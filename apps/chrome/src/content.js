@@ -54,22 +54,75 @@ function getCurrentPageUrl() {
   return CatraSC.normalizeTrackUrl(window.location.href);
 }
 
-function findActionButtonGroup() {
-  return (
+function findActionButtonContainer() {
+  const moreButton = document.querySelector('button[aria-label="More menu"]');
+  if (moreButton?.parentElement) {
+    return {
+      container: moreButton.parentElement,
+      insertBefore: moreButton,
+      templateButton: moreButton,
+    };
+  }
+
+  const legacyGroup =
     document.querySelector(".listenEngagement__actions .sc-button-group") ||
-    document.querySelector(".soundActions .sc-button-group")
-  );
+    document.querySelector(".soundActions .sc-button-group");
+
+  if (legacyGroup) {
+    return {
+      container: legacyGroup,
+      insertBefore: legacyGroup.querySelector(".sc-button-more"),
+      templateButton: legacyGroup.querySelector("button"),
+    };
+  }
+
+  return null;
+}
+
+function getMuiIconButtonClassName(templateButton) {
+  const classes = [
+    "MuiButtonBase-root",
+    "MuiIconButton-root",
+    "MuiIconButton-colorContrast",
+    "MuiIconButton-sizeMedium",
+    "catra-sc-download-btn",
+  ];
+
+  if (templateButton) {
+    for (const className of templateButton.classList) {
+      if (className.startsWith("mui-")) {
+        classes.push(className);
+        break;
+      }
+    }
+  }
+
+  return classes.join(" ");
 }
 
 function createDownloadIcon() {
   const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   icon.setAttribute("viewBox", "0 0 24 24");
-  icon.setAttribute("width", "20");
-  icon.setAttribute("height", "20");
+  icon.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   icon.setAttribute("aria-hidden", "true");
   icon.innerHTML =
     '<path fill="currentColor" d="M12 3a1 1 0 0 1 1 1v9.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1Zm-7 14a1 1 0 0 1 1 1v1h12v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z"/>';
   return icon;
+}
+
+function createMuiDownloadButton({ id, className, onClick }) {
+  const button = document.createElement("button");
+  button.className = className;
+  button.type = "button";
+  button.tabIndex = 0;
+  button.setAttribute("variant", "outlined");
+  button.setAttribute("aria-label", "ダウンロード");
+  if (id) {
+    button.id = id;
+  }
+  button.appendChild(createDownloadIcon());
+  button.addEventListener("click", onClick);
+  return button;
 }
 
 function setButtonState(button, state) {
@@ -144,24 +197,21 @@ async function downloadTrack(trackUrl, button) {
   }
 }
 
-function createInlineDownloadButton() {
-  const button = document.createElement("button");
-  button.id = INLINE_BUTTON_ID;
-  button.type = "button";
-  button.className =
-    "sc-button sc-button-secondary sc-button-medium sc-button-icon sc-button-responsive catra-sc-download-btn";
-  button.appendChild(createDownloadIcon());
+function createInlineDownloadButton(templateButton) {
+  const button = createMuiDownloadButton({
+    id: INLINE_BUTTON_ID,
+    className: getMuiIconButtonClassName(templateButton),
+    onClick: async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
 
-  button.addEventListener("click", async (event) => {
-    event.preventDefault();
-    event.stopPropagation();
+      if (inlineDownloading) {
+        return;
+      }
 
-    if (inlineDownloading) {
-      return;
-    }
-
-    inlineDownloading = true;
-    await downloadTrack(getCurrentPageUrl(), button);
+      inlineDownloading = true;
+      await downloadTrack(getCurrentPageUrl(), button);
+    },
   });
 
   return button;
@@ -173,19 +223,18 @@ function ensureInlineDownloadButton() {
     return;
   }
 
-  const buttonGroup = findActionButtonGroup();
-  if (!buttonGroup) {
+  const actionTarget = findActionButtonContainer();
+  if (!actionTarget) {
     return;
   }
 
   let button = document.getElementById(INLINE_BUTTON_ID);
   if (!button) {
-    button = createInlineDownloadButton();
-    const moreButton = buttonGroup.querySelector(".sc-button-more");
-    if (moreButton) {
-      buttonGroup.insertBefore(button, moreButton);
+    button = createInlineDownloadButton(actionTarget.templateButton);
+    if (actionTarget.insertBefore) {
+      actionTarget.container.insertBefore(button, actionTarget.insertBefore);
     } else {
-      buttonGroup.appendChild(button);
+      actionTarget.container.appendChild(button);
     }
   }
 
@@ -249,21 +298,43 @@ function findTrackItems() {
   return [...items];
 }
 
-function createListDownloadButton(trackUrl) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = `catra-sc-download-btn catra-sc-list-download ${LIST_BUTTON_CLASS}`;
-  button.title = "ダウンロード";
-  button.setAttribute("aria-label", "ダウンロード");
-  button.dataset.trackUrl = trackUrl;
-  button.appendChild(createDownloadIcon());
+function findListActionContainer(item) {
+  const moreButton = item.querySelector('button[aria-label="More menu"]');
+  if (moreButton?.parentElement) {
+    return {
+      container: moreButton.parentElement,
+      insertBefore: moreButton,
+      templateButton: moreButton,
+    };
+  }
 
-  button.addEventListener("click", async (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    await downloadTrack(trackUrl, button);
+  const legacyActions =
+    item.querySelector(".sound__actions") ||
+    item.querySelector(".trackItem__actions") ||
+    item.querySelector(".soundActions") ||
+    item.querySelector(".sc-button-group");
+
+  if (legacyActions) {
+    return {
+      container: legacyActions,
+      insertBefore: legacyActions.querySelector(".sc-button-more"),
+      templateButton: legacyActions.querySelector("button"),
+    };
+  }
+
+  return null;
+}
+
+function createListDownloadButton(trackUrl, templateButton) {
+  const button = createMuiDownloadButton({
+    className: `${getMuiIconButtonClassName(templateButton)} ${LIST_BUTTON_CLASS}`,
+    onClick: async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await downloadTrack(trackUrl, button);
+    },
   });
-
+  button.dataset.trackUrl = trackUrl;
   return button;
 }
 
@@ -278,16 +349,18 @@ function ensureListDownloadButtons() {
       continue;
     }
 
-    const actions =
-      item.querySelector(".sound__actions") ||
-      item.querySelector(".trackItem__actions") ||
-      item.querySelector(".soundActions") ||
-      item.querySelector(".sc-button-group");
+    const actionTarget = findListActionContainer(item);
+    const button = createListDownloadButton(
+      trackUrl,
+      actionTarget?.templateButton ?? null,
+    );
 
-    const button = createListDownloadButton(trackUrl);
-
-    if (actions) {
-      actions.appendChild(button);
+    if (actionTarget) {
+      if (actionTarget.insertBefore) {
+        actionTarget.container.insertBefore(button, actionTarget.insertBefore);
+      } else {
+        actionTarget.container.appendChild(button);
+      }
       continue;
     }
 
