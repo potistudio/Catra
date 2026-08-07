@@ -1,3 +1,5 @@
+export type TrackSource = "soundcloud" | "bandcamp";
+
 export interface Track {
   id: number;
   path: string;
@@ -11,6 +13,7 @@ export interface Track {
   key: string | null;
   rating: number | null;
   artworkPath: string | null;
+  source: TrackSource | null;
   addedAt: number;
 }
 

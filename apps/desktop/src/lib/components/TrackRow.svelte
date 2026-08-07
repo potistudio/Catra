@@ -1,6 +1,8 @@
 <script lang="ts">
   import TrackArtwork from "$lib/components/TrackArtwork.svelte";
+  import TrackSourceBadge from "$lib/components/TrackSourceBadge.svelte";
   import type { Track } from "$lib/types";
+  import { isTrackSource } from "$lib/trackSource";
   import {
     displayArtist,
     displayTitle,
@@ -38,7 +40,14 @@
   ondblclick={() => onselect(track)}
 >
   <span class="cell artwork-cell" role="gridcell">
-    <TrackArtwork artworkPath={track.artworkPath} title={displayTitle(track)} />
+    <div class="artwork-wrap">
+      <TrackArtwork artworkPath={track.artworkPath} title={displayTitle(track)} />
+      {#if isTrackSource(track.source)}
+        <span class="source-badge-wrap">
+          <TrackSourceBadge source={track.source} size={12} />
+        </span>
+      {/if}
+    </div>
   </span>
   <span class="cell title" role="gridcell">{displayTitle(track)}</span>
   <span class="cell" role="gridcell">{displayArtist(track)}</span>
@@ -107,6 +116,24 @@
     display: flex;
     justify-content: center;
     overflow: visible;
+  }
+
+  .artwork-wrap {
+    position: relative;
+    width: 40px;
+    height: 40px;
+  }
+
+  .source-badge-wrap {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    z-index: 1;
+  }
+
+  .source-badge-wrap :global(.source-badge) {
+    width: 16px;
+    height: 16px;
   }
 
   .title {

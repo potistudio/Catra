@@ -55,6 +55,7 @@ pub fn scan_folder(library: &LibraryState, folder: &str) -> Result<ScanResult, S
                 metadata.key.as_deref(),
                 metadata.rating,
                 artwork_path.as_deref(),
+                metadata.source.as_deref(),
                 added_at,
             )
             .map_err(|e| e.to_string())?;
@@ -100,6 +101,7 @@ pub fn import_file(library: &LibraryState, path: &Path) -> Result<bool, String> 
             metadata.key.as_deref(),
             metadata.rating,
             artwork_path.as_deref(),
+            metadata.source.as_deref(),
             added_at,
         )
         .map_err(|e| e.to_string())
@@ -123,6 +125,7 @@ struct FileMetadata {
     key: Option<String>,
     rating: Option<u8>,
     artwork: Option<(Vec<u8>, String)>,
+    source: Option<String>,
 }
 
 fn read_metadata(path: &Path) -> FileMetadata {
@@ -156,6 +159,7 @@ fn read_metadata(path: &Path) -> FileMetadata {
             .and_then(|s| s.parse::<f32>().ok());
         let rating = parse_rating(tag);
         let artwork = extract_artwork(tag);
+        let source = detect_source(tag);
 
         return FileMetadata {
             title,
@@ -168,6 +172,7 @@ fn read_metadata(path: &Path) -> FileMetadata {
             key,
             rating,
             artwork,
+            source,
         };
     }
 
@@ -182,6 +187,7 @@ fn read_metadata(path: &Path) -> FileMetadata {
         key: None,
         rating: None,
         artwork: None,
+        source: None,
     }
 }
 
@@ -197,6 +203,51 @@ fn empty_metadata(fallback_title: Option<String>) -> FileMetadata {
         key: None,
         rating: None,
         artwork: None,
+        source: None,
+    }
+}
+
+fn detect_source(tag: &lofty::tag::Tag) -> Option<String> {
+    let url_keys = [
+        ItemKey::Comment,
+        ItemKey::AudioFileUrl,
+        ItemKey::AudioSourceUrl,
+        ItemKey::PaymentUrl,
+        ItemKey::CommercialInformationUrl,
+        ItemKey::TrackArtistUrl,
+        ItemKey::Unknown("WWW".to_string()),
+        ItemKey::Unknown("www".to_string()),
+        ItemKey::Unknown("URL".to_string()),
+        ItemKey::Unknown("url".to_string()),
+    ];
+
+    for key in url_keys {
+        if let Some(value) = tag.get_string(&key) {
+            if let Some(source) = detect_source_from_text(value) {
+                return Some(source.to_string());
+            }
+        }
+    }
+
+    for item in tag.items() {
+        if let Some(text) = item.value().text() {
+            if let Some(source) = detect_source_from_text(text) {
+                return Some(source.to_string());
+            }
+        }
+    }
+
+    None
+}
+
+fn detect_source_from_text(text: &str) -> Option<&'static str> {
+    let lower = text.to_ascii_lowercase();
+    if lower.contains("soundcloud.com") {
+        Some("soundcloud")
+    } else if lower.contains("bandcamp.com") {
+        Some("bandcamp")
+    } else {
+        None
     }
 }
 

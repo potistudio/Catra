@@ -20,6 +20,7 @@ pub struct Track {
     pub key: Option<String>,
     pub rating: Option<u8>,
     pub artwork_path: Option<String>,
+    pub source: Option<String>,
     pub added_at: i64,
 }
 
@@ -58,6 +59,7 @@ impl LibraryState {
                 key_name TEXT,
                 rating INTEGER,
                 artwork_path TEXT,
+                source TEXT,
                 added_at INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
@@ -80,7 +82,7 @@ impl LibraryState {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, path, title, artist, album, duration_ms, bpm, bitrate_kbps,
-                    genre, key_name, rating, artwork_path, added_at
+                    genre, key_name, rating, artwork_path, source, added_at
              FROM tracks
              ORDER BY artist COLLATE NOCASE, title COLLATE NOCASE",
         )?;
@@ -100,7 +102,8 @@ impl LibraryState {
                     key: row.get(9)?,
                     rating: row.get(10)?,
                     artwork_path: row.get(11)?,
-                    added_at: row.get(12)?,
+                    source: row.get(12)?,
+                    added_at: row.get(13)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -121,14 +124,15 @@ impl LibraryState {
         key: Option<&str>,
         rating: Option<u8>,
         artwork_path: Option<&str>,
+        source: Option<&str>,
         added_at: i64,
     ) -> Result<bool, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         let rows = conn.execute(
             "INSERT OR IGNORE INTO tracks (
                 path, title, artist, album, duration_ms, bpm, bitrate_kbps,
-                genre, key_name, rating, artwork_path, added_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                genre, key_name, rating, artwork_path, source, added_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 path,
                 title,
@@ -141,6 +145,7 @@ impl LibraryState {
                 key,
                 rating,
                 artwork_path,
+                source,
                 added_at
             ],
         )?;
@@ -208,6 +213,7 @@ fn migrate(conn: &Connection) -> Result<(), rusqlite::Error> {
         "ALTER TABLE tracks ADD COLUMN key_name TEXT",
         "ALTER TABLE tracks ADD COLUMN rating INTEGER",
         "ALTER TABLE tracks ADD COLUMN artwork_path TEXT",
+        "ALTER TABLE tracks ADD COLUMN source TEXT",
     ];
 
     for sql in migrations {

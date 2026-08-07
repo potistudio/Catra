@@ -1,6 +1,8 @@
 <script lang="ts">
   import TrackArtwork from "$lib/components/TrackArtwork.svelte";
+  import TrackSourceBadge from "$lib/components/TrackSourceBadge.svelte";
   import type { Track } from "$lib/types";
+  import { isTrackSource } from "$lib/trackSource";
   import { displayArtist, displayTitle, formatDuration } from "$lib/format";
 
   interface Props {
@@ -37,6 +39,11 @@
     />
     {#if track.durationMs}
       <span class="duration">{formatDuration(track.durationMs)}</span>
+    {/if}
+    {#if isTrackSource(track.source)}
+      <span class="source-badge-wrap">
+        <TrackSourceBadge source={track.source} />
+      </span>
     {/if}
     <button
       type="button"
@@ -112,10 +119,17 @@
     line-height: 1.4;
   }
 
-  .remove-btn {
+  .source-badge-wrap {
     position: absolute;
     top: 0.35rem;
     right: 0.35rem;
+    z-index: 1;
+  }
+
+  .remove-btn {
+    position: absolute;
+    top: 0.35rem;
+    left: 0.35rem;
     width: 24px;
     height: 24px;
     border: none;
