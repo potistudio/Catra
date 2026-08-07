@@ -1,23 +1,9 @@
 const INLINE_BUTTON_ID = "catra-sc-inline-download";
 const LIST_BUTTON_CLASS = "catra-sc-list-download";
 const ACTION_CONTAINER_CLASS = "mui-16ytee5";
-const LOG_PREFIX = "[Catra SC]";
-const MORE_MENU_SELECTORS = [
-  'button[aria-label="More menu"]',
-  'button[aria-label="More"]',
-  'button[title="More"]',
-  ".sc-button-more",
-];
+const MORE_MENU_SELECTOR = 'button[aria-label="More menu"]';
 const SUCCESS_RESET_MS = 2000;
 const POLL_INTERVAL_MS = 500;
-const DEBUG_LOG_INTERVAL_MS = 5000;
-
-console.info(`${LOG_PREFIX} script evaluating`, location.href);
-
-let inlineDownloading = false;
-let successResetTimeout = null;
-let lastDebugLogAt = 0;
-let inlineButtonReadyLogged = false;
 
 const NON_TRACK_SEGMENTS = new Set([
   "discover",
@@ -46,24 +32,12 @@ const NON_TRACK_SEGMENTS = new Set([
   "charts",
 ]);
 
-function logDebug(message, details = undefined) {
-  if (details === undefined) {
-    console.info(`${LOG_PREFIX} ${message}`);
-    return;
-  }
-
-  console.info(`${LOG_PREFIX} ${message}`, details);
-}
-
-function logDebugThrottled(message, details) {
-  const now = Date.now();
-  if (now - lastDebugLogAt < DEBUG_LOG_INTERVAL_MS) {
-    return;
-  }
-
-  lastDebugLogAt = now;
-  logDebug(message, details);
-}
+let inlineDownloading = false;
+let successResetTimeout = null;
+let observer = null;
+let pollTimer = null;
+let refreshScheduled = false;
+let lastUrl = location.href;
 
 function collectElementsDeep(root, selector) {
   if (!root) {
@@ -84,18 +58,6 @@ function collectElementsDeep(root, selector) {
   }
 
   return results;
-}
-
-function querySelectorDeep(root, selector) {
-  return collectElementsDeep(root, selector)[0] ?? null;
-}
-
-function isDocumentRoot(root) {
-  return (
-    root === document ||
-    root === document.documentElement ||
-    root === document.body
-  );
 }
 
 function getPathSegments() {
@@ -145,143 +107,6 @@ function hasEmbeddedTrackIframe() {
   return false;
 }
 
-function isUiShellFrame() {
-  return (
-    window.top === window &&
-    !findPrimaryMuiActionContainer() &&
-    hasEmbeddedTrackIframe()
-  );
-}
-
-function shouldHandleInlineButton() {
-  if (!isTrackPage() || isPlaylistPage()) {
-    return false;
-  }
-
-  if (isUiShellFrame()) {
-    return false;
-  }
-
-  return true;
-}
-
-function queryWithinRoot(root, selector) {
-  const match =
-    root.querySelector?.(selector) ??
-    (root.matches?.(selector) ? root : null);
-  return match ?? null;
-}
-
-function findMuiActionContainer(root) {
-  const inRoot = queryWithinRoot(root, `.${ACTION_CONTAINER_CLASS}`);
-  if (inRoot) {
-    return inRoot;
-  }
-
-  if (isDocumentRoot(root)) {
-    const deepMatch = querySelectorDeep(document.documentElement, `.${ACTION_CONTAINER_CLASS}`);
-    if (deepMatch) {
-      return deepMatch;
-    }
-  }
-
-  if (root instanceof Element && root !== document.documentElement) {
-    let node = root.parentElement;
-    while (node && node !== document.documentElement) {
-      if (node.classList?.contains(ACTION_CONTAINER_CLASS)) {
-        return node;
-      }
-
-      const inAncestor = node.querySelector?.(`.${ACTION_CONTAINER_CLASS}`);
-      if (inAncestor) {
-        return inAncestor;
-      }
-
-      node = node.parentElement;
-    }
-  }
-
-  return null;
-}
-
-function buildActionTarget(container, preferredMoreButton = null) {
-  const moreButton = preferredMoreButton ?? findMoreMenuButton(container);
-  return {
-    container,
-    insertBefore: moreButton,
-    templateButton:
-      moreButton ?? container.querySelector("button.MuiIconButton-root"),
-  };
-}
-
-function findMoreMenuButton(root) {
-  for (const selector of MORE_MENU_SELECTORS) {
-    if (isDocumentRoot(root)) {
-      const deepMatch = querySelectorDeep(document.documentElement, selector);
-      if (deepMatch) {
-        return deepMatch;
-      }
-      continue;
-    }
-
-    const button =
-      root.querySelector?.(selector) ??
-      (root.matches?.(selector) ? root : null);
-    if (button) {
-      return button;
-    }
-  }
-
-  return null;
-}
-
-function getTraversalBoundary(root) {
-  if (
-    root === document ||
-    root === document.documentElement ||
-    root === document.body
-  ) {
-    return document.documentElement;
-  }
-
-  return root;
-}
-
-function findActionButtonGroup(moreButton, boundary) {
-  let node = moreButton.parentElement;
-  while (node && node !== boundary) {
-    const iconButtons = node.querySelectorAll("button.MuiIconButton-root");
-    if (iconButtons.length >= 2) {
-      return node;
-    }
-
-    node = node.parentElement;
-  }
-
-  return moreButton.parentElement;
-}
-
-function resolveActionContainer(root) {
-  const muiContainer = findMuiActionContainer(root);
-  if (muiContainer) {
-    return buildActionTarget(muiContainer);
-  }
-
-  const moreButton = findMoreMenuButton(root);
-  if (moreButton) {
-    const container = findActionButtonGroup(
-      moreButton,
-      getTraversalBoundary(root),
-    );
-
-    if (container) {
-      return buildActionTarget(container, moreButton);
-    }
-  }
-
-  return null;
-}
-
 function findPrimaryMuiActionContainer() {
   let bestContainer = null;
   let bestVisibleButtons = 0;
@@ -303,69 +128,69 @@ function findPrimaryMuiActionContainer() {
   return bestContainer;
 }
 
-function findPrimaryLegacyActionGroup() {
-  const groups = document.querySelectorAll(
-    ".listenEngagement__actions .sc-button-group, .soundActions .sc-button-group",
+function isUiShellFrame() {
+  return (
+    window.top === window &&
+    !findPrimaryMuiActionContainer() &&
+    hasEmbeddedTrackIframe()
   );
-
-  for (const group of groups) {
-    const moreButton = group.querySelector(".sc-button-more");
-    if (moreButton?.offsetParent !== null) {
-      return group;
-    }
-  }
-
-  return groups[0] ?? null;
 }
 
-function findInlineActionContainer() {
-  const muiContainer = findPrimaryMuiActionContainer();
-  if (muiContainer) {
-    return buildActionTarget(muiContainer);
+function shouldHandleInlineButton() {
+  if (!isTrackPage() || isPlaylistPage()) {
+    return false;
   }
 
-  const legacyGroup = findPrimaryLegacyActionGroup();
-  if (legacyGroup) {
-    return {
-      container: legacyGroup,
-      insertBefore: legacyGroup.querySelector(".sc-button-more"),
-      templateButton: legacyGroup.querySelector("button"),
-    };
+  if (isUiShellFrame()) {
+    return false;
   }
 
-  const engagementRoot =
-    document.querySelector(".listenEngagement__actions") ||
-    document.querySelector(".soundActions");
-
-  if (engagementRoot) {
-    const scopedTarget = resolveActionContainer(engagementRoot);
-    if (scopedTarget) {
-      return scopedTarget;
-    }
-  }
-
-  return resolveActionContainer(document);
+  return true;
 }
 
-function findActionButtonContainer() {
-  const actionTarget = findInlineActionContainer();
-  if (actionTarget) {
-    return actionTarget;
+function findMuiActionContainerWithin(root) {
+  const inRoot = root.querySelector?.(`.${ACTION_CONTAINER_CLASS}`);
+  if (inRoot) {
+    return inRoot;
   }
 
-  const legacyGroup =
-    document.querySelector(".listenEngagement__actions .sc-button-group") ||
-    document.querySelector(".soundActions .sc-button-group");
+  if (root instanceof Element && root !== document.documentElement) {
+    let node = root.parentElement;
+    while (node && node !== document.documentElement) {
+      if (node.classList?.contains(ACTION_CONTAINER_CLASS)) {
+        return node;
+      }
 
-  if (legacyGroup) {
-    return {
-      container: legacyGroup,
-      insertBefore: legacyGroup.querySelector(".sc-button-more"),
-      templateButton: legacyGroup.querySelector("button"),
-    };
+      const nested = node.querySelector?.(`.${ACTION_CONTAINER_CLASS}`);
+      if (nested) {
+        return nested;
+      }
+
+      node = node.parentElement;
+    }
   }
 
   return null;
+}
+
+function buildActionTarget(container) {
+  const moreButton = container.querySelector(MORE_MENU_SELECTOR);
+  const templateButton = container.querySelector("button.MuiIconButton-root");
+
+  return {
+    container,
+    insertBefore: moreButton,
+    templateButton: templateButton ?? moreButton,
+  };
+}
+
+function findInlineActionContainer() {
+  const container = findPrimaryMuiActionContainer();
+  if (!container) {
+    return null;
+  }
+
+  return buildActionTarget(container);
 }
 
 function getMuiIconButtonClassName(templateButton) {
@@ -401,35 +226,14 @@ function createDownloadIcon() {
   return icon;
 }
 
-function getDownloadButtonClassName(templateButton) {
-  if (templateButton?.classList.contains("MuiIconButton-root")) {
-    return getMuiIconButtonClassName(templateButton);
-  }
-
-  if (templateButton?.classList.contains("sc-button")) {
-    const sizeClass = templateButton.classList.contains("sc-button-small")
-      ? "sc-button-small"
-      : "sc-button-medium";
-    return [
-      "sc-button-secondary",
-      "sc-button",
-      sizeClass,
-      "sc-button-icon",
-      "sc-button-responsive",
-      "catra-sc-download-btn",
-    ].join(" ");
-  }
-
-  return getMuiIconButtonClassName(templateButton);
-}
-
-function createMuiDownloadButton({ id, className, onClick }) {
+function createDownloadButton({ id, className, onClick }) {
   const button = document.createElement("button");
   button.className = className;
   button.type = "button";
   button.tabIndex = 0;
   button.setAttribute("variant", "outlined");
   button.setAttribute("aria-label", "ダウンロード");
+
   if (id) {
     button.id = id;
   }
@@ -534,10 +338,11 @@ function insertDownloadButton(actionTarget, button) {
 
   actionTarget.container.appendChild(button);
 }
+
 function createInlineDownloadButton(templateButton) {
-  const button = createMuiDownloadButton({
+  const button = createDownloadButton({
     id: INLINE_BUTTON_ID,
-    className: getDownloadButtonClassName(templateButton),
+    className: getMuiIconButtonClassName(templateButton),
     onClick: async (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -558,34 +363,13 @@ function ensureInlineDownloadButton() {
   if (!shouldHandleInlineButton()) {
     if (!isUiShellFrame()) {
       removeInlineDownloadButton();
-      logDebugThrottled("inline button skipped", {
-        path: location.pathname,
-        isTrackPage: isTrackPage(),
-        isPlaylistPage: isPlaylistPage(),
-      });
     }
 
     return false;
   }
 
-  const actionTarget = findActionButtonContainer();
+  const actionTarget = findInlineActionContainer();
   if (!actionTarget) {
-    logDebugThrottled("action container not found", {
-      path: location.pathname,
-      frame: window.top === window ? "top" : "child",
-      muiContainers: collectElementsDeep(
-        document.documentElement,
-        `.${ACTION_CONTAINER_CLASS}`,
-      ).length,
-      moreMenuButtons: collectElementsDeep(
-        document.documentElement,
-        'button[aria-label="More menu"]',
-      ).length,
-      muiIconButtons: collectElementsDeep(
-        document.documentElement,
-        "button.MuiIconButton-root",
-      ).length,
-    });
     return false;
   }
 
@@ -597,24 +381,10 @@ function ensureInlineDownloadButton() {
   if (!button) {
     button = createInlineDownloadButton(actionTarget.templateButton);
     insertDownloadButton(actionTarget, button);
-    logDebug("inline download button inserted", {
-      frame: window.top === window ? "top" : "child",
-      containerClass: actionTarget.container.className,
-      insertBefore: actionTarget.insertBefore?.getAttribute?.("aria-label") ?? null,
-    });
   }
 
   if (!inlineDownloading) {
     setButtonState(button, "idle");
-  }
-
-  if (!inlineButtonReadyLogged) {
-    inlineButtonReadyLogged = true;
-    logDebug("inline download button ready", {
-      frame: window.top === window ? "top" : "child",
-      connected: button.isConnected,
-      visible: button.offsetParent !== null,
-    });
   }
 
   return true;
@@ -636,10 +406,12 @@ function extractTrackUrlFromItem(item) {
     return null;
   }
 
-  const url = CatraSC.normalizeTrackUrl(href);
-  const path = new URL(url).pathname;
-  const segments = path.split("/").filter(Boolean);
+  const url = getCurrentPageUrlFromHref(href);
+  if (!url) {
+    return null;
+  }
 
+  const segments = getPathSegmentsFromUrl(url);
   if (segments.length < 2 || segments.length > 3) {
     return null;
   }
@@ -655,29 +427,40 @@ function extractTrackUrlFromItem(item) {
   return url;
 }
 
+function getPathSegmentsFromUrl(url) {
+  const segments = new URL(url).pathname.split("/").filter(Boolean);
+  if (segments[0]?.toLowerCase() === "n") {
+    return segments.slice(1);
+  }
+
+  return segments;
+}
+
+function getCurrentPageUrlFromHref(href) {
+  const normalized = CatraSC.normalizeTrackUrl(href);
+  const parsed = new URL(normalized, window.location.origin);
+  const segments = parsed.pathname.split("/").filter(Boolean);
+
+  if (segments[0]?.toLowerCase() === "n") {
+    parsed.pathname = `/${segments.slice(1).join("/")}`;
+    return parsed.toString().replace(/\/$/, "");
+  }
+
+  return normalized;
+}
+
 function findTrackItems() {
-  const selectors = [
-    "article.sound",
-    ".sound__content",
-    ".trackItem__content",
-    ".soundList__item",
-    ".searchList__item",
-    ".lazyLoadingList__item",
-    `[class*="${ACTION_CONTAINER_CLASS}"]`,
-  ];
-
   const items = new Set();
-  for (const selector of selectors) {
-    for (const element of document.querySelectorAll(selector)) {
-      if (element.classList?.contains(ACTION_CONTAINER_CLASS)) {
-        const row = element.closest(
-          "article, tr, li, [class*='item'], [class*='row'], [class*='track']",
-        );
-        items.add(row ?? element.parentElement ?? element);
-        continue;
-      }
 
-      items.add(element);
+  for (const container of collectElementsDeep(
+    document.documentElement,
+    `.${ACTION_CONTAINER_CLASS}`,
+  )) {
+    const row = container.closest(
+      "article, tr, li, [class*='item'], [class*='row'], [class*='track']",
+    );
+    if (row && row !== container) {
+      items.add(row);
     }
   }
 
@@ -685,31 +468,17 @@ function findTrackItems() {
 }
 
 function findListActionContainer(item) {
-  const actionTarget = resolveActionContainer(item);
-  if (actionTarget) {
-    return actionTarget;
+  const container = findMuiActionContainerWithin(item);
+  if (!container) {
+    return null;
   }
 
-  const legacyActions =
-    item.querySelector(".sound__actions") ||
-    item.querySelector(".trackItem__actions") ||
-    item.querySelector(".soundActions") ||
-    item.querySelector(".sc-button-group");
-
-  if (legacyActions) {
-    return {
-      container: legacyActions,
-      insertBefore: legacyActions.querySelector(".sc-button-more"),
-      templateButton: legacyActions.querySelector("button"),
-    };
-  }
-
-  return null;
+  return buildActionTarget(container);
 }
 
 function createListDownloadButton(trackUrl, templateButton) {
-  const button = createMuiDownloadButton({
-    className: `${getDownloadButtonClassName(templateButton)} ${LIST_BUTTON_CLASS}`,
+  const button = createDownloadButton({
+    className: `${getMuiIconButtonClassName(templateButton)} ${LIST_BUTTON_CLASS}`,
     onClick: async (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -759,11 +528,6 @@ function refreshButtons() {
   ensureListDownloadButtons();
 }
 
-let observer = null;
-let pollTimer = null;
-let refreshScheduled = false;
-let lastUrl = location.href;
-
 function scheduleRefresh() {
   if (refreshScheduled) {
     return;
@@ -776,15 +540,11 @@ function scheduleRefresh() {
   });
 }
 
-function stopPolling() {
+function startPolling() {
   if (pollTimer) {
     clearInterval(pollTimer);
-    pollTimer = null;
   }
-}
 
-function startPolling() {
-  stopPolling();
   pollTimer = setInterval(() => {
     refreshButtons();
   }, POLL_INTERVAL_MS);
@@ -799,47 +559,44 @@ function onNavigation() {
 
   lastUrl = currentUrl;
   inlineDownloading = false;
-  inlineButtonReadyLogged = false;
   removeInlineDownloadButton();
   scheduleRefresh();
   startPolling();
 }
 
 function shouldScheduleRefreshFromMutation(mutation) {
-  if (mutation.type === "childList") {
-    for (const node of mutation.addedNodes) {
-      if (node.nodeType !== Node.ELEMENT_NODE) {
-        continue;
-      }
+  if (mutation.type !== "childList") {
+    return false;
+  }
 
-      const element = node;
-      if (
-        element.id === INLINE_BUTTON_ID ||
-        element.classList?.contains(ACTION_CONTAINER_CLASS) ||
-        element.classList?.contains("listenEngagement__actions") ||
-        element.classList?.contains("soundActions") ||
-        element.classList?.contains("sc-button-group") ||
-        element.querySelector?.(`.${ACTION_CONTAINER_CLASS}`) ||
-        element.querySelector?.(".listenEngagement__actions") ||
-        element.querySelector?.(".soundActions") ||
-        findMoreMenuButton(element)
-      ) {
-        return true;
-      }
+  for (const node of mutation.addedNodes) {
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      continue;
     }
 
-    for (const node of mutation.removedNodes) {
-      if (node.nodeType !== Node.ELEMENT_NODE) {
-        continue;
-      }
+    const element = node;
+    if (
+      element.id === INLINE_BUTTON_ID ||
+      element.classList?.contains(ACTION_CONTAINER_CLASS) ||
+      element.matches?.(MORE_MENU_SELECTOR) ||
+      element.querySelector?.(`.${ACTION_CONTAINER_CLASS}`) ||
+      element.querySelector?.(MORE_MENU_SELECTOR)
+    ) {
+      return true;
+    }
+  }
 
-      const element = node;
-      if (
-        element.id === INLINE_BUTTON_ID ||
-        element.querySelector?.(`#${INLINE_BUTTON_ID}`)
-      ) {
-        return true;
-      }
+  for (const node of mutation.removedNodes) {
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      continue;
+    }
+
+    const element = node;
+    if (
+      element.id === INLINE_BUTTON_ID ||
+      element.querySelector?.(`#${INLINE_BUTTON_ID}`)
+    ) {
+      return true;
     }
   }
 
@@ -900,17 +657,6 @@ function watchNavigation() {
 }
 
 function bootstrap() {
-  const version = chrome.runtime?.getManifest?.()?.version ?? "unknown";
-  const frameType = window.top === window ? "top" : "child";
-
-  document.documentElement.dataset.catraScExtension = version;
-  logDebug("content script loaded", {
-    version,
-    href: location.href,
-    frame: frameType,
-    hostname: location.hostname,
-  });
-
   onNavigation();
   startObserver();
   hookHistory();
@@ -918,8 +664,4 @@ function bootstrap() {
   startPolling();
 }
 
-try {
-  bootstrap();
-} catch (error) {
-  console.error(`${LOG_PREFIX} bootstrap failed`, error);
-}
+bootstrap();
