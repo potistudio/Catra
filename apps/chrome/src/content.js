@@ -122,7 +122,47 @@ function isPlaylistPage() {
 }
 
 function getCurrentPageUrl() {
-  return CatraSC.normalizeTrackUrl(window.location.href);
+  const normalized = CatraSC.normalizeTrackUrl(window.location.href);
+  const parsed = new URL(normalized);
+  const segments = parsed.pathname.split("/").filter(Boolean);
+
+  if (segments[0]?.toLowerCase() === "n") {
+    parsed.pathname = `/${segments.slice(1).join("/")}`;
+    return parsed.toString().replace(/\/$/, "");
+  }
+
+  return normalized;
+}
+
+function hasEmbeddedTrackIframe() {
+  for (const iframe of document.querySelectorAll("iframe[src]")) {
+    const src = iframe.getAttribute("src") ?? "";
+    if (/soundcloud\.com\/n\/[^/]+\/[^/?#]+/i.test(src)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isUiShellFrame() {
+  return (
+    window.top === window &&
+    !findPrimaryMuiActionContainer() &&
+    hasEmbeddedTrackIframe()
+  );
+}
+
+function shouldHandleInlineButton() {
+  if (!isTrackPage() || isPlaylistPage()) {
+    return false;
+  }
+
+  if (isUiShellFrame()) {
+    return false;
+  }
+
+  return true;
 }
 
 function queryWithinRoot(root, selector) {
@@ -473,15 +513,14 @@ async function downloadTrack(trackUrl, button) {
   }
 }
 
-function getInlineButton(container) {
-  const buttonInContainer = container.querySelector(`#${INLINE_BUTTON_ID}`);
-  if (buttonInContainer?.isConnected) {
-    return buttonInContainer;
+function getInlineButton() {
+  const existing = document.getElementById(INLINE_BUTTON_ID);
+  if (existing?.isConnected) {
+    return existing;
   }
 
-  const detached = document.getElementById(INLINE_BUTTON_ID);
-  if (detached && !detached.isConnected) {
-    detached.remove();
+  if (existing) {
+    existing.remove();
   }
 
   return null;
@@ -516,13 +555,16 @@ function createInlineDownloadButton(templateButton) {
 }
 
 function ensureInlineDownloadButton() {
-  if (!isTrackPage() || isPlaylistPage()) {
-    removeInlineDownloadButton();
-    logDebugThrottled("inline button skipped", {
-      path: location.pathname,
-      isTrackPage: isTrackPage(),
-      isPlaylistPage: isPlaylistPage(),
-    });
+  if (!shouldHandleInlineButton()) {
+    if (!isUiShellFrame()) {
+      removeInlineDownloadButton();
+      logDebugThrottled("inline button skipped", {
+        path: location.pathname,
+        isTrackPage: isTrackPage(),
+        isPlaylistPage: isPlaylistPage(),
+      });
+    }
+
     return false;
   }
 
@@ -530,6 +572,7 @@ function ensureInlineDownloadButton() {
   if (!actionTarget) {
     logDebugThrottled("action container not found", {
       path: location.pathname,
+      frame: window.top === window ? "top" : "child",
       muiContainers: collectElementsDeep(
         document.documentElement,
         `.${ACTION_CONTAINER_CLASS}`,
@@ -546,11 +589,16 @@ function ensureInlineDownloadButton() {
     return false;
   }
 
-  let button = getInlineButton(actionTarget.container);
+  let button = getInlineButton();
+  if (button && !actionTarget.container.contains(button)) {
+    insertDownloadButton(actionTarget, button);
+  }
+
   if (!button) {
     button = createInlineDownloadButton(actionTarget.templateButton);
     insertDownloadButton(actionTarget, button);
     logDebug("inline download button inserted", {
+      frame: window.top === window ? "top" : "child",
       containerClass: actionTarget.container.className,
       insertBefore: actionTarget.insertBefore?.getAttribute?.("aria-label") ?? null,
     });
@@ -563,6 +611,7 @@ function ensureInlineDownloadButton() {
   if (!inlineButtonReadyLogged) {
     inlineButtonReadyLogged = true;
     logDebug("inline download button ready", {
+      frame: window.top === window ? "top" : "child",
       connected: button.isConnected,
       visible: button.offsetParent !== null,
     });

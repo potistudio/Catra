@@ -10,6 +10,15 @@
   display: block;
   width: 24px;
   height: 24px;
+  fill: currentColor;
+}
+
+.MuiIconButton-root.catra-sc-download-btn,
+.mui-16ytee5 .catra-sc-download-btn {
+  color: inherit;
+  opacity: 1;
+  min-width: 40px;
+  min-height: 40px;
 }
 
 .catra-sc-download-btn.is-loading {
