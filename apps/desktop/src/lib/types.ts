@@ -18,3 +18,19 @@ export interface ScanResult {
   added: number;
   skipped: number;
 }
+
+export type ActivityLogLevel = "info" | "success" | "warning" | "error";
+
+export interface ActivityLogEntry {
+  id: number;
+  timestamp: number;
+  level: ActivityLogLevel;
+  message: string;
+  detail?: string;
+}
+
+export interface ActivityLogPayload {
+  level: ActivityLogLevel;
+  message: string;
+  detail?: string;
+}

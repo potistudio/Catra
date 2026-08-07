@@ -1,3 +1,4 @@
+mod activity_log;
 mod commands;
 mod download;
 mod extension_server;

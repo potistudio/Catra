@@ -1,17 +1,19 @@
 <script lang="ts">
   import { listen } from "@tauri-apps/api/event";
   import { open } from "@tauri-apps/plugin-dialog";
+  import { onMount } from "svelte";
+  import { pushActivityLog, pushActivityLogPayload } from "$lib/activityLog.svelte";
   import { listTracks, removeTrack, scanFolder } from "$lib/api";
+  import ActivityConsole from "$lib/components/ActivityConsole.svelte";
   import PreviewPlayer from "$lib/components/PreviewPlayer.svelte";
   import TrackList from "$lib/components/TrackList.svelte";
-  import type { Track } from "$lib/types";
+  import type { ActivityLogPayload, Track } from "$lib/types";
 
   let tracks = $state<Track[]>([]);
   let selectedTrack = $state<Track | null>(null);
   let loading = $state(false);
-  let statusMessage = $state<string | null>(null);
 
-  async function loadTracks() {
+  async function loadTracks(silent = true) {
     loading = true;
     try {
       tracks = await listTracks();
@@ -19,8 +21,11 @@
         const updated = tracks.find((t) => t.id === selectedTrack!.id);
         selectedTrack = updated ?? null;
       }
+      if (!silent) {
+        pushActivityLog("info", `ライブラリを読み込みました (${tracks.length} 曲)`);
+      }
     } catch (e) {
-      statusMessage = `Failed to load library: ${e}`;
+      pushActivityLog("error", "ライブラリの読み込みに失敗しました", String(e));
     } finally {
       loading = false;
     }
@@ -36,14 +41,18 @@
     if (!selected || typeof selected !== "string") return;
 
     loading = true;
-    statusMessage = null;
+    pushActivityLog("info", "フォルダをスキャン中...", selected);
 
     try {
       const result = await scanFolder(selected);
-      statusMessage = `Added ${result.added} tracks (${result.skipped} already in library)`;
+      pushActivityLog(
+        "success",
+        `スキャン完了: ${result.added} 曲を追加 (${result.skipped} 曲は既存)`,
+        selected,
+      );
       await loadTracks();
     } catch (e) {
-      statusMessage = `Scan failed: ${e}`;
+      pushActivityLog("error", "スキャンに失敗しました", String(e));
     } finally {
       loading = false;
     }
@@ -60,34 +69,38 @@
         selectedTrack = null;
       }
       await loadTracks();
-      statusMessage = `Removed "${track.title ?? track.path}"`;
+      pushActivityLog(
+        "success",
+        `ライブラリから削除: ${track.title ?? track.path}`,
+        track.path,
+      );
     } catch (e) {
-      statusMessage = `Failed to remove track: ${e}`;
+      pushActivityLog("error", "トラックの削除に失敗しました", String(e));
     }
   }
 
-  $effect(() => {
-    void loadTracks();
+  onMount(() => {
+    pushActivityLog("info", "Catra を起動しました");
+    void loadTracks(false);
 
     let unlistenUpdated: (() => void) | undefined;
-    let unlistenError: (() => void) | undefined;
+    let unlistenActivity: (() => void) | undefined;
 
     void listen("library-updated", () => {
       void loadTracks();
-      statusMessage = "Downloaded track added to library";
     }).then((unlisten) => {
       unlistenUpdated = unlisten;
     });
 
-    void listen<string>("download-error", (event) => {
-      statusMessage = `Download failed: ${event.payload}`;
+    void listen<ActivityLogPayload>("activity-log", (event) => {
+      pushActivityLogPayload(event.payload);
     }).then((unlisten) => {
-      unlistenError = unlisten;
+      unlistenActivity = unlisten;
     });
 
     return () => {
       unlistenUpdated?.();
-      unlistenError?.();
+      unlistenActivity?.();
     };
   });
 </script>
@@ -98,9 +111,6 @@
     <button class="btn primary" onclick={handleAddFolder} disabled={loading}>
       Add Folder
     </button>
-    {#if statusMessage}
-      <span class="status">{statusMessage}</span>
-    {/if}
   </header>
 
   <main class="content">
@@ -112,6 +122,7 @@
     />
   </main>
 
+  <ActivityConsole />
   <PreviewPlayer track={selectedTrack} />
 </div>
 
@@ -167,12 +178,6 @@
 
   .btn.primary:hover:not(:disabled) {
     filter: brightness(1.1);
-  }
-
-  .status {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    margin-left: auto;
   }
 
   .content {

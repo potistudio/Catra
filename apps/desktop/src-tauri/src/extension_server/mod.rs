@@ -1,3 +1,4 @@
+use crate::activity_log::emit_activity_log;
 use crate::download::download_and_import;
 use serde::Deserialize;
 use std::io::Read;
@@ -79,6 +80,12 @@ fn handle_request(app: &AppHandle, mut request: tiny_http::Request) {
             return;
         }
 
+        emit_activity_log(
+            app,
+            "info",
+            "Chrome 拡張からダウンロード要求を受信",
+            Some(payload.url.clone()),
+        );
         download_and_import(app.clone(), payload.url);
         let _ = request.respond(json_response(
             StatusCode(202),
@@ -99,10 +106,22 @@ pub fn start(app: AppHandle) {
         let server = match Server::http(&address) {
             Ok(server) => server,
             Err(error) => {
-                eprintln!("Failed to start extension server on {address}: {error}");
+                emit_activity_log(
+                    &app,
+                    "error",
+                    format!("拡張機能サーバーの起動に失敗: {address}"),
+                    Some(error.to_string()),
+                );
                 return;
             }
         };
+
+        emit_activity_log(
+            &app,
+            "success",
+            format!("拡張機能サーバーを起動: http://{address}"),
+            None,
+        );
 
         for request in server.incoming_requests() {
             handle_request(&app, request);
