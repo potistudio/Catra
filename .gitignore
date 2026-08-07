@@ -1,8 +1,24 @@
-# macOS dummy file
+# OS
 .DS_Store
+Thumbs.db
 
-# Cargo artifacts
-/target/
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+.svelte-kit/
+target/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
 
 # Personal references
 refs/
