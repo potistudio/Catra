@@ -1,6 +1,11 @@
 const INLINE_BUTTON_ID = "catra-sc-inline-download";
 const LIST_BUTTON_CLASS = "catra-sc-list-download";
 const ACTION_CONTAINER_CLASS = "mui-16ytee5";
+const MORE_MENU_SELECTORS = [
+  'button[aria-label="More menu"]',
+  'button[aria-label="More"]',
+  'button[title="More"]',
+];
 const SUCCESS_RESET_MS = 2000;
 const POLL_INTERVAL_MS = 500;
 const POLL_DURATION_MS = 60000;
@@ -57,20 +62,75 @@ function getCurrentPageUrl() {
   return CatraSC.normalizeTrackUrl(window.location.href);
 }
 
+function findMoreMenuButton(root) {
+  for (const selector of MORE_MENU_SELECTORS) {
+    const button =
+      root.querySelector?.(selector) ??
+      (root.matches?.(selector) ? root : null);
+    if (button) {
+      return button;
+    }
+  }
+
+  return null;
+}
+
+function getTraversalBoundary(root) {
+  if (
+    root === document ||
+    root === document.documentElement ||
+    root === document.body
+  ) {
+    return document.documentElement;
+  }
+
+  return root;
+}
+
+function findActionButtonGroup(moreButton, boundary) {
+  let node = moreButton.parentElement;
+  while (node && node !== boundary) {
+    const iconButtons = node.querySelectorAll("button.MuiIconButton-root");
+    if (iconButtons.length >= 2) {
+      return node;
+    }
+
+    node = node.parentElement;
+  }
+
+  return moreButton.parentElement;
+}
+
 function resolveActionContainer(root) {
+  const moreButton = findMoreMenuButton(root);
+  if (moreButton) {
+    const container = findActionButtonGroup(
+      moreButton,
+      getTraversalBoundary(root),
+    );
+
+    if (container) {
+      return {
+        container,
+        insertBefore: moreButton,
+        templateButton:
+          moreButton ?? container.querySelector("button.MuiIconButton-root"),
+      };
+    }
+  }
+
   const container =
     root.querySelector?.(`.${ACTION_CONTAINER_CLASS}`) ??
     (root.classList?.contains(ACTION_CONTAINER_CLASS) ? root : null);
 
   if (container) {
-    const moreButton = container.querySelector('button[aria-label="More menu"]');
-    const templateButton =
-      moreButton ?? container.querySelector("button.MuiIconButton-root");
-
+    const fallbackMoreButton = findMoreMenuButton(container);
     return {
       container,
-      insertBefore: moreButton,
-      templateButton,
+      insertBefore: fallbackMoreButton,
+      templateButton:
+        fallbackMoreButton ??
+        container.querySelector("button.MuiIconButton-root"),
     };
   }
 
@@ -443,9 +503,7 @@ function startPolling() {
 
   pollTimer = setInterval(() => {
     refreshButtons();
-    const inlineReady = document
-      .querySelector(`.${ACTION_CONTAINER_CLASS}`)
-      ?.querySelector(`#${INLINE_BUTTON_ID}`)?.isConnected;
+    const inlineReady = document.getElementById(INLINE_BUTTON_ID)?.isConnected;
 
     if (inlineReady || Date.now() - pollStartedAt > POLL_DURATION_MS) {
       stopPolling();
@@ -481,8 +539,7 @@ function startObserver() {
         if (
           element.classList?.contains(ACTION_CONTAINER_CLASS) ||
           element.querySelector?.(`.${ACTION_CONTAINER_CLASS}`) ||
-          element.matches?.('button[aria-label="More menu"]') ||
-          element.querySelector?.('button[aria-label="More menu"]')
+          findMoreMenuButton(element)
         ) {
           scheduleRefresh();
           return;
