@@ -1,8 +1,10 @@
-use super::db::{LibraryState, ScanResult};
+use super::db::{save_artwork, LibraryState, ScanResult};
 use lofty::file::AudioFile;
 use lofty::file::TaggedFileExt;
+use lofty::picture::PictureType;
 use lofty::probe::Probe;
 use lofty::tag::Accessor;
+use lofty::tag::ItemKey;
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -35,6 +37,11 @@ pub fn scan_folder(library: &LibraryState, folder: &str) -> Result<ScanResult, S
         let path_str = path.to_string_lossy().to_string();
         let metadata = read_metadata(path);
 
+        let artwork_path = metadata
+            .artwork
+            .as_ref()
+            .and_then(|(data, mime)| save_artwork(library.artwork_dir(), &path_str, data, mime));
+
         let inserted = library
             .insert_track(
                 &path_str,
@@ -43,6 +50,11 @@ pub fn scan_folder(library: &LibraryState, folder: &str) -> Result<ScanResult, S
                 metadata.album.as_deref(),
                 metadata.duration_ms,
                 metadata.bpm,
+                metadata.bitrate_kbps,
+                metadata.genre.as_deref(),
+                metadata.key.as_deref(),
+                metadata.rating,
+                artwork_path.as_deref(),
                 added_at,
             )
             .map_err(|e| e.to_string())?;
@@ -70,6 +82,11 @@ struct FileMetadata {
     album: Option<String>,
     duration_ms: Option<u64>,
     bpm: Option<f32>,
+    bitrate_kbps: Option<u32>,
+    genre: Option<String>,
+    key: Option<String>,
+    rating: Option<u8>,
+    artwork: Option<(Vec<u8>, String)>,
 }
 
 fn read_metadata(path: &Path) -> FileMetadata {
@@ -81,29 +98,28 @@ fn read_metadata(path: &Path) -> FileMetadata {
     let tagged_file = match Probe::open(path).and_then(|p| p.read()) {
         Ok(file) => file,
         Err(_) => {
-            return FileMetadata {
-                title: fallback_title,
-                artist: None,
-                album: None,
-                duration_ms: None,
-                bpm: None,
-            };
+            return empty_metadata(fallback_title);
         }
     };
 
     let properties = tagged_file.properties();
     let duration_ms = Some(properties.duration().as_millis() as u64);
+    let bitrate_kbps = properties.audio_bitrate();
 
     if let Some(tag) = tagged_file.primary_tag() {
-        let title = tag
-            .title()
-            .map(|s| s.to_string())
-            .or(fallback_title);
+        let title = tag.title().map(|s| s.to_string()).or(fallback_title);
         let artist = tag.artist().map(|s| s.to_string());
         let album = tag.album().map(|s| s.to_string());
+        let genre = tag.genre().map(|s| s.to_string());
+        let key = tag
+            .get_string(&ItemKey::InitialKey)
+            .map(|s| s.to_string());
         let bpm = tag
-            .get_string(&lofty::tag::ItemKey::Bpm)
+            .get_string(&ItemKey::Bpm)
+            .or_else(|| tag.get_string(&ItemKey::IntegerBpm))
             .and_then(|s| s.parse::<f32>().ok());
+        let rating = parse_rating(tag);
+        let artwork = extract_artwork(tag);
 
         return FileMetadata {
             title,
@@ -111,6 +127,11 @@ fn read_metadata(path: &Path) -> FileMetadata {
             album,
             duration_ms,
             bpm,
+            bitrate_kbps,
+            genre,
+            key,
+            rating,
+            artwork,
         };
     }
 
@@ -120,5 +141,64 @@ fn read_metadata(path: &Path) -> FileMetadata {
         album: None,
         duration_ms,
         bpm: None,
+        bitrate_kbps,
+        genre: None,
+        key: None,
+        rating: None,
+        artwork: None,
     }
+}
+
+fn empty_metadata(fallback_title: Option<String>) -> FileMetadata {
+    FileMetadata {
+        title: fallback_title,
+        artist: None,
+        album: None,
+        duration_ms: None,
+        bpm: None,
+        bitrate_kbps: None,
+        genre: None,
+        key: None,
+        rating: None,
+        artwork: None,
+    }
+}
+
+fn parse_rating(tag: &lofty::tag::Tag) -> Option<u8> {
+    if let Some(item) = tag.get(&ItemKey::Popularimeter) {
+        if let Some(binary) = item.value().binary() {
+            if let Some(null_pos) = binary.iter().position(|&b| b == 0) {
+                let rating_index = null_pos + 1;
+                if rating_index < binary.len() {
+                    let rating = binary[rating_index];
+                    if rating > 0 {
+                        return Some(rating);
+                    }
+                }
+            }
+        }
+
+        if let Some(text) = item.value().text() {
+            if let Ok(rating) = text.parse::<u8>() {
+                if rating > 0 {
+                    return Some(rating);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn extract_artwork(tag: &lofty::tag::Tag) -> Option<(Vec<u8>, String)> {
+    let picture = tag
+        .get_picture_type(PictureType::CoverFront)
+        .or_else(|| tag.pictures().first())?;
+
+    let mime = picture
+        .mime_type()
+        .map(|m| m.as_str().to_string())
+        .unwrap_or_else(|| "image/jpeg".to_string());
+
+    Some((picture.data().to_vec(), mime))
 }

@@ -6,6 +6,11 @@ export interface Track {
   album: string | null;
   durationMs: number | null;
   bpm: number | null;
+  bitrateKbps: number | null;
+  genre: string | null;
+  key: string | null;
+  rating: number | null;
+  artworkPath: string | null;
   addedAt: number;
 }
 

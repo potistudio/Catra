@@ -1,6 +1,15 @@
 <script lang="ts">
+  import TrackArtwork from "$lib/components/TrackArtwork.svelte";
   import type { Track } from "$lib/types";
-  import { displayArtist, displayTitle, formatDuration } from "$lib/format";
+  import {
+    displayArtist,
+    displayTitle,
+    displayValue,
+    formatBitrate,
+    formatBpm,
+    formatDuration,
+    formatRating,
+  } from "$lib/format";
 
   interface Props {
     tracks: Track[];
@@ -17,11 +26,15 @@
     tracks.filter((track) => {
       if (!query.trim()) return true;
       const q = query.toLowerCase();
-      const title = (track.title ?? "").toLowerCase();
-      const artist = (track.artist ?? "").toLowerCase();
-      const album = (track.album ?? "").toLowerCase();
-      const path = track.path.toLowerCase();
-      return title.includes(q) || artist.includes(q) || album.includes(q) || path.includes(q);
+      const fields = [
+        track.title,
+        track.artist,
+        track.album,
+        track.genre,
+        track.key,
+        track.path,
+      ];
+      return fields.some((field) => (field ?? "").toLowerCase().includes(q));
     }),
   );
 
@@ -38,7 +51,7 @@
     <input
       class="search"
       type="search"
-      placeholder="Search tracks..."
+      placeholder="トラックを検索..."
       bind:value={query}
     />
     <span class="count">{filtered.length} tracks</span>
@@ -47,20 +60,25 @@
   {#if filtered.length === 0}
     <div class="empty">
       {#if tracks.length === 0}
-        <p>No tracks in library</p>
-        <p class="hint">Add a folder to scan your music collection</p>
+        <p>ライブラリにトラックがありません</p>
+        <p class="hint">フォルダを追加して音楽をスキャンしてください</p>
       {:else}
-        <p>No tracks match your search</p>
+        <p>検索に一致するトラックがありません</p>
       {/if}
     </div>
   {:else}
     <div class="table-wrap" role="grid" aria-label="Track library">
       <div class="table-header" role="row">
-        <span role="columnheader">Title</span>
-        <span role="columnheader">Artist</span>
-        <span role="columnheader">Album</span>
-        <span role="columnheader">Duration</span>
+        <span role="columnheader">ジャケット</span>
+        <span role="columnheader">タイトル</span>
+        <span role="columnheader">アーティスト</span>
+        <span role="columnheader">アルバム</span>
         <span role="columnheader">BPM</span>
+        <span role="columnheader">ビットレート</span>
+        <span role="columnheader">キー</span>
+        <span role="columnheader">ジャンル</span>
+        <span role="columnheader">レート</span>
+        <span role="columnheader">時間</span>
         <span role="columnheader"></span>
       </div>
 
@@ -74,13 +92,20 @@
           onkeydown={(e) => handleKeydown(e, track)}
           ondblclick={() => onselect(track)}
         >
+          <span class="cell artwork-cell" role="gridcell">
+            <TrackArtwork artworkPath={track.artworkPath} title={displayTitle(track)} />
+          </span>
           <span class="cell title" role="gridcell">{displayTitle(track)}</span>
           <span class="cell" role="gridcell">{displayArtist(track)}</span>
-          <span class="cell muted" role="gridcell">{track.album ?? "—"}</span>
-          <span class="cell mono" role="gridcell">{formatDuration(track.durationMs)}</span>
-          <span class="cell mono" role="gridcell">
-            {track.bpm ? track.bpm.toFixed(1) : "—"}
+          <span class="cell muted" role="gridcell">{displayValue(track.album)}</span>
+          <span class="cell mono" role="gridcell">{formatBpm(track.bpm)}</span>
+          <span class="cell mono" role="gridcell">{formatBitrate(track.bitrateKbps)}</span>
+          <span class="cell mono" role="gridcell">{displayValue(track.key)}</span>
+          <span class="cell muted" role="gridcell">{displayValue(track.genre)}</span>
+          <span class="cell rating" role="gridcell" title={track.rating ? `${track.rating}/255` : ""}>
+            {formatRating(track.rating)}
           </span>
+          <span class="cell mono" role="gridcell">{formatDuration(track.durationMs)}</span>
           <span class="cell actions" role="gridcell">
             <button
               class="remove-btn"
@@ -89,7 +114,7 @@
                 onremove(track);
               }}
               aria-label="Remove from library"
-              title="Remove from library"
+              title="ライブラリから削除"
             >
               ✕
             </button>
@@ -158,16 +183,19 @@
 
   .table-wrap {
     flex: 1;
-    overflow-y: auto;
+    overflow: auto;
   }
 
   .table-header,
   .table-row {
     display: grid;
-    grid-template-columns: 2fr 1.5fr 1.5fr 5rem 4rem 2.5rem;
-    gap: 0.75rem;
+    grid-template-columns:
+      3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
+      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 2rem;
+    gap: 0.6rem;
     align-items: center;
-    padding: 0 1.25rem;
+    padding: 0 1rem;
+    min-width: 72rem;
   }
 
   .table-header {
@@ -176,7 +204,7 @@
     z-index: 1;
     padding-top: 0.5rem;
     padding-bottom: 0.5rem;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -186,9 +214,9 @@
   }
 
   .table-row {
-    padding-top: 0.45rem;
-    padding-bottom: 0.45rem;
-    font-size: 0.9rem;
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+    font-size: 0.85rem;
     border-bottom: 1px solid var(--border-subtle);
     cursor: pointer;
     outline: none;
@@ -213,6 +241,12 @@
     text-overflow: ellipsis;
   }
 
+  .artwork-cell {
+    display: flex;
+    justify-content: center;
+    overflow: visible;
+  }
+
   .title {
     font-weight: 500;
   }
@@ -223,8 +257,14 @@
 
   .mono {
     font-variant-numeric: tabular-nums;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: var(--text-muted);
+  }
+
+  .rating {
+    font-size: 0.75rem;
+    color: #f0c040;
+    letter-spacing: -0.05em;
   }
 
   .actions {

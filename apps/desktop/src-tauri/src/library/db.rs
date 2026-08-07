@@ -1,6 +1,7 @@
 use rusqlite::{params, Connection};
 use serde::Serialize;
-use std::path::PathBuf;
+use std::hash::{Hash, Hasher};
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 
@@ -14,6 +15,11 @@ pub struct Track {
     pub album: Option<String>,
     pub duration_ms: Option<u64>,
     pub bpm: Option<f32>,
+    pub bitrate_kbps: Option<u32>,
+    pub genre: Option<String>,
+    pub key: Option<String>,
+    pub rating: Option<u8>,
+    pub artwork_path: Option<String>,
     pub added_at: i64,
 }
 
@@ -26,13 +32,15 @@ pub struct ScanResult {
 
 pub struct LibraryState {
     conn: Mutex<Connection>,
+    artwork_dir: PathBuf,
 }
 
 impl LibraryState {
-    pub fn new(db_path: PathBuf) -> Result<Self, rusqlite::Error> {
+    pub fn new(db_path: PathBuf, artwork_dir: PathBuf) -> Result<Self, rusqlite::Error> {
         if let Some(parent) = db_path.parent() {
             std::fs::create_dir_all(parent).ok();
         }
+        std::fs::create_dir_all(&artwork_dir).ok();
 
         let conn = Connection::open(db_path)?;
         conn.execute_batch(
@@ -45,22 +53,34 @@ impl LibraryState {
                 album TEXT,
                 duration_ms INTEGER,
                 bpm REAL,
+                bitrate_kbps INTEGER,
+                genre TEXT,
+                key_name TEXT,
+                rating INTEGER,
+                artwork_path TEXT,
                 added_at INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
             CREATE INDEX IF NOT EXISTS idx_tracks_title ON tracks(title);
             ",
         )?;
+        migrate(&conn)?;
 
         Ok(Self {
             conn: Mutex::new(conn),
+            artwork_dir,
         })
+    }
+
+    pub fn artwork_dir(&self) -> &Path {
+        &self.artwork_dir
     }
 
     pub fn list_tracks(&self) -> Result<Vec<Track>, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, path, title, artist, album, duration_ms, bpm, added_at
+            "SELECT id, path, title, artist, album, duration_ms, bpm, bitrate_kbps,
+                    genre, key_name, rating, artwork_path, added_at
              FROM tracks
              ORDER BY artist COLLATE NOCASE, title COLLATE NOCASE",
         )?;
@@ -75,7 +95,12 @@ impl LibraryState {
                     album: row.get(4)?,
                     duration_ms: row.get(5)?,
                     bpm: row.get(6)?,
-                    added_at: row.get(7)?,
+                    bitrate_kbps: row.get(7)?,
+                    genre: row.get(8)?,
+                    key: row.get(9)?,
+                    rating: row.get(10)?,
+                    artwork_path: row.get(11)?,
+                    added_at: row.get(12)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -91,13 +116,33 @@ impl LibraryState {
         album: Option<&str>,
         duration_ms: Option<u64>,
         bpm: Option<f32>,
+        bitrate_kbps: Option<u32>,
+        genre: Option<&str>,
+        key: Option<&str>,
+        rating: Option<u8>,
+        artwork_path: Option<&str>,
         added_at: i64,
     ) -> Result<bool, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         let rows = conn.execute(
-            "INSERT OR IGNORE INTO tracks (path, title, artist, album, duration_ms, bpm, added_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![path, title, artist, album, duration_ms, bpm, added_at],
+            "INSERT OR IGNORE INTO tracks (
+                path, title, artist, album, duration_ms, bpm, bitrate_kbps,
+                genre, key_name, rating, artwork_path, added_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![
+                path,
+                title,
+                artist,
+                album,
+                duration_ms,
+                bpm,
+                bitrate_kbps,
+                genre,
+                key,
+                rating,
+                artwork_path,
+                added_at
+            ],
         )?;
 
         Ok(rows > 0)
@@ -105,18 +150,79 @@ impl LibraryState {
 
     pub fn remove_track(&self, id: i64) -> Result<bool, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
+
+        let artwork_path: Option<String> = conn
+            .query_row(
+                "SELECT artwork_path FROM tracks WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+            .ok();
+
         let rows = conn.execute("DELETE FROM tracks WHERE id = ?1", params![id])?;
+
+        if rows > 0 {
+            if let Some(path) = artwork_path {
+                std::fs::remove_file(path).ok();
+            }
+        }
+
         Ok(rows > 0)
     }
 }
 
-pub fn init_library(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    let db_path = app
-        .path()
-        .app_data_dir()?
-        .join("library.db");
+pub fn save_artwork(
+    artwork_dir: &Path,
+    source_path: &str,
+    data: &[u8],
+    mime: &str,
+) -> Option<String> {
+    let ext = match mime {
+        "image/png" => "png",
+        "image/gif" => "gif",
+        "image/webp" => "webp",
+        "image/bmp" => "bmp",
+        _ => "jpg",
+    };
 
-    let state = LibraryState::new(db_path)?;
+    let hash = path_hash(source_path);
+    let file_path = artwork_dir.join(format!("{hash}.{ext}"));
+
+    if std::fs::write(&file_path, data).is_ok() {
+        Some(file_path.to_string_lossy().to_string())
+    } else {
+        None
+    }
+}
+
+fn path_hash(path: &str) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    path.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
+}
+
+fn migrate(conn: &Connection) -> Result<(), rusqlite::Error> {
+    let migrations = [
+        "ALTER TABLE tracks ADD COLUMN bitrate_kbps INTEGER",
+        "ALTER TABLE tracks ADD COLUMN genre TEXT",
+        "ALTER TABLE tracks ADD COLUMN key_name TEXT",
+        "ALTER TABLE tracks ADD COLUMN rating INTEGER",
+        "ALTER TABLE tracks ADD COLUMN artwork_path TEXT",
+    ];
+
+    for sql in migrations {
+        conn.execute(sql, []).ok();
+    }
+
+    Ok(())
+}
+
+pub fn init_library(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let data_dir = app.path().app_data_dir()?;
+    let db_path = data_dir.join("library.db");
+    let artwork_dir = data_dir.join("artwork");
+
+    let state = LibraryState::new(db_path, artwork_dir)?;
     app.manage(state);
 
     Ok(())

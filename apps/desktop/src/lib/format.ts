@@ -16,5 +16,26 @@ export function displayTitle(track: { title: string | null; path: string }): str
 }
 
 export function displayArtist(track: { artist: string | null }): string {
-  return track.artist ?? "Unknown Artist";
+  return track.artist ?? "—";
+}
+
+export function formatBitrate(kbps: number | null): string {
+  if (kbps === null || kbps <= 0) return "—";
+  return `${kbps} kbps`;
+}
+
+export function formatBpm(bpm: number | null): string {
+  if (bpm === null || bpm <= 0) return "—";
+  return bpm.toFixed(1);
+}
+
+export function formatRating(rating: number | null): string {
+  if (rating === null || rating === 0) return "—";
+
+  const stars = Math.max(1, Math.min(5, Math.round((rating / 255) * 5)));
+  return `${"★".repeat(stars)}${"☆".repeat(5 - stars)}`;
+}
+
+export function displayValue(value: string | null): string {
+  return value && value.trim() ? value : "—";
 }

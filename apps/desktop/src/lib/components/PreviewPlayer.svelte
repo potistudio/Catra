@@ -1,7 +1,16 @@
 <script lang="ts">
   import { convertFileSrc } from "@tauri-apps/api/core";
+  import TrackArtwork from "$lib/components/TrackArtwork.svelte";
   import type { Track } from "$lib/types";
-  import { displayArtist, displayTitle, formatDuration } from "$lib/format";
+  import {
+    displayArtist,
+    displayTitle,
+    displayValue,
+    formatBitrate,
+    formatBpm,
+    formatDuration,
+    formatRating,
+  } from "$lib/format";
 
   interface Props {
     track: Track | null;
@@ -80,12 +89,23 @@
       onended={handleEnded}
     ></audio>
 
+    <TrackArtwork
+      artworkPath={track.artworkPath}
+      title={displayTitle(track)}
+      size={56}
+    />
+
     <div class="preview-info">
       <span class="preview-title">{displayTitle(track)}</span>
       <span class="preview-artist">{displayArtist(track)}</span>
-      {#if track.bpm}
-        <span class="preview-bpm">{track.bpm.toFixed(1)} BPM</span>
-      {/if}
+      <span class="preview-album">{displayValue(track.album)}</span>
+      <div class="preview-meta">
+        <span>BPM {formatBpm(track.bpm)}</span>
+        <span>{formatBitrate(track.bitrateKbps)}</span>
+        <span>Key {displayValue(track.key)}</span>
+        <span>{displayValue(track.genre)}</span>
+        <span class="rating">{formatRating(track.rating)}</span>
+      </div>
     </div>
 
     <div class="preview-controls">
@@ -109,7 +129,7 @@
       <span class="time">{formatDuration(duration * 1000)}</span>
     </div>
   {:else}
-    <p class="preview-empty">Select a track to preview</p>
+    <p class="preview-empty">トラックを選択してプレビュー</p>
   {/if}
 </footer>
 
@@ -117,11 +137,11 @@
   .preview {
     display: flex;
     align-items: center;
-    gap: 1.5rem;
+    gap: 1rem;
     padding: 0.75rem 1.25rem;
     border-top: 1px solid var(--border);
     background: var(--surface-raised);
-    min-height: 72px;
+    min-height: 80px;
   }
 
   .preview-empty {
@@ -133,9 +153,9 @@
   .preview-info {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
-    min-width: 200px;
-    max-width: 280px;
+    gap: 0.1rem;
+    min-width: 180px;
+    max-width: 320px;
   }
 
   .preview-title {
@@ -153,10 +173,26 @@
     text-overflow: ellipsis;
   }
 
-  .preview-bpm {
-    font-size: 0.75rem;
-    color: var(--accent);
+  .preview-album {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .preview-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+    margin-top: 0.15rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
     font-variant-numeric: tabular-nums;
+  }
+
+  .preview-meta .rating {
+    color: #f0c040;
   }
 
   .preview-controls {
@@ -164,6 +200,7 @@
     align-items: center;
     gap: 0.75rem;
     flex: 1;
+    min-width: 0;
   }
 
   .play-btn {
