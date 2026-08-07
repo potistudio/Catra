@@ -2,7 +2,12 @@ import { displayTitle } from "$lib/format";
 import type { Track } from "$lib/types";
 
 export const TRACK_ROW_HEIGHT = 48;
+export const TRACK_GRID_MIN_CARD_WIDTH = 148;
+export const TRACK_GRID_GAP = 12;
+export const TRACK_GRID_ROW_HEIGHT = 196;
 export const VIRTUAL_OVERSCAN = 12;
+
+export type ViewMode = "list" | "grid";
 
 export type SortColumn =
   | "title"
@@ -117,4 +122,41 @@ export function getVisibleTrackRange(
   const end = Math.min(totalCount, start + visibleCount);
 
   return { start, end };
+}
+
+export function getGridColumnCount(containerWidth: number): number {
+  if (containerWidth <= 0) return 1;
+  return Math.max(
+    1,
+    Math.floor(
+      (containerWidth + TRACK_GRID_GAP) /
+        (TRACK_GRID_MIN_CARD_WIDTH + TRACK_GRID_GAP),
+    ),
+  );
+}
+
+export function getVisibleGridRange(
+  scrollTop: number,
+  viewportHeight: number,
+  columnCount: number,
+  totalCount: number,
+): { start: number; end: number; startRow: number } {
+  if (totalCount === 0 || columnCount <= 0) {
+    return { start: 0, end: 0, startRow: 0 };
+  }
+
+  const rowCount = Math.ceil(totalCount / columnCount);
+  const startRow = Math.max(
+    0,
+    Math.floor(scrollTop / TRACK_GRID_ROW_HEIGHT) - VIRTUAL_OVERSCAN,
+  );
+  const visibleRows =
+    Math.ceil(viewportHeight / TRACK_GRID_ROW_HEIGHT) + VIRTUAL_OVERSCAN * 2;
+  const endRow = Math.min(rowCount, startRow + visibleRows);
+
+  return {
+    start: startRow * columnCount,
+    end: Math.min(totalCount, endRow * columnCount),
+    startRow,
+  };
 }

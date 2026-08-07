@@ -1,4 +1,5 @@
 <script lang="ts">
+  import TrackGrid from "$lib/components/TrackGrid.svelte";
   import TrackRow from "$lib/components/TrackRow.svelte";
   import type { Track } from "$lib/types";
   import {
@@ -8,7 +9,20 @@
     TRACK_ROW_HEIGHT,
     type SortColumn,
     type SortDirection,
+    type ViewMode,
   } from "$lib/trackListView";
+
+  const SORT_LABELS: Record<SortColumn, string> = {
+    title: "タイトル",
+    artist: "アーティスト",
+    album: "アルバム",
+    bpm: "BPM",
+    bitrateKbps: "ビットレート",
+    key: "キー",
+    genre: "ジャンル",
+    rating: "レート",
+    durationMs: "時間",
+  };
 
   interface Props {
     tracks: Track[];
@@ -21,6 +35,7 @@
 
   let queryInput = $state("");
   let query = $state("");
+  let viewMode = $state<ViewMode>("list");
   let sortColumn = $state<SortColumn>("artist");
   let sortDirection = $state<SortDirection>("asc");
   let scrollTop = $state(0);
@@ -90,7 +105,60 @@
       placeholder="トラックを検索..."
       bind:value={queryInput}
     />
+    {#if viewMode === "grid"}
+      <div class="grid-sort">
+        <label class="sort-label" for="grid-sort-column">並び替え</label>
+        <select
+          id="grid-sort-column"
+          class="sort-select"
+          bind:value={sortColumn}
+        >
+          {#each Object.entries(SORT_LABELS) as [value, label] (value)}
+            <option value={value}>{label}</option>
+          {/each}
+        </select>
+        <button
+          type="button"
+          class="sort-direction"
+          aria-label={sortDirection === "asc" ? "昇順" : "降順"}
+          onclick={() => (sortDirection = sortDirection === "asc" ? "desc" : "asc")}
+        >
+          {sortDirection === "asc" ? "↑" : "↓"}
+        </button>
+      </div>
+    {/if}
     <span class="count">{sorted.length} tracks</span>
+    <div class="view-toggle" role="group" aria-label="表示切替">
+      <button
+        type="button"
+        class="view-btn"
+        class:active={viewMode === "list"}
+        aria-label="リスト表示"
+        aria-pressed={viewMode === "list"}
+        onclick={() => (viewMode = "list")}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+          <rect x="1" y="2" width="14" height="2" rx="0.5" fill="currentColor" />
+          <rect x="1" y="7" width="14" height="2" rx="0.5" fill="currentColor" />
+          <rect x="1" y="12" width="14" height="2" rx="0.5" fill="currentColor" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="view-btn"
+        class:active={viewMode === "grid"}
+        aria-label="グリッド表示"
+        aria-pressed={viewMode === "grid"}
+        onclick={() => (viewMode = "grid")}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+          <rect x="1" y="1" width="6" height="6" rx="1" fill="currentColor" />
+          <rect x="9" y="1" width="6" height="6" rx="1" fill="currentColor" />
+          <rect x="1" y="9" width="6" height="6" rx="1" fill="currentColor" />
+          <rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" />
+        </svg>
+      </button>
+    </div>
   </div>
 
   {#if sorted.length === 0}
@@ -102,6 +170,13 @@
         <p>検索に一致するトラックがありません</p>
       {/if}
     </div>
+  {:else if viewMode === "grid"}
+    <TrackGrid
+      tracks={sorted}
+      selectedId={selectedId}
+      {onselect}
+      {onremove}
+    />
   {:else}
     <div
       class="table-wrap"
@@ -258,6 +333,92 @@
     font-size: 0.8rem;
     color: var(--text-muted);
     white-space: nowrap;
+  }
+
+  .grid-sort {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .sort-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .sort-select {
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
+  .sort-select:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+  }
+
+  .sort-direction {
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+
+  .sort-direction:hover {
+    background: var(--surface-hover);
+  }
+
+  .sort-direction:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .view-toggle {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .view-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .view-btn:not(:last-child) {
+    border-right: 1px solid var(--border);
+  }
+
+  .view-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+  }
+
+  .view-btn.active {
+    background: var(--accent-subtle);
+    color: var(--accent);
+  }
+
+  .view-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
   }
 
   .empty {
