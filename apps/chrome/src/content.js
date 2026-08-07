@@ -9,7 +9,6 @@ const MORE_MENU_SELECTORS = [
 ];
 const SUCCESS_RESET_MS = 2000;
 const POLL_INTERVAL_MS = 500;
-const POLL_DURATION_MS = 60000;
 
 const NON_TRACK_SEGMENTS = new Set([
   "discover",
@@ -170,14 +169,52 @@ function resolveActionContainer(root) {
   return null;
 }
 
-function findInlineActionContainer() {
+function findPrimaryMuiActionContainer() {
+  let bestContainer = null;
+  let bestVisibleButtons = 0;
+
   for (const container of document.querySelectorAll(`.${ACTION_CONTAINER_CLASS}`)) {
-    if (
-      container.querySelector("button.MuiIconButton-root") &&
-      findMoreMenuButton(container)
-    ) {
-      return buildActionTarget(container);
+    const visibleButtons = [...container.querySelectorAll("button.MuiIconButton-root")].filter(
+      (button) => button.offsetParent !== null,
+    ).length;
+
+    if (visibleButtons > bestVisibleButtons) {
+      bestVisibleButtons = visibleButtons;
+      bestContainer = container;
     }
+  }
+
+  return bestContainer;
+}
+
+function findPrimaryLegacyActionGroup() {
+  const groups = document.querySelectorAll(
+    ".listenEngagement__actions .sc-button-group, .soundActions .sc-button-group",
+  );
+
+  for (const group of groups) {
+    const moreButton = group.querySelector(".sc-button-more");
+    if (moreButton?.offsetParent !== null) {
+      return group;
+    }
+  }
+
+  return groups[0] ?? null;
+}
+
+function findInlineActionContainer() {
+  const muiContainer = findPrimaryMuiActionContainer();
+  if (muiContainer) {
+    return buildActionTarget(muiContainer);
+  }
+
+  const legacyGroup = findPrimaryLegacyActionGroup();
+  if (legacyGroup) {
+    return {
+      container: legacyGroup,
+      insertBefore: legacyGroup.querySelector(".sc-button-more"),
+      templateButton: legacyGroup.querySelector("button"),
+    };
   }
 
   const engagementRoot =
@@ -188,15 +225,6 @@ function findInlineActionContainer() {
     const scopedTarget = resolveActionContainer(engagementRoot);
     if (scopedTarget) {
       return scopedTarget;
-    }
-
-    const legacyGroup = engagementRoot.querySelector(".sc-button-group");
-    if (legacyGroup) {
-      return {
-        container: legacyGroup,
-        insertBefore: legacyGroup.querySelector(".sc-button-more"),
-        templateButton: legacyGroup.querySelector("button"),
-      };
     }
   }
 
@@ -289,7 +317,10 @@ function createMuiDownloadButton({ id, className, onClick }) {
   if (id) {
     button.id = id;
   }
-  button.appendChild(createDownloadIcon());
+
+  const iconWrapper = document.createElement("div");
+  iconWrapper.appendChild(createDownloadIcon());
+  button.appendChild(iconWrapper);
   button.addEventListener("click", onClick);
   return button;
 }
@@ -573,7 +604,6 @@ function refreshButtons() {
 
 let observer = null;
 let pollTimer = null;
-let pollStartedAt = 0;
 let refreshScheduled = false;
 let lastUrl = location.href;
 
@@ -598,19 +628,8 @@ function stopPolling() {
 
 function startPolling() {
   stopPolling();
-  pollStartedAt = Date.now();
-
   pollTimer = setInterval(() => {
     refreshButtons();
-    const inlineReady =
-      document.getElementById(INLINE_BUTTON_ID)?.isConnected ||
-      document.querySelector(`.${ACTION_CONTAINER_CLASS}`)
-        ?.querySelector(`#${INLINE_BUTTON_ID}`)
-        ?.isConnected;
-
-    if (inlineReady || Date.now() - pollStartedAt > POLL_DURATION_MS) {
-      stopPolling();
-    }
   }, POLL_INTERVAL_MS);
 }
 
@@ -628,6 +647,47 @@ function onNavigation() {
   startPolling();
 }
 
+function shouldScheduleRefreshFromMutation(mutation) {
+  if (mutation.type === "childList") {
+    for (const node of mutation.addedNodes) {
+      if (node.nodeType !== Node.ELEMENT_NODE) {
+        continue;
+      }
+
+      const element = node;
+      if (
+        element.id === INLINE_BUTTON_ID ||
+        element.classList?.contains(ACTION_CONTAINER_CLASS) ||
+        element.classList?.contains("listenEngagement__actions") ||
+        element.classList?.contains("soundActions") ||
+        element.classList?.contains("sc-button-group") ||
+        element.querySelector?.(`.${ACTION_CONTAINER_CLASS}`) ||
+        element.querySelector?.(".listenEngagement__actions") ||
+        element.querySelector?.(".soundActions") ||
+        findMoreMenuButton(element)
+      ) {
+        return true;
+      }
+    }
+
+    for (const node of mutation.removedNodes) {
+      if (node.nodeType !== Node.ELEMENT_NODE) {
+        continue;
+      }
+
+      const element = node;
+      if (
+        element.id === INLINE_BUTTON_ID ||
+        element.querySelector?.(`#${INLINE_BUTTON_ID}`)
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function startObserver() {
   if (observer) {
     return;
@@ -635,24 +695,9 @@ function startObserver() {
 
   observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
-      if (mutation.type !== "childList" || mutation.addedNodes.length === 0) {
-        continue;
-      }
-
-      for (const node of mutation.addedNodes) {
-        if (node.nodeType !== Node.ELEMENT_NODE) {
-          continue;
-        }
-
-        const element = node;
-        if (
-          element.classList?.contains(ACTION_CONTAINER_CLASS) ||
-          element.querySelector?.(`.${ACTION_CONTAINER_CLASS}`) ||
-          findMoreMenuButton(element)
-        ) {
-          scheduleRefresh();
-          return;
-        }
+      if (shouldScheduleRefreshFromMutation(mutation)) {
+        scheduleRefresh();
+        return;
       }
     }
   });
@@ -700,3 +745,6 @@ onNavigation();
 startObserver();
 hookHistory();
 watchNavigation();
+startPolling();
+
+document.documentElement.dataset.catraScExtension = "loaded";
