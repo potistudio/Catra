@@ -122,11 +122,9 @@ async function downloadTrack(trackUrl, button) {
   }
 
   try {
-    const track = await CatraSC.resolveTrack(trackUrl);
     const result = await chrome.runtime.sendMessage({
       type: "DOWNLOAD_TRACK",
-      downloadUrl: track.downloadUrl,
-      fileName: track.fileName,
+      trackUrl: CatraSC.normalizeTrackUrl(trackUrl),
     });
 
     if (!result?.success) {

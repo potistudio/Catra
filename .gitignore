@@ -6,3 +6,6 @@
 
 # Personal references
 refs/
+
+# Generated Chrome native messaging manifest
+apps/chrome/host/com.catra.ytdlp.json
