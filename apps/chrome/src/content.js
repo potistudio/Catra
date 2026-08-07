@@ -1,6 +1,7 @@
 const INLINE_BUTTON_ID = "catra-sc-inline-download";
 const LIST_BUTTON_CLASS = "catra-sc-list-download";
 const ACTION_CONTAINER_CLASS = "mui-16ytee5";
+const LOG_PREFIX = "[Catra SC]";
 const MORE_MENU_SELECTORS = [
   'button[aria-label="More menu"]',
   'button[aria-label="More"]',
@@ -9,6 +10,14 @@ const MORE_MENU_SELECTORS = [
 ];
 const SUCCESS_RESET_MS = 2000;
 const POLL_INTERVAL_MS = 500;
+const DEBUG_LOG_INTERVAL_MS = 5000;
+
+console.info(`${LOG_PREFIX} script evaluating`, location.href);
+
+let inlineDownloading = false;
+let successResetTimeout = null;
+let lastDebugLogAt = 0;
+let inlineButtonReadyLogged = false;
 
 const NON_TRACK_SEGMENTS = new Set([
   "discover",
@@ -37,8 +46,57 @@ const NON_TRACK_SEGMENTS = new Set([
   "charts",
 ]);
 
-let inlineDownloading = false;
-let successResetTimeout = null;
+function logDebug(message, details = undefined) {
+  if (details === undefined) {
+    console.info(`${LOG_PREFIX} ${message}`);
+    return;
+  }
+
+  console.info(`${LOG_PREFIX} ${message}`, details);
+}
+
+function logDebugThrottled(message, details) {
+  const now = Date.now();
+  if (now - lastDebugLogAt < DEBUG_LOG_INTERVAL_MS) {
+    return;
+  }
+
+  lastDebugLogAt = now;
+  logDebug(message, details);
+}
+
+function collectElementsDeep(root, selector) {
+  if (!root) {
+    return [];
+  }
+
+  const results = [];
+  try {
+    results.push(...root.querySelectorAll(selector));
+  } catch {
+    return results;
+  }
+
+  for (const element of root.querySelectorAll("*")) {
+    if (element.shadowRoot) {
+      results.push(...collectElementsDeep(element.shadowRoot, selector));
+    }
+  }
+
+  return results;
+}
+
+function querySelectorDeep(root, selector) {
+  return collectElementsDeep(root, selector)[0] ?? null;
+}
+
+function isDocumentRoot(root) {
+  return (
+    root === document ||
+    root === document.documentElement ||
+    root === document.body
+  );
+}
 
 function getPathSegments() {
   const segments = window.location.pathname.split("/").filter(Boolean);
@@ -80,6 +138,13 @@ function findMuiActionContainer(root) {
     return inRoot;
   }
 
+  if (isDocumentRoot(root)) {
+    const deepMatch = querySelectorDeep(document.documentElement, `.${ACTION_CONTAINER_CLASS}`);
+    if (deepMatch) {
+      return deepMatch;
+    }
+  }
+
   if (root instanceof Element && root !== document.documentElement) {
     let node = root.parentElement;
     while (node && node !== document.documentElement) {
@@ -111,6 +176,14 @@ function buildActionTarget(container, preferredMoreButton = null) {
 
 function findMoreMenuButton(root) {
   for (const selector of MORE_MENU_SELECTORS) {
+    if (isDocumentRoot(root)) {
+      const deepMatch = querySelectorDeep(document.documentElement, selector);
+      if (deepMatch) {
+        return deepMatch;
+      }
+      continue;
+    }
+
     const button =
       root.querySelector?.(selector) ??
       (root.matches?.(selector) ? root : null);
@@ -173,7 +246,10 @@ function findPrimaryMuiActionContainer() {
   let bestContainer = null;
   let bestVisibleButtons = 0;
 
-  for (const container of document.querySelectorAll(`.${ACTION_CONTAINER_CLASS}`)) {
+  for (const container of collectElementsDeep(
+    document.documentElement,
+    `.${ACTION_CONTAINER_CLASS}`,
+  )) {
     const visibleButtons = [...container.querySelectorAll("button.MuiIconButton-root")].filter(
       (button) => button.offsetParent !== null,
     ).length;
@@ -291,17 +367,17 @@ function getDownloadButtonClassName(templateButton) {
   }
 
   if (templateButton?.classList.contains("sc-button")) {
-  const sizeClass = templateButton.classList.contains("sc-button-small")
-    ? "sc-button-small"
-    : "sc-button-medium";
-  return [
-    "sc-button-secondary",
-    "sc-button",
-    sizeClass,
-    "sc-button-icon",
-    "sc-button-responsive",
-    "catra-sc-download-btn",
-  ].join(" ");
+    const sizeClass = templateButton.classList.contains("sc-button-small")
+      ? "sc-button-small"
+      : "sc-button-medium";
+    return [
+      "sc-button-secondary",
+      "sc-button",
+      sizeClass,
+      "sc-button-icon",
+      "sc-button-responsive",
+      "catra-sc-download-btn",
+    ].join(" ");
   }
 
   return getMuiIconButtonClassName(templateButton);
@@ -442,11 +518,31 @@ function createInlineDownloadButton(templateButton) {
 function ensureInlineDownloadButton() {
   if (!isTrackPage() || isPlaylistPage()) {
     removeInlineDownloadButton();
+    logDebugThrottled("inline button skipped", {
+      path: location.pathname,
+      isTrackPage: isTrackPage(),
+      isPlaylistPage: isPlaylistPage(),
+    });
     return false;
   }
 
   const actionTarget = findActionButtonContainer();
   if (!actionTarget) {
+    logDebugThrottled("action container not found", {
+      path: location.pathname,
+      muiContainers: collectElementsDeep(
+        document.documentElement,
+        `.${ACTION_CONTAINER_CLASS}`,
+      ).length,
+      moreMenuButtons: collectElementsDeep(
+        document.documentElement,
+        'button[aria-label="More menu"]',
+      ).length,
+      muiIconButtons: collectElementsDeep(
+        document.documentElement,
+        "button.MuiIconButton-root",
+      ).length,
+    });
     return false;
   }
 
@@ -454,10 +550,22 @@ function ensureInlineDownloadButton() {
   if (!button) {
     button = createInlineDownloadButton(actionTarget.templateButton);
     insertDownloadButton(actionTarget, button);
+    logDebug("inline download button inserted", {
+      containerClass: actionTarget.container.className,
+      insertBefore: actionTarget.insertBefore?.getAttribute?.("aria-label") ?? null,
+    });
   }
 
   if (!inlineDownloading) {
     setButtonState(button, "idle");
+  }
+
+  if (!inlineButtonReadyLogged) {
+    inlineButtonReadyLogged = true;
+    logDebug("inline download button ready", {
+      connected: button.isConnected,
+      visible: button.offsetParent !== null,
+    });
   }
 
   return true;
@@ -642,6 +750,7 @@ function onNavigation() {
 
   lastUrl = currentUrl;
   inlineDownloading = false;
+  inlineButtonReadyLogged = false;
   removeInlineDownloadButton();
   scheduleRefresh();
   startPolling();
@@ -741,10 +850,27 @@ function watchNavigation() {
   }, POLL_INTERVAL_MS);
 }
 
-onNavigation();
-startObserver();
-hookHistory();
-watchNavigation();
-startPolling();
+function bootstrap() {
+  const version = chrome.runtime?.getManifest?.()?.version ?? "unknown";
+  const frameType = window.top === window ? "top" : "child";
 
-document.documentElement.dataset.catraScExtension = "loaded";
+  document.documentElement.dataset.catraScExtension = version;
+  logDebug("content script loaded", {
+    version,
+    href: location.href,
+    frame: frameType,
+    hostname: location.hostname,
+  });
+
+  onNavigation();
+  startObserver();
+  hookHistory();
+  watchNavigation();
+  startPolling();
+}
+
+try {
+  bootstrap();
+} catch (error) {
+  console.error(`${LOG_PREFIX} bootstrap failed`, error);
+}
