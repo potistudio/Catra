@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { listen } from "@tauri-apps/api/event";
   import { open } from "@tauri-apps/plugin-dialog";
   import { listTracks, removeTrack, scanFolder } from "$lib/api";
   import PreviewPlayer from "$lib/components/PreviewPlayer.svelte";
@@ -67,6 +68,27 @@
 
   $effect(() => {
     void loadTracks();
+
+    let unlistenUpdated: (() => void) | undefined;
+    let unlistenError: (() => void) | undefined;
+
+    void listen("library-updated", () => {
+      void loadTracks();
+      statusMessage = "Downloaded track added to library";
+    }).then((unlisten) => {
+      unlistenUpdated = unlisten;
+    });
+
+    void listen<string>("download-error", (event) => {
+      statusMessage = `Download failed: ${event.payload}`;
+    }).then((unlisten) => {
+      unlistenError = unlisten;
+    });
+
+    return () => {
+      unlistenUpdated?.();
+      unlistenError?.();
+    };
   });
 </script>
 

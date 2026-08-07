@@ -84,8 +84,8 @@ function setButtonState(button, state) {
 
   if (state === "success") {
     button.classList.add("is-success");
-    button.title = "ダウンロード完了";
-    button.setAttribute("aria-label", "ダウンロード完了");
+    button.title = "Catra でダウンロード開始";
+    button.setAttribute("aria-label", "Catra でダウンロード開始");
     return;
   }
 

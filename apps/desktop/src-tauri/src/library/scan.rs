@@ -69,6 +69,42 @@ pub fn scan_folder(library: &LibraryState, folder: &str) -> Result<ScanResult, S
     Ok(ScanResult { added, skipped })
 }
 
+pub fn import_file(library: &LibraryState, path: &Path) -> Result<bool, String> {
+    if !path.is_file() {
+        return Err(format!("Not a file: {}", path.display()));
+    }
+
+    if !is_audio_file(path) {
+        return Err(format!("Not an audio file: {}", path.display()));
+    }
+
+    let path_str = path.to_string_lossy().to_string();
+    let metadata = read_metadata(path);
+    let added_at = chrono::Utc::now().timestamp();
+
+    let artwork_path = metadata
+        .artwork
+        .as_ref()
+        .and_then(|(data, mime)| save_artwork(library.artwork_dir(), &path_str, data, mime));
+
+    library
+        .insert_track(
+            &path_str,
+            metadata.title.as_deref(),
+            metadata.artist.as_deref(),
+            metadata.album.as_deref(),
+            metadata.duration_ms,
+            metadata.bpm,
+            metadata.bitrate_kbps,
+            metadata.genre.as_deref(),
+            metadata.key.as_deref(),
+            metadata.rating,
+            artwork_path.as_deref(),
+            added_at,
+        )
+        .map_err(|e| e.to_string())
+}
+
 fn is_audio_file(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())

@@ -1,51 +1,29 @@
-const NATIVE_HOST = "com.catra.ytdlp";
+const CATRA_API = "http://127.0.0.1:17340";
 
-function downloadViaYtDlp(trackUrl) {
-  return new Promise((resolve) => {
-    let settled = false;
-
-    const finish = (result) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      resolve(result);
-    };
-
-    let port;
-    try {
-      port = chrome.runtime.connectNative(NATIVE_HOST);
-    } catch (error) {
-      finish({
-        success: false,
-        error: error?.message ?? "Native Messaging Host に接続できませんでした",
-      });
-      return;
+async function downloadViaCatra(trackUrl) {
+  try {
+    const health = await fetch(`${CATRA_API}/health`);
+    if (!health.ok) {
+      throw new Error("Catra が起動していません");
     }
+  } catch {
+    throw new Error("Catra が起動していません。デスクトップアプリを起動してください。");
+  }
 
-    port.onMessage.addListener((response) => {
-      finish(response);
-      port.disconnect();
-    });
-
-    port.onDisconnect.addListener(() => {
-      if (settled) {
-        return;
-      }
-
-      finish({
-        success: false,
-        error:
-          chrome.runtime.lastError?.message ??
-          "Native Messaging Host との接続が切断されました。host/install.ps1 を実行してください。",
-      });
-    });
-
-    port.postMessage({
-      type: "DOWNLOAD",
-      url: trackUrl,
-    });
+  const response = await fetch(`${CATRA_API}/download`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ url: trackUrl }),
   });
+
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !result?.success) {
+    throw new Error(result?.error ?? "ダウンロードの開始に失敗しました");
+  }
+
+  return result;
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -53,7 +31,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return false;
   }
 
-  downloadViaYtDlp(message.trackUrl)
+  downloadViaCatra(message.trackUrl)
     .then((result) => {
       sendResponse(result);
     })
