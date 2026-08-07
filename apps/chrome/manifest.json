@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Catra SoundCloud Downloader",
+  "version": "0.1.0",
+  "description": "Add download buttons to SoundCloud tracks",
+  "permissions": ["downloads", "storage"],
+  "host_permissions": [
+    "https://soundcloud.com/*",
+    "https://api-v2.soundcloud.com/*",
+    "https://*.sndcdn.com/*",
+    "https://*.media-streaming.soundcloud.cloud/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://soundcloud.com/*"],
+      "js": ["src/api.js", "src/content.js"],
+      "css": ["src/styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/icon48.png"],
+      "matches": ["https://soundcloud.com/*"]
+    }
+  ]
+}
