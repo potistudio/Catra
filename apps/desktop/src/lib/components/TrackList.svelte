@@ -20,7 +20,22 @@
 
   let { tracks, selectedId, onselect, onremove }: Props = $props();
 
+  type SortColumn =
+    | "title"
+    | "artist"
+    | "album"
+    | "bpm"
+    | "bitrateKbps"
+    | "key"
+    | "genre"
+    | "rating"
+    | "durationMs";
+
+  type SortDirection = "asc" | "desc";
+
   let query = $state("");
+  let sortColumn = $state<SortColumn>("artist");
+  let sortDirection = $state<SortDirection>("asc");
 
   let filtered = $derived(
     tracks.filter((track) => {
@@ -38,6 +53,84 @@
     }),
   );
 
+  let sorted = $derived(sortTracks(filtered, sortColumn, sortDirection));
+
+  function compareStrings(a: string | null, b: string | null): number {
+    const aVal = a?.trim() ?? "";
+    const bVal = b?.trim() ?? "";
+    if (!aVal && !bVal) return 0;
+    if (!aVal) return 1;
+    if (!bVal) return -1;
+    return aVal.localeCompare(bVal, undefined, { sensitivity: "base", numeric: true });
+  }
+
+  function compareNumbers(a: number | null, b: number | null): number {
+    if (a === null && b === null) return 0;
+    if (a === null) return 1;
+    if (b === null) return -1;
+    return a - b;
+  }
+
+  function sortTracks(
+    items: Track[],
+    column: SortColumn,
+    direction: SortDirection,
+  ): Track[] {
+    const mult = direction === "asc" ? 1 : -1;
+
+    return [...items].sort((a, b) => {
+      let cmp = 0;
+
+      switch (column) {
+        case "title":
+          cmp = compareStrings(displayTitle(a), displayTitle(b));
+          break;
+        case "artist":
+          cmp = compareStrings(a.artist, b.artist);
+          break;
+        case "album":
+          cmp = compareStrings(a.album, b.album);
+          break;
+        case "bpm":
+          cmp = compareNumbers(a.bpm, b.bpm);
+          break;
+        case "bitrateKbps":
+          cmp = compareNumbers(a.bitrateKbps, b.bitrateKbps);
+          break;
+        case "key":
+          cmp = compareStrings(a.key, b.key);
+          break;
+        case "genre":
+          cmp = compareStrings(a.genre, b.genre);
+          break;
+        case "rating":
+          cmp = compareNumbers(a.rating, b.rating);
+          break;
+        case "durationMs":
+          cmp = compareNumbers(a.durationMs, b.durationMs);
+          break;
+      }
+
+      if (cmp !== 0) return cmp * mult;
+      return compareStrings(displayTitle(a), displayTitle(b)) * mult;
+    });
+  }
+
+  function toggleSort(column: SortColumn) {
+    if (sortColumn === column) {
+      sortDirection = sortDirection === "asc" ? "desc" : "asc";
+      return;
+    }
+
+    sortColumn = column;
+    sortDirection = "asc";
+  }
+
+  function sortIndicator(column: SortColumn): string {
+    if (sortColumn !== column) return "";
+    return sortDirection === "asc" ? " ↑" : " ↓";
+  }
+
   function handleKeydown(event: KeyboardEvent, track: Track) {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -54,10 +147,10 @@
       placeholder="トラックを検索..."
       bind:value={query}
     />
-    <span class="count">{filtered.length} tracks</span>
+    <span class="count">{sorted.length} tracks</span>
   </div>
 
-  {#if filtered.length === 0}
+  {#if sorted.length === 0}
     <div class="empty">
       {#if tracks.length === 0}
         <p>ライブラリにトラックがありません</p>
@@ -70,19 +163,100 @@
     <div class="table-wrap" role="grid" aria-label="Track library">
       <div class="table-header" role="row">
         <span role="columnheader">ジャケット</span>
-        <span role="columnheader">タイトル</span>
-        <span role="columnheader">アーティスト</span>
-        <span role="columnheader">アルバム</span>
-        <span role="columnheader">BPM</span>
-        <span role="columnheader">ビットレート</span>
-        <span role="columnheader">キー</span>
-        <span role="columnheader">ジャンル</span>
-        <span role="columnheader">レート</span>
-        <span role="columnheader">時間</span>
+        <button
+          type="button"
+          class="column-header"
+          class:active={sortColumn === "title"}
+          role="columnheader"
+          aria-sort={sortColumn === "title" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+          onclick={() => toggleSort("title")}
+        >
+          タイトル{sortIndicator("title")}
+        </button>
+        <button
+          type="button"
+          class="column-header"
+          class:active={sortColumn === "artist"}
+          role="columnheader"
+          aria-sort={sortColumn === "artist" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+          onclick={() => toggleSort("artist")}
+        >
+          アーティスト{sortIndicator("artist")}
+        </button>
+        <button
+          type="button"
+          class="column-header"
+          class:active={sortColumn === "album"}
+          role="columnheader"
+          aria-sort={sortColumn === "album" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+          onclick={() => toggleSort("album")}
+        >
+          アルバム{sortIndicator("album")}
+        </button>
+        <button
+          type="button"
+          class="column-header"
+          class:active={sortColumn === "bpm"}
+          role="columnheader"
+          aria-sort={sortColumn === "bpm" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+          onclick={() => toggleSort("bpm")}
+        >
+          BPM{sortIndicator("bpm")}
+        </button>
+        <button
+          type="button"
+          class="column-header"
+          class:active={sortColumn === "bitrateKbps"}
+          role="columnheader"
+          aria-sort={sortColumn === "bitrateKbps" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+          onclick={() => toggleSort("bitrateKbps")}
+        >
+          ビットレート{sortIndicator("bitrateKbps")}
+        </button>
+        <button
+          type="button"
+          class="column-header"
+          class:active={sortColumn === "key"}
+          role="columnheader"
+          aria-sort={sortColumn === "key" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+          onclick={() => toggleSort("key")}
+        >
+          キー{sortIndicator("key")}
+        </button>
+        <button
+          type="button"
+          class="column-header"
+          class:active={sortColumn === "genre"}
+          role="columnheader"
+          aria-sort={sortColumn === "genre" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+          onclick={() => toggleSort("genre")}
+        >
+          ジャンル{sortIndicator("genre")}
+        </button>
+        <button
+          type="button"
+          class="column-header"
+          class:active={sortColumn === "rating"}
+          role="columnheader"
+          aria-sort={sortColumn === "rating" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+          onclick={() => toggleSort("rating")}
+        >
+          レート{sortIndicator("rating")}
+        </button>
+        <button
+          type="button"
+          class="column-header"
+          class:active={sortColumn === "durationMs"}
+          role="columnheader"
+          aria-sort={sortColumn === "durationMs" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+          onclick={() => toggleSort("durationMs")}
+        >
+          時間{sortIndicator("durationMs")}
+        </button>
         <span role="columnheader"></span>
       </div>
 
-      {#each filtered as track (track.id)}
+      {#each sorted as track (track.id)}
         <div
           class="table-row"
           class:selected={selectedId === track.id}
@@ -211,6 +385,35 @@
     color: var(--text-muted);
     background: var(--surface);
     border-bottom: 1px solid var(--border);
+  }
+
+  .column-header {
+    padding: 0;
+    border: none;
+    background: transparent;
+    font: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .column-header:hover {
+    color: var(--text);
+  }
+
+  .column-header.active {
+    color: var(--accent);
+  }
+
+  .column-header:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 
   .table-row {
