@@ -1,5 +1,6 @@
 const INLINE_BUTTON_ID = "catra-sc-inline-download";
 const LIST_BUTTON_CLASS = "catra-sc-list-download";
+const ACTION_CONTAINER_CLASS = "mui-16ytee5";
 const SUCCESS_RESET_MS = 2000;
 
 const NON_TRACK_SEGMENTS = new Set([
@@ -54,14 +55,30 @@ function getCurrentPageUrl() {
   return CatraSC.normalizeTrackUrl(window.location.href);
 }
 
-function findActionButtonContainer() {
-  const moreButton = document.querySelector('button[aria-label="More menu"]');
-  if (moreButton?.parentElement) {
+function resolveActionContainer(root) {
+  const container =
+    root.querySelector?.(`.${ACTION_CONTAINER_CLASS}`) ??
+    (root.classList?.contains(ACTION_CONTAINER_CLASS) ? root : null);
+
+  if (container) {
+    const moreButton = container.querySelector('button[aria-label="More menu"]');
+    const templateButton =
+      moreButton ?? container.querySelector("button.MuiIconButton-root");
+
     return {
-      container: moreButton.parentElement,
+      container,
       insertBefore: moreButton,
-      templateButton: moreButton,
+      templateButton,
     };
+  }
+
+  return null;
+}
+
+function findActionButtonContainer() {
+  const actionTarget = resolveActionContainer(document);
+  if (actionTarget) {
+    return actionTarget;
   }
 
   const legacyGroup =
@@ -299,13 +316,9 @@ function findTrackItems() {
 }
 
 function findListActionContainer(item) {
-  const moreButton = item.querySelector('button[aria-label="More menu"]');
-  if (moreButton?.parentElement) {
-    return {
-      container: moreButton.parentElement,
-      insertBefore: moreButton,
-      templateButton: moreButton,
-    };
+  const actionTarget = resolveActionContainer(item);
+  if (actionTarget) {
+    return actionTarget;
   }
 
   const legacyActions =
