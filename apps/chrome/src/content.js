@@ -2,6 +2,8 @@ const INLINE_BUTTON_ID = "catra-sc-inline-download";
 const LIST_BUTTON_CLASS = "catra-sc-list-download";
 const ACTION_CONTAINER_CLASS = "mui-16ytee5";
 const SUCCESS_RESET_MS = 2000;
+const POLL_INTERVAL_MS = 500;
+const POLL_DURATION_MS = 60000;
 
 const NON_TRACK_SEGMENTS = new Set([
   "discover",
@@ -214,6 +216,28 @@ async function downloadTrack(trackUrl, button) {
   }
 }
 
+function getInlineButton(container) {
+  const buttonInContainer = container.querySelector(`#${INLINE_BUTTON_ID}`);
+  if (buttonInContainer?.isConnected) {
+    return buttonInContainer;
+  }
+
+  const detached = document.getElementById(INLINE_BUTTON_ID);
+  if (detached && !detached.isConnected) {
+    detached.remove();
+  }
+
+  return null;
+}
+
+function insertDownloadButton(actionTarget, button) {
+  if (actionTarget.insertBefore?.isConnected) {
+    actionTarget.container.insertBefore(button, actionTarget.insertBefore);
+    return;
+  }
+
+  actionTarget.container.appendChild(button);
+}
 function createInlineDownloadButton(templateButton) {
   const button = createMuiDownloadButton({
     id: INLINE_BUTTON_ID,
@@ -237,27 +261,25 @@ function createInlineDownloadButton(templateButton) {
 function ensureInlineDownloadButton() {
   if (!isTrackPage() || isPlaylistPage()) {
     removeInlineDownloadButton();
-    return;
+    return false;
   }
 
   const actionTarget = findActionButtonContainer();
   if (!actionTarget) {
-    return;
+    return false;
   }
 
-  let button = document.getElementById(INLINE_BUTTON_ID);
+  let button = getInlineButton(actionTarget.container);
   if (!button) {
     button = createInlineDownloadButton(actionTarget.templateButton);
-    if (actionTarget.insertBefore) {
-      actionTarget.container.insertBefore(button, actionTarget.insertBefore);
-    } else {
-      actionTarget.container.appendChild(button);
-    }
+    insertDownloadButton(actionTarget, button);
   }
 
   if (!inlineDownloading) {
     setButtonState(button, "idle");
   }
+
+  return true;
 }
 
 function removeInlineDownloadButton() {
@@ -353,27 +375,29 @@ function createListDownloadButton(trackUrl, templateButton) {
 
 function ensureListDownloadButtons() {
   for (const item of findTrackItems()) {
-    if (item.querySelector(`.${LIST_BUTTON_CLASS}`)) {
-      continue;
-    }
-
     const trackUrl = extractTrackUrlFromItem(item);
     if (!trackUrl || trackUrl === getCurrentPageUrl()) {
       continue;
     }
 
     const actionTarget = findListActionContainer(item);
+    const existingButton = item.querySelector(`.${LIST_BUTTON_CLASS}`);
+
+    if (existingButton?.isConnected) {
+      continue;
+    }
+
+    if (existingButton && !existingButton.isConnected) {
+      existingButton.remove();
+    }
+
     const button = createListDownloadButton(
       trackUrl,
       actionTarget?.templateButton ?? null,
     );
 
     if (actionTarget) {
-      if (actionTarget.insertBefore) {
-        actionTarget.container.insertBefore(button, actionTarget.insertBefore);
-      } else {
-        actionTarget.container.appendChild(button);
-      }
+      insertDownloadButton(actionTarget, button);
       continue;
     }
 
@@ -389,33 +413,117 @@ function refreshButtons() {
 }
 
 let observer = null;
+let pollTimer = null;
+let pollStartedAt = 0;
+let refreshScheduled = false;
 let lastUrl = location.href;
+
+function scheduleRefresh() {
+  if (refreshScheduled) {
+    return;
+  }
+
+  refreshScheduled = true;
+  requestAnimationFrame(() => {
+    refreshScheduled = false;
+    refreshButtons();
+  });
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+function startPolling() {
+  stopPolling();
+  pollStartedAt = Date.now();
+
+  pollTimer = setInterval(() => {
+    refreshButtons();
+    const inlineReady = document
+      .querySelector(`.${ACTION_CONTAINER_CLASS}`)
+      ?.querySelector(`#${INLINE_BUTTON_ID}`)?.isConnected;
+
+    if (inlineReady || Date.now() - pollStartedAt > POLL_DURATION_MS) {
+      stopPolling();
+    }
+  }, POLL_INTERVAL_MS);
+}
+
+function onNavigation() {
+  lastUrl = location.href;
+  inlineDownloading = false;
+  removeInlineDownloadButton();
+  scheduleRefresh();
+  startPolling();
+}
 
 function startObserver() {
   if (observer) {
     return;
   }
 
-  observer = new MutationObserver(() => {
-    refreshButtons();
+  observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (mutation.type !== "childList" || mutation.addedNodes.length === 0) {
+        continue;
+      }
+
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType !== Node.ELEMENT_NODE) {
+          continue;
+        }
+
+        const element = node;
+        if (
+          element.classList?.contains(ACTION_CONTAINER_CLASS) ||
+          element.querySelector?.(`.${ACTION_CONTAINER_CLASS}`) ||
+          element.matches?.('button[aria-label="More menu"]') ||
+          element.querySelector?.('button[aria-label="More menu"]')
+        ) {
+          scheduleRefresh();
+          return;
+        }
+      }
+    }
   });
 
-  observer.observe(document.body, {
+  observer.observe(document.documentElement, {
     childList: true,
     subtree: true,
   });
 }
 
+function hookHistory() {
+  const notify = () => onNavigation();
+
+  const { pushState, replaceState } = history;
+  history.pushState = function pushStatePatched(...args) {
+    const result = pushState.apply(this, args);
+    notify();
+    return result;
+  };
+  history.replaceState = function replaceStatePatched(...args) {
+    const result = replaceState.apply(this, args);
+    notify();
+    return result;
+  };
+
+  window.addEventListener("popstate", notify);
+}
+
 function watchNavigation() {
   setInterval(() => {
     if (location.href !== lastUrl) {
-      lastUrl = location.href;
-      inlineDownloading = false;
-      refreshButtons();
+      onNavigation();
     }
-  }, 500);
+  }, POLL_INTERVAL_MS);
 }
 
-refreshButtons();
+onNavigation();
 startObserver();
+hookHistory();
 watchNavigation();
