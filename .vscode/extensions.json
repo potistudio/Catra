@@ -1,0 +1,10 @@
+{
+	"recommendations": [
+		"editorconfig.editorconfig",
+		"hverlin.mise-vscode",
+		"streetsidesoftware.code-spell-checker",
+		"svelte.svelte-vscode",
+		"tauri-apps.tauri-vscode",
+		"vadimcn.vscode-lldb",
+	]
+}
