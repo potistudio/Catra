@@ -1,5 +1,15 @@
 .catra-sc-download-btn {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.catra-sc-download-btn svg {
+  display: block;
+  width: 24px;
+  height: 24px;
 }
 
 .catra-sc-download-btn.is-loading {

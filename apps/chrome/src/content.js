@@ -5,6 +5,7 @@ const MORE_MENU_SELECTORS = [
   'button[aria-label="More menu"]',
   'button[aria-label="More"]',
   'button[title="More"]',
+  ".sc-button-more",
 ];
 const SUCCESS_RESET_MS = 2000;
 const POLL_INTERVAL_MS = 500;
@@ -41,7 +42,12 @@ let inlineDownloading = false;
 let successResetTimeout = null;
 
 function getPathSegments() {
-  return window.location.pathname.split("/").filter(Boolean);
+  const segments = window.location.pathname.split("/").filter(Boolean);
+  if (segments[0]?.toLowerCase() === "n") {
+    return segments.slice(1);
+  }
+
+  return segments;
 }
 
 function isTrackPage() {
@@ -164,8 +170,41 @@ function resolveActionContainer(root) {
   return null;
 }
 
+function findInlineActionContainer() {
+  for (const container of document.querySelectorAll(`.${ACTION_CONTAINER_CLASS}`)) {
+    if (
+      container.querySelector("button.MuiIconButton-root") &&
+      findMoreMenuButton(container)
+    ) {
+      return buildActionTarget(container);
+    }
+  }
+
+  const engagementRoot =
+    document.querySelector(".listenEngagement__actions") ||
+    document.querySelector(".soundActions");
+
+  if (engagementRoot) {
+    const scopedTarget = resolveActionContainer(engagementRoot);
+    if (scopedTarget) {
+      return scopedTarget;
+    }
+
+    const legacyGroup = engagementRoot.querySelector(".sc-button-group");
+    if (legacyGroup) {
+      return {
+        container: legacyGroup,
+        insertBefore: legacyGroup.querySelector(".sc-button-more"),
+        templateButton: legacyGroup.querySelector("button"),
+      };
+    }
+  }
+
+  return resolveActionContainer(document);
+}
+
 function findActionButtonContainer() {
-  const actionTarget = resolveActionContainer(document);
+  const actionTarget = findInlineActionContainer();
   if (actionTarget) {
     return actionTarget;
   }
@@ -209,11 +248,35 @@ function getMuiIconButtonClassName(templateButton) {
 function createDownloadIcon() {
   const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   icon.setAttribute("viewBox", "0 0 24 24");
+  icon.setAttribute("width", "24");
+  icon.setAttribute("height", "24");
   icon.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   icon.setAttribute("aria-hidden", "true");
   icon.innerHTML =
     '<path fill="currentColor" d="M12 3a1 1 0 0 1 1 1v9.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1Zm-7 14a1 1 0 0 1 1 1v1h12v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z"/>';
   return icon;
+}
+
+function getDownloadButtonClassName(templateButton) {
+  if (templateButton?.classList.contains("MuiIconButton-root")) {
+    return getMuiIconButtonClassName(templateButton);
+  }
+
+  if (templateButton?.classList.contains("sc-button")) {
+  const sizeClass = templateButton.classList.contains("sc-button-small")
+    ? "sc-button-small"
+    : "sc-button-medium";
+  return [
+    "sc-button-secondary",
+    "sc-button",
+    sizeClass,
+    "sc-button-icon",
+    "sc-button-responsive",
+    "catra-sc-download-btn",
+  ].join(" ");
+  }
+
+  return getMuiIconButtonClassName(templateButton);
 }
 
 function createMuiDownloadButton({ id, className, onClick }) {
@@ -328,7 +391,7 @@ function insertDownloadButton(actionTarget, button) {
 function createInlineDownloadButton(templateButton) {
   const button = createMuiDownloadButton({
     id: INLINE_BUTTON_ID,
-    className: getMuiIconButtonClassName(templateButton),
+    className: getDownloadButtonClassName(templateButton),
     onClick: async (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -458,7 +521,7 @@ function findListActionContainer(item) {
 
 function createListDownloadButton(trackUrl, templateButton) {
   const button = createMuiDownloadButton({
-    className: `${getMuiIconButtonClassName(templateButton)} ${LIST_BUTTON_CLASS}`,
+    className: `${getDownloadButtonClassName(templateButton)} ${LIST_BUTTON_CLASS}`,
     onClick: async (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -552,7 +615,13 @@ function startPolling() {
 }
 
 function onNavigation() {
-  lastUrl = location.href;
+  const currentUrl = location.href;
+  if (currentUrl === lastUrl) {
+    scheduleRefresh();
+    return;
+  }
+
+  lastUrl = currentUrl;
   inlineDownloading = false;
   removeInlineDownloadButton();
   scheduleRefresh();
@@ -595,7 +664,14 @@ function startObserver() {
 }
 
 function hookHistory() {
-  const notify = () => onNavigation();
+  const notify = () => {
+    if (location.href === lastUrl) {
+      scheduleRefresh();
+      return;
+    }
+
+    onNavigation();
+  };
 
   const { pushState, replaceState } = history;
   history.pushState = function pushStatePatched(...args) {
