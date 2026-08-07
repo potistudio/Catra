@@ -62,6 +62,48 @@ function getCurrentPageUrl() {
   return CatraSC.normalizeTrackUrl(window.location.href);
 }
 
+function queryWithinRoot(root, selector) {
+  const match =
+    root.querySelector?.(selector) ??
+    (root.matches?.(selector) ? root : null);
+  return match ?? null;
+}
+
+function findMuiActionContainer(root) {
+  const inRoot = queryWithinRoot(root, `.${ACTION_CONTAINER_CLASS}`);
+  if (inRoot) {
+    return inRoot;
+  }
+
+  if (root instanceof Element && root !== document.documentElement) {
+    let node = root.parentElement;
+    while (node && node !== document.documentElement) {
+      if (node.classList?.contains(ACTION_CONTAINER_CLASS)) {
+        return node;
+      }
+
+      const inAncestor = node.querySelector?.(`.${ACTION_CONTAINER_CLASS}`);
+      if (inAncestor) {
+        return inAncestor;
+      }
+
+      node = node.parentElement;
+    }
+  }
+
+  return null;
+}
+
+function buildActionTarget(container, preferredMoreButton = null) {
+  const moreButton = preferredMoreButton ?? findMoreMenuButton(container);
+  return {
+    container,
+    insertBefore: moreButton,
+    templateButton:
+      moreButton ?? container.querySelector("button.MuiIconButton-root"),
+  };
+}
+
 function findMoreMenuButton(root) {
   for (const selector of MORE_MENU_SELECTORS) {
     const button =
@@ -102,6 +144,11 @@ function findActionButtonGroup(moreButton, boundary) {
 }
 
 function resolveActionContainer(root) {
+  const muiContainer = findMuiActionContainer(root);
+  if (muiContainer) {
+    return buildActionTarget(muiContainer);
+  }
+
   const moreButton = findMoreMenuButton(root);
   if (moreButton) {
     const container = findActionButtonGroup(
@@ -110,28 +157,8 @@ function resolveActionContainer(root) {
     );
 
     if (container) {
-      return {
-        container,
-        insertBefore: moreButton,
-        templateButton:
-          moreButton ?? container.querySelector("button.MuiIconButton-root"),
-      };
+      return buildActionTarget(container, moreButton);
     }
-  }
-
-  const container =
-    root.querySelector?.(`.${ACTION_CONTAINER_CLASS}`) ??
-    (root.classList?.contains(ACTION_CONTAINER_CLASS) ? root : null);
-
-  if (container) {
-    const fallbackMoreButton = findMoreMenuButton(container);
-    return {
-      container,
-      insertBefore: fallbackMoreButton,
-      templateButton:
-        fallbackMoreButton ??
-        container.querySelector("button.MuiIconButton-root"),
-    };
   }
 
   return null;
@@ -385,11 +412,20 @@ function findTrackItems() {
     ".soundList__item",
     ".searchList__item",
     ".lazyLoadingList__item",
+    `[class*="${ACTION_CONTAINER_CLASS}"]`,
   ];
 
   const items = new Set();
   for (const selector of selectors) {
     for (const element of document.querySelectorAll(selector)) {
+      if (element.classList?.contains(ACTION_CONTAINER_CLASS)) {
+        const row = element.closest(
+          "article, tr, li, [class*='item'], [class*='row'], [class*='track']",
+        );
+        items.add(row ?? element.parentElement ?? element);
+        continue;
+      }
+
       items.add(element);
     }
   }
@@ -503,7 +539,11 @@ function startPolling() {
 
   pollTimer = setInterval(() => {
     refreshButtons();
-    const inlineReady = document.getElementById(INLINE_BUTTON_ID)?.isConnected;
+    const inlineReady =
+      document.getElementById(INLINE_BUTTON_ID)?.isConnected ||
+      document.querySelector(`.${ACTION_CONTAINER_CLASS}`)
+        ?.querySelector(`#${INLINE_BUTTON_ID}`)
+        ?.isConnected;
 
     if (inlineReady || Date.now() - pollStartedAt > POLL_DURATION_MS) {
       stopPolling();
