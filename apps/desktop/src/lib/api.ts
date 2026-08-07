@@ -12,3 +12,7 @@ export async function scanFolder(folder: string): Promise<ScanResult> {
 export async function removeTrack(id: number): Promise<void> {
   return invoke("library_remove_track", { id });
 }
+
+export async function removeTracks(ids: number[]): Promise<number> {
+  return invoke<number>("library_remove_tracks", { ids });
+}

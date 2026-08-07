@@ -29,9 +29,13 @@
     selectedId: number | null;
     onselect: (track: Track) => void;
     onremove: (track: Track) => void;
+    onbulkremove: (ids: number[]) => void | Promise<void>;
   }
 
-  let { tracks, selectedId, onselect, onremove }: Props = $props();
+  let { tracks, selectedId, onselect, onremove, onbulkremove }: Props = $props();
+
+  let checkedIds = $state<Set<number>>(new Set());
+  let selectAllCheckbox = $state<HTMLInputElement | null>(null);
 
   let queryInput = $state("");
   let query = $state("");
@@ -77,6 +81,68 @@
   let totalBodyHeight = $derived(sorted.length * TRACK_ROW_HEIGHT);
   let bodyOffsetY = $derived(visibleRange.start * TRACK_ROW_HEIGHT);
 
+  let checkedCount = $derived(checkedIds.size);
+  let allVisibleSelected = $derived(
+    sorted.length > 0 && sorted.every((track) => checkedIds.has(track.id)),
+  );
+  let someVisibleSelected = $derived(
+    sorted.some((track) => checkedIds.has(track.id)) && !allVisibleSelected,
+  );
+
+  $effect(() => {
+    if (selectAllCheckbox) {
+      selectAllCheckbox.indeterminate = someVisibleSelected;
+    }
+  });
+
+  $effect(() => {
+    const validIds = new Set(tracks.map((track) => track.id));
+    const next = new Set([...checkedIds].filter((id) => validIds.has(id)));
+    if (next.size !== checkedIds.size) {
+      checkedIds = next;
+    }
+  });
+
+  function toggleCheck(track: Track) {
+    const next = new Set(checkedIds);
+    if (next.has(track.id)) {
+      next.delete(track.id);
+    } else {
+      next.add(track.id);
+    }
+    checkedIds = next;
+  }
+
+  function toggleSelectAll() {
+    if (allVisibleSelected) {
+      const next = new Set(checkedIds);
+      for (const track of sorted) {
+        next.delete(track.id);
+      }
+      checkedIds = next;
+      return;
+    }
+
+    const next = new Set(checkedIds);
+    for (const track of sorted) {
+      next.add(track.id);
+    }
+    checkedIds = next;
+  }
+
+  function clearSelection() {
+    checkedIds = new Set();
+  }
+
+  async function handleBulkRemove() {
+    const ids = [...checkedIds];
+    if (ids.length === 0) return;
+    if (!confirm(`${ids.length} 曲をライブラリから削除しますか？`)) return;
+
+    await onbulkremove(ids);
+    checkedIds = new Set();
+  }
+
   function handleScroll(event: Event) {
     scrollTop = (event.currentTarget as HTMLDivElement).scrollTop;
   }
@@ -106,6 +172,20 @@
       bind:value={queryInput}
     />
     {#if viewMode === "grid"}
+      <label class="select-all-grid">
+        <input
+          type="checkbox"
+          class="checkbox"
+          bind:this={selectAllCheckbox}
+          checked={allVisibleSelected}
+          aria-label="表示中のトラックをすべて選択"
+          onclick={(e) => {
+            e.preventDefault();
+            toggleSelectAll();
+          }}
+        />
+        全選択
+      </label>
       <div class="grid-sort">
         <label class="sort-label" for="grid-sort-column">並び替え</label>
         <select
@@ -128,6 +208,15 @@
       </div>
     {/if}
     <span class="count">{sorted.length} tracks</span>
+    {#if checkedCount > 0}
+      <span class="selection-count">{checkedCount} 曲を選択中</span>
+      <button type="button" class="bulk-btn danger" onclick={handleBulkRemove}>
+        削除
+      </button>
+      <button type="button" class="bulk-btn" onclick={clearSelection}>
+        選択解除
+      </button>
+    {/if}
     <div class="view-toggle" role="group" aria-label="表示切替">
       <button
         type="button"
@@ -174,8 +263,10 @@
     <TrackGrid
       tracks={sorted}
       selectedId={selectedId}
+      {checkedIds}
       {onselect}
       {onremove}
+      ontogglecheck={toggleCheck}
     />
   {:else}
     <div
@@ -187,6 +278,19 @@
     >
       <div class="table-inner">
         <div class="table-header" role="row">
+          <span class="checkbox-cell sticky-col" role="columnheader">
+            <input
+              type="checkbox"
+              class="checkbox"
+              bind:this={selectAllCheckbox}
+              checked={allVisibleSelected}
+              aria-label="表示中のトラックをすべて選択"
+              onclick={(e) => {
+                e.preventDefault();
+                toggleSelectAll();
+              }}
+            />
+          </span>
           <span role="columnheader">ジャケット</span>
           <button
             type="button"
@@ -287,8 +391,10 @@
               <TrackRow
                 {track}
                 selected={selectedId === track.id}
+                checked={checkedIds.has(track.id)}
                 {onselect}
                 {onremove}
+                ontogglecheck={toggleCheck}
               />
             {/each}
           </div>
@@ -333,6 +439,53 @@
     font-size: 0.8rem;
     color: var(--text-muted);
     white-space: nowrap;
+  }
+
+  .selection-count {
+    font-size: 0.8rem;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  .bulk-btn {
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .bulk-btn:hover {
+    background: var(--surface-hover);
+  }
+
+  .bulk-btn.danger {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
+  .bulk-btn.danger:hover {
+    background: var(--danger-subtle);
+  }
+
+  .bulk-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .select-all-grid {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
   }
 
   .grid-sort {
@@ -453,7 +606,7 @@
   .table-header {
     display: grid;
     grid-template-columns:
-      3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
+      2.5rem 3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
       3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 2rem;
     gap: 0.6rem;
     align-items: center;
@@ -499,6 +652,28 @@
     outline: 2px solid var(--accent);
     outline-offset: 2px;
     border-radius: 2px;
+  }
+
+  .checkbox-cell {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .sticky-col {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--surface);
+  }
+
+  .checkbox {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: var(--accent);
+    flex-shrink: 0;
   }
 
   .virtual-body {

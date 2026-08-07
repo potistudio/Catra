@@ -4,7 +4,9 @@ mod download;
 mod extension_server;
 mod library;
 
-use commands::{library_list_tracks, library_remove_track, library_scan_folder};
+use commands::{
+    library_list_tracks, library_remove_track, library_remove_tracks, library_scan_folder,
+};
 use extension_server::start as start_extension_server;
 use library::init_library;
 
@@ -22,6 +24,7 @@ pub fn run() {
             library_list_tracks,
             library_scan_folder,
             library_remove_track,
+            library_remove_tracks,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -23,3 +23,8 @@ pub fn library_remove_track(state: State<'_, LibraryState>, id: i64) -> Result<(
         Err(format!("Track not found: {id}"))
     }
 }
+
+#[tauri::command]
+pub fn library_remove_tracks(state: State<'_, LibraryState>, ids: Vec<i64>) -> Result<u32, String> {
+    state.remove_tracks(&ids).map_err(|e| e.to_string())
+}

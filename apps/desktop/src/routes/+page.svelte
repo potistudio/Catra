@@ -3,7 +3,7 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { onMount } from "svelte";
   import { pushActivityLog, pushActivityLogPayload } from "$lib/activityLog.svelte";
-  import { listTracks, removeTrack, scanFolder } from "$lib/api";
+  import { listTracks, removeTrack, removeTracks, scanFolder } from "$lib/api";
   import ActivityConsole from "$lib/components/ActivityConsole.svelte";
   import PreviewPlayer from "$lib/components/PreviewPlayer.svelte";
   import TrackList from "$lib/components/TrackList.svelte";
@@ -79,6 +79,19 @@
     }
   }
 
+  async function handleBulkRemove(ids: number[]) {
+    try {
+      const count = await removeTracks(ids);
+      if (selectedTrack && ids.includes(selectedTrack.id)) {
+        selectedTrack = null;
+      }
+      await loadTracks();
+      pushActivityLog("success", `${count} 曲をライブラリから削除しました`);
+    } catch (e) {
+      pushActivityLog("error", "トラックの一括削除に失敗しました", String(e));
+    }
+  }
+
   onMount(() => {
     pushActivityLog("info", "Catra を起動しました");
     void loadTracks(false);
@@ -119,6 +132,7 @@
       selectedId={selectedTrack?.id ?? null}
       onselect={handleSelect}
       onremove={handleRemove}
+      onbulkremove={handleBulkRemove}
     />
   </main>
 

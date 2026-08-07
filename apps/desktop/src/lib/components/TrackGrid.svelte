@@ -11,11 +11,13 @@
   interface Props {
     tracks: Track[];
     selectedId: number | null;
+    checkedIds: Set<number>;
     onselect: (track: Track) => void;
     onremove: (track: Track) => void;
+    ontogglecheck: (track: Track) => void;
   }
 
-  let { tracks, selectedId, onselect, onremove }: Props = $props();
+  let { tracks, selectedId, checkedIds, onselect, onremove, ontogglecheck }: Props = $props();
 
   let scrollTop = $state(0);
   let viewportHeight = $state(0);
@@ -71,8 +73,10 @@
         <TrackCard
           {track}
           selected={selectedId === track.id}
+          checked={checkedIds.has(track.id)}
           {onselect}
           {onremove}
+          {ontogglecheck}
         />
       {/each}
     </div>

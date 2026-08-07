@@ -16,11 +16,13 @@
   interface Props {
     track: Track;
     selected: boolean;
+    checked: boolean;
     onselect: (track: Track) => void;
     onremove: (track: Track) => void;
+    ontogglecheck: (track: Track) => void;
   }
 
-  let { track, selected, onselect, onremove }: Props = $props();
+  let { track, selected, checked, onselect, onremove, ontogglecheck }: Props = $props();
 
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === "Enter" || event.key === " ") {
@@ -33,12 +35,26 @@
 <div
   class="table-row"
   class:selected
+  class:checked
   role="row"
   tabindex="0"
   onclick={() => onselect(track)}
   onkeydown={handleKeydown}
   ondblclick={() => onselect(track)}
 >
+  <span class="cell checkbox-cell sticky-col" role="gridcell">
+    <input
+      type="checkbox"
+      class="checkbox"
+      {checked}
+      aria-label={`${displayTitle(track)} を選択`}
+      onclick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        ontogglecheck(track);
+      }}
+    />
+  </span>
   <span class="cell artwork-cell" role="gridcell">
     <div class="artwork-wrap">
       <TrackArtwork artworkPath={track.artworkPath} title={displayTitle(track)} />
@@ -79,7 +95,7 @@
   .table-row {
     display: grid;
     grid-template-columns:
-      3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
+      2.5rem 3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
       3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 2rem;
     gap: 0.6rem;
     align-items: center;
@@ -101,6 +117,14 @@
     background: var(--accent-subtle);
   }
 
+  .table-row.checked {
+    background: color-mix(in srgb, var(--accent-subtle) 60%, transparent);
+  }
+
+  .table-row.selected.checked {
+    background: var(--accent-subtle);
+  }
+
   .table-row:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: -2px;
@@ -116,6 +140,38 @@
     display: flex;
     justify-content: center;
     overflow: visible;
+  }
+
+  .checkbox-cell {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: visible;
+  }
+
+  .sticky-col {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: inherit;
+  }
+
+  .table-row:hover .sticky-col {
+    background: var(--surface-hover);
+  }
+
+  .table-row.selected .sticky-col,
+  .table-row.checked .sticky-col {
+    background: inherit;
+  }
+
+  .checkbox {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: var(--accent);
+    flex-shrink: 0;
   }
 
   .artwork-wrap {

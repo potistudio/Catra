@@ -154,25 +154,45 @@ impl LibraryState {
     }
 
     pub fn remove_track(&self, id: i64) -> Result<bool, rusqlite::Error> {
+        Ok(self.remove_tracks(&[id])? > 0)
+    }
+
+    pub fn remove_tracks(&self, ids: &[i64]) -> Result<u32, rusqlite::Error> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+
         let conn = self.conn.lock().unwrap();
+        let tx = conn.unchecked_transaction()?;
 
-        let artwork_path: Option<String> = conn
-            .query_row(
-                "SELECT artwork_path FROM tracks WHERE id = ?1",
-                params![id],
-                |row| row.get(0),
-            )
-            .ok();
+        let mut artwork_paths = Vec::new();
+        let mut deleted = 0u32;
 
-        let rows = conn.execute("DELETE FROM tracks WHERE id = ?1", params![id])?;
+        for &id in ids {
+            let artwork_path: Option<String> = tx
+                .query_row(
+                    "SELECT artwork_path FROM tracks WHERE id = ?1",
+                    params![id],
+                    |row| row.get(0),
+                )
+                .ok();
 
-        if rows > 0 {
-            if let Some(path) = artwork_path {
-                std::fs::remove_file(path).ok();
+            let rows = tx.execute("DELETE FROM tracks WHERE id = ?1", params![id])?;
+            if rows > 0 {
+                deleted += rows as u32;
+                if let Some(path) = artwork_path {
+                    artwork_paths.push(path);
+                }
             }
         }
 
-        Ok(rows > 0)
+        tx.commit()?;
+
+        for path in artwork_paths {
+            std::fs::remove_file(path).ok();
+        }
+
+        Ok(deleted)
     }
 }
 

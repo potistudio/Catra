@@ -8,11 +8,13 @@
   interface Props {
     track: Track;
     selected: boolean;
+    checked: boolean;
     onselect: (track: Track) => void;
     onremove: (track: Track) => void;
+    ontogglecheck: (track: Track) => void;
   }
 
-  let { track, selected, onselect, onremove }: Props = $props();
+  let { track, selected, checked, onselect, onremove, ontogglecheck }: Props = $props();
 
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === "Enter" || event.key === " ") {
@@ -25,6 +27,7 @@
 <div
   class="track-card"
   class:selected
+  class:checked
   role="button"
   tabindex="0"
   onclick={() => onselect(track)}
@@ -45,6 +48,19 @@
         <TrackSourceBadge source={track.source} />
       </span>
     {/if}
+    <label class="checkbox-wrap" title="選択">
+      <input
+        type="checkbox"
+        class="checkbox"
+        {checked}
+        aria-label={`${displayTitle(track)} を選択`}
+        onclick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          ontogglecheck(track);
+        }}
+      />
+    </label>
     <button
       type="button"
       class="remove-btn"
@@ -88,6 +104,16 @@
     border-color: var(--accent);
   }
 
+  .track-card.checked {
+    background: color-mix(in srgb, var(--accent-subtle) 60%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  }
+
+  .track-card.selected.checked {
+    background: var(--accent-subtle);
+    border-color: var(--accent);
+  }
+
   .track-card:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -126,9 +152,32 @@
     z-index: 1;
   }
 
-  .remove-btn {
+  .checkbox-wrap {
     position: absolute;
     top: 0.35rem;
+    left: 0.35rem;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.55);
+    cursor: pointer;
+  }
+
+  .checkbox {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: var(--accent);
+  }
+
+  .remove-btn {
+    position: absolute;
+    bottom: 0.35rem;
     left: 0.35rem;
     width: 24px;
     height: 24px;
