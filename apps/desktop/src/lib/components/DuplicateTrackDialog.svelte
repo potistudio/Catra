@@ -26,17 +26,17 @@
 <div class="backdrop" role="presentation">
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="duplicate-title">
     <header class="header">
-      <h2 id="duplicate-title">重複した楽曲が見つかりました</h2>
+      <h2 id="duplicate-title">どちらをライブラリに残しますか？</h2>
     </header>
 
     <div class="choices">
       <button
         type="button"
         class="choice"
-        aria-label={`ライブラリ内のトラックを残す: ${existingTitle}`}
+        aria-label={`現在のトラックを残す: ${existingTitle}`}
         onclick={() => onchoose("existing")}
       >
-        <span class="choice-label">ライブラリ内</span>
+        <span class="choice-heading">現在のトラックを残す</span>
         <div class="choice-body">
           <TrackArtwork
             artworkPath={payload.existing.artworkPath}
@@ -63,10 +63,10 @@
       <button
         type="button"
         class="choice"
-        aria-label={`新しいトラックを残す: ${candidateTitle}`}
+        aria-label={`新しいトラックで置き換え: ${candidateTitle}`}
         onclick={() => onchoose("new")}
       >
-        <span class="choice-label">新規</span>
+        <span class="choice-heading">新しいトラックで置き換え</span>
         <div class="choice-body">
           <TrackArtwork artworkPath={null} title={candidateTitle} size={72} />
           <div class="meta">
@@ -166,12 +166,10 @@
     outline-offset: 2px;
   }
 
-  .choice-label {
-    font-size: 0.75rem;
+  .choice-heading {
+    font-size: 0.875rem;
     font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--text-muted);
+    color: var(--text);
   }
 
   .choice-body {
