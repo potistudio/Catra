@@ -2,7 +2,7 @@ use crate::activity_log::emit_activity_log;
 use crate::library::{import_file, DuplicateResolver, LibraryState};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::io::{BufRead, BufReader};
+use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Condvar, Mutex, OnceLock};
@@ -108,9 +108,9 @@ impl ProgressTracker {
 
     fn start_job(&self, app: &AppHandle, url: &str, is_playlist: bool) {
         let mut state = self.state.lock().unwrap();
-        state.active_url = Some(url.to_string());
+        state.active_url = Some(normalize_download_url(url));
         state.active_phase = DownloadPhase::Downloading;
-        state.percent = None;
+        state.percent = Some(0.0);
         state.current = None;
         state.total = None;
         state.message = Some(if is_playlist {
@@ -120,7 +120,7 @@ impl ProgressTracker {
         });
         state
             .queued_urls
-            .retain(|queued_url| queued_url != url);
+            .retain(|queued_url| queued_url != &normalize_download_url(url));
         Self::prune_completions(&mut state);
         Self::emit_progress(app, &state);
     }
@@ -168,9 +168,10 @@ impl ProgressTracker {
     }
 
     fn finish_job(&self, app: &AppHandle, url: &str, success: bool, error: Option<String>) {
+        let normalized = normalize_download_url(url);
         let mut state = self.state.lock().unwrap();
         state.completions.insert(
-            url.to_string(),
+            normalized,
             JobCompletion {
                 success,
                 error: error.clone(),
@@ -188,9 +189,10 @@ impl ProgressTracker {
     }
 
     fn snapshot_for_url(&self, url: &str) -> DownloadProgressPayload {
+        let normalized = normalize_download_url(url);
         let state = self.state.lock().unwrap();
 
-        if let Some(completion) = state.completions.get(url) {
+        if let Some(completion) = state.completions.get(&normalized) {
             return DownloadProgressPayload {
                 status: if completion.success {
                     "completed".to_string()
@@ -216,7 +218,7 @@ impl ProgressTracker {
             };
         }
 
-        if state.active_url.as_deref() == Some(url) {
+        if state.active_url.as_deref() == Some(normalized.as_str()) {
             return DownloadProgressPayload {
                 status: match state.active_phase {
                     DownloadPhase::Idle => "idle".to_string(),
@@ -236,7 +238,7 @@ impl ProgressTracker {
         if let Some(position) = state
             .queued_urls
             .iter()
-            .position(|queued_url| queued_url == url)
+            .position(|queued_url| queued_url == &normalized)
         {
             return DownloadProgressPayload {
                 status: "queued".to_string(),
@@ -292,15 +294,102 @@ fn parse_playlist_item_line(line: &str) -> Option<(usize, usize)> {
     Some((current, total))
 }
 
+pub fn normalize_download_url(url: &str) -> String {
+    let trimmed = url.trim();
+    let without_fragment = trimmed.split('#').next().unwrap_or(trimmed);
+    let without_query = without_fragment
+        .split('?')
+        .next()
+        .unwrap_or(without_fragment);
+    without_query.trim_end_matches('/').to_string()
+}
+
 pub fn get_download_progress(url: &str) -> DownloadProgressPayload {
     ProgressTracker::global().snapshot_for_url(url)
+}
+
+pub fn get_active_download_progress() -> DownloadProgressPayload {
+    let tracker = ProgressTracker::global();
+    let state = tracker.state.lock().unwrap();
+
+    if let Some(url) = state.active_url.clone() {
+        drop(state);
+        return tracker.snapshot_for_url(&url);
+    }
+
+    if let Some(url) = state.queued_urls.first().cloned() {
+        drop(state);
+        return tracker.snapshot_for_url(&url);
+    }
+
+    DownloadProgressPayload {
+        status: "idle".to_string(),
+        phase: DownloadPhase::Idle,
+        percent: None,
+        current: None,
+        total: None,
+        queue_position: None,
+        message: None,
+    }
+}
+
+fn is_yt_dlp_progress_line(line: &str) -> bool {
+    let trimmed = line.trim();
+    trimmed.starts_with("[download]")
+        || trimmed.starts_with("[ExtractAudio]")
+        || trimmed.starts_with("[Metadata]")
+}
+
+fn process_yt_dlp_stderr_line(app: &AppHandle, line: &str) {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+
+    ProgressTracker::global().update_from_yt_dlp_line(app, trimmed);
+    if !is_yt_dlp_progress_line(trimmed) {
+        emit_activity_log(app, "info", trimmed, None);
+    }
+}
+
+fn read_yt_dlp_stderr(app: AppHandle, stderr: impl Read + Send + 'static) {
+    std::thread::spawn(move || {
+        let mut reader = BufReader::new(stderr);
+        let mut buffer = Vec::new();
+        let mut chunk = [0u8; 4096];
+
+        loop {
+            match reader.read(&mut chunk) {
+                Ok(0) => break,
+                Ok(count) => {
+                    for &byte in &chunk[..count] {
+                        if byte == b'\n' || byte == b'\r' {
+                            if !buffer.is_empty() {
+                                let line = decode_process_output(&buffer);
+                                process_yt_dlp_stderr_line(&app, &line);
+                                buffer.clear();
+                            }
+                        } else {
+                            buffer.push(byte);
+                        }
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+
+        if !buffer.is_empty() {
+            let line = decode_process_output(&buffer);
+            process_yt_dlp_stderr_line(&app, &line);
+        }
+    });
 }
 
 fn sync_queue_snapshot(app: &AppHandle, jobs: &VecDeque<DownloadJob>) {
     let urls = jobs
         .iter()
         .map(|job| match job {
-            DownloadJob::Track(url) | DownloadJob::Playlist(url) => url.clone(),
+            DownloadJob::Track(url) | DownloadJob::Playlist(url) => normalize_download_url(url),
         })
         .collect();
     ProgressTracker::global().set_queued_urls(app, urls);
@@ -492,6 +581,9 @@ fn run_yt_dlp(
         "--add-metadata".to_string(),
         "--encoding".to_string(),
         "utf-8".to_string(),
+        "--newline".to_string(),
+        "--progress-delta".to_string(),
+        "1".to_string(),
         "-o".to_string(),
         output_template.to_string_lossy().to_string(),
         "--print".to_string(),
@@ -514,17 +606,7 @@ fn run_yt_dlp(
         .map_err(|e| format!("yt-dlp を実行できませんでした: {e}"))?;
 
     if let Some(stderr) = child.stderr.take() {
-        let app_stderr = app.clone();
-        std::thread::spawn(move || {
-            let reader = BufReader::new(stderr);
-            for line in reader.lines().map_while(Result::ok) {
-                let trimmed = line.trim();
-                if !trimmed.is_empty() {
-                    ProgressTracker::global().update_from_yt_dlp_line(&app_stderr, trimmed);
-                    emit_activity_log(&app_stderr, "info", trimmed, None);
-                }
-            }
-        });
+        read_yt_dlp_stderr(app.clone(), stderr);
     }
 
     let output = child
@@ -686,9 +768,9 @@ fn enqueue_job(app: AppHandle, job: DownloadJob) {
 }
 
 pub fn download_and_import(app: AppHandle, url: String) {
-    enqueue_job(app, DownloadJob::Track(url));
+    enqueue_job(app, DownloadJob::Track(normalize_download_url(&url)));
 }
 
 pub fn download_playlist_and_import(app: AppHandle, url: String) {
-    enqueue_job(app, DownloadJob::Playlist(url));
+    enqueue_job(app, DownloadJob::Playlist(normalize_download_url(&url)));
 }

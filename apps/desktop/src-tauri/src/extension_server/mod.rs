@@ -1,5 +1,8 @@
 use crate::activity_log::emit_activity_log;
-use crate::download::{download_and_import, download_playlist_and_import, get_download_progress};
+use crate::download::{
+    download_and_import, download_playlist_and_import, get_active_download_progress,
+    get_download_progress, normalize_download_url,
+};
 use serde::Deserialize;
 use tiny_http::{Header, Method, Response, Server, StatusCode};
 use tauri::AppHandle;
@@ -100,20 +103,18 @@ fn handle_request(app: &AppHandle, mut request: tiny_http::Request) {
     if method == Method::Get && url.starts_with("/download/progress") {
         let target_url = parse_progress_url(&url).filter(|value| !value.trim().is_empty());
 
-        if let Some(target_url) = target_url {
-            let progress = get_download_progress(&target_url);
-            let body = serde_json::json!({
-                "success": true,
-                "progress": progress,
-            })
-            .to_string();
-            let _ = request.respond(json_response(StatusCode(200), &body));
+        let progress = if let Some(target_url) = target_url {
+            get_download_progress(&normalize_download_url(&target_url))
         } else {
-            let _ = request.respond(json_response(
-                StatusCode(400),
-                r#"{"success":false,"error":"url query parameter is required"}"#,
-            ));
-        }
+            get_active_download_progress()
+        };
+
+        let body = serde_json::json!({
+            "success": true,
+            "progress": progress,
+        })
+        .to_string();
+        let _ = request.respond(json_response(StatusCode(200), &body));
         return;
     }
 

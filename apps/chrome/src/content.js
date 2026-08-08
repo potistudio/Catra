@@ -371,6 +371,17 @@ function formatProgressLabel(progress) {
     return "...";
   }
 
+  if (progress.status === "downloading") {
+    if (progress.percent != null) {
+      const rounded = Math.round(progress.percent);
+      if (progress.current != null && progress.total != null) {
+        return `${progress.current}/${progress.total}`;
+      }
+      return `${rounded}%`;
+    }
+    return "…";
+  }
+
   if (progress.percent != null) {
     const rounded = Math.round(progress.percent);
     if (progress.current != null && progress.total != null) {
@@ -406,8 +417,31 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function pollDownloadProgress(trackUrl, button) {
+async function fetchDownloadProgress(trackUrl) {
   const normalizedUrl = CatraSC.normalizeTrackUrl(trackUrl);
+
+  const specific = await chrome.runtime
+    .sendMessage({
+      type: "GET_DOWNLOAD_PROGRESS",
+      trackUrl: normalizedUrl,
+    })
+    .catch(() => null);
+
+  if (specific?.progress && specific.progress.status !== "idle") {
+    return specific.progress;
+  }
+
+  const active = await chrome.runtime
+    .sendMessage({
+      type: "GET_DOWNLOAD_PROGRESS",
+      active: true,
+    })
+    .catch(() => null);
+
+  return active?.progress ?? specific?.progress ?? null;
+}
+
+async function pollDownloadProgress(trackUrl, button) {
   const startedAt = Date.now();
   const timeoutMs = 30 * 60 * 1000;
 
@@ -416,14 +450,7 @@ async function pollDownloadProgress(trackUrl, button) {
       throw new Error("ダウンロードがタイムアウトしました");
     }
 
-    const result = await chrome.runtime
-      .sendMessage({
-        type: "GET_DOWNLOAD_PROGRESS",
-        trackUrl: normalizedUrl,
-      })
-      .catch(() => null);
-
-    const progress = result?.progress;
+    const progress = await fetchDownloadProgress(trackUrl);
     if (progress && button.classList.contains("is-loading")) {
       updateButtonProgress(button, progress);
     }

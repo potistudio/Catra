@@ -55,6 +55,10 @@
   display: none;
 }
 
+.catra-sc-progress-label:not([hidden]) {
+  z-index: 1;
+}
+
 .catra-sc-download-btn.is-loading::after {
   content: "";
   position: absolute;

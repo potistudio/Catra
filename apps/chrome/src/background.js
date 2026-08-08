@@ -30,12 +30,13 @@ async function postJson(path, body) {
   return result;
 }
 
-async function getDownloadProgress(trackUrl) {
+async function getDownloadProgress({ trackUrl, active = false } = {}) {
   await ensureCatraAvailable();
 
-  const response = await fetch(
-    `${CATRA_API}/download/progress?url=${encodeURIComponent(trackUrl)}`,
-  );
+  const path = active
+    ? "/download/progress"
+    : `/download/progress?url=${encodeURIComponent(trackUrl)}`;
+  const response = await fetch(`${CATRA_API}${path}`);
   const result = await response.json().catch(() => null);
   if (!response.ok || !result?.success) {
     throw new Error(result?.error ?? "進捗の取得に失敗しました");
@@ -46,7 +47,10 @@ async function getDownloadProgress(trackUrl) {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "GET_DOWNLOAD_PROGRESS") {
-    getDownloadProgress(message.trackUrl)
+    getDownloadProgress({
+      trackUrl: message.trackUrl,
+      active: message.active === true,
+    })
       .then((result) => {
         sendResponse(result);
       })

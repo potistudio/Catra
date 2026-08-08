@@ -60,6 +60,16 @@ export interface ActivityLogEntry {
   detail?: string;
 }
 
+export interface DownloadProgress {
+  status: string;
+  phase: "idle" | "queued" | "downloading" | "importing";
+  percent?: number | null;
+  current?: number | null;
+  total?: number | null;
+  queuePosition?: number | null;
+  message?: string | null;
+}
+
 export interface ActivityLogPayload {
   level: ActivityLogLevel;
   message: string;

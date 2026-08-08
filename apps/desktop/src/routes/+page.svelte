@@ -8,13 +8,21 @@
   import DuplicateTrackDialog from "$lib/components/DuplicateTrackDialog.svelte";
   import PreviewPlayer from "$lib/components/PreviewPlayer.svelte";
   import TrackList from "$lib/components/TrackList.svelte";
-  import type { ActivityLogPayload, DuplicateFoundPayload, ScanProgress, ScanResult, Track } from "$lib/types";
+  import type {
+    ActivityLogPayload,
+    DownloadProgress,
+    DuplicateFoundPayload,
+    ScanProgress,
+    ScanResult,
+    Track,
+  } from "$lib/types";
 
   let tracks = $state<Track[]>([]);
   let selectedTrack = $state<Track | null>(null);
   let loading = $state(false);
   let scanning = $state(false);
   let duplicatePayload = $state<DuplicateFoundPayload | null>(null);
+  let downloadProgress = $state<DownloadProgress | null>(null);
 
   async function loadTracks(silent = true) {
     loading = true;
@@ -111,6 +119,7 @@
     let unlistenScanError: (() => void) | undefined;
     let unlistenScanProgress: (() => void) | undefined;
     let unlistenDuplicate: (() => void) | undefined;
+    let unlistenDownloadProgress: (() => void) | undefined;
 
     void listen("library-updated", () => {
       void loadTracks();
@@ -149,6 +158,18 @@
       unlistenDuplicate = unlisten;
     });
 
+    void listen<DownloadProgress>("download-progress", (event) => {
+      const progress = event.payload;
+      if (progress.status === "idle" && progress.percent == null && !progress.message) {
+        downloadProgress = null;
+        return;
+      }
+
+      downloadProgress = progress;
+    }).then((unlisten) => {
+      unlistenDownloadProgress = unlisten;
+    });
+
     return () => {
       unlistenUpdated?.();
       unlistenActivity?.();
@@ -156,6 +177,7 @@
       unlistenScanError?.();
       unlistenScanProgress?.();
       unlistenDuplicate?.();
+      unlistenDownloadProgress?.();
     };
   });
 </script>
@@ -167,6 +189,27 @@
 <div class="app">
   <header class="toolbar">
     <h1 class="logo">Catra</h1>
+    {#if downloadProgress}
+      <div class="download-status" aria-live="polite">
+        <span class="download-message">
+          {downloadProgress.message ?? "ダウンロード中"}
+        </span>
+        {#if downloadProgress.percent != null}
+          <span class="download-percent">{Math.round(downloadProgress.percent)}%</span>
+        {:else if downloadProgress.current != null && downloadProgress.total != null}
+          <span class="download-percent">
+            {downloadProgress.current}/{downloadProgress.total}
+          </span>
+        {/if}
+        {#if downloadProgress.percent != null}
+          <progress
+            class="download-bar"
+            max="100"
+            value={Math.round(downloadProgress.percent)}
+          ></progress>
+        {/if}
+      </div>
+    {/if}
     <button class="btn primary" onclick={handleAddFolder} disabled={loading || scanning}>
       Add Folder
     </button>
@@ -208,6 +251,47 @@
     font-size: 1.25rem;
     font-weight: 700;
     letter-spacing: -0.02em;
+    flex-shrink: 0;
+  }
+
+  .download-status {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+    flex: 1;
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+  }
+
+  .download-message {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+
+  .download-percent {
+    flex-shrink: 0;
+    font-size: 0.8rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+
+  .download-bar {
+    width: 120px;
+    height: 6px;
+    flex-shrink: 0;
+    border: none;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--surface-hover);
+    accent-color: var(--accent);
   }
 
   .btn {
