@@ -5,6 +5,7 @@ const TRACK_ACTION_CONTAINER_CLASS = "mui-16ytee5";
 const MORE_MENU_SELECTOR = 'button[aria-label="More menu"]';
 const SUCCESS_RESET_MS = 2000;
 const POLL_INTERVAL_MS = 500;
+const PROGRESS_POLL_MS = 400;
 
 const NON_TRACK_SEGMENTS = new Set([
   "discover",
@@ -87,8 +88,12 @@ function getPathSegments() {
   return getPathSegmentsFromHref(getPageHrefForDetection());
 }
 
+function getFramePathSegments() {
+  return getPathSegmentsFromHref(window.location.href);
+}
+
 function isTrackPage() {
-  const segments = getPathSegments();
+  const segments = getFramePathSegments();
   if (segments.length < 2 || segments.length > 3) {
     return false;
   }
@@ -96,7 +101,41 @@ function isTrackPage() {
   return !segments.some((segment) => NON_TRACK_SEGMENTS.has(segment.toLowerCase()));
 }
 
-const PLAYLIST_ACTION_CONTROL_COUNT = 4;
+const PLAYLIST_HEADER_ACTION_XPATH =
+  "/html/body/div[1]/div[2]/div[2]/div/div[2]/div[1]/div/div[1]/div/div/div[2]/div/div[1]";
+
+function evaluateXPath(xpath) {
+  try {
+    const result = document.evaluate(
+      xpath,
+      document,
+      null,
+      XPathResult.FIRST_ORDERED_NODE_TYPE,
+      null,
+    );
+    const node = result.singleNodeValue;
+    return node instanceof Element ? node : null;
+  } catch {
+    return null;
+  }
+}
+
+function findPlaylistHeaderActionContainer() {
+  const container = evaluateXPath(PLAYLIST_HEADER_ACTION_XPATH);
+  if (!container) {
+    return null;
+  }
+
+  const controls = getPlaylistActionBarControls(container);
+  if (controls.length < 3) {
+    return null;
+  }
+
+  return {
+    container,
+    templateButton: controls.at(-1),
+  };
+}
 
 function isPlaylistPage() {
   for (const href of [getPageHrefForDetection(), window.location.href]) {
@@ -110,7 +149,8 @@ function isPlaylistPage() {
 }
 
 function getCurrentPageUrl() {
-  const normalized = CatraSC.normalizeTrackUrl(getPageHrefForDetection());
+  const href = isPlaylistPage() ? getPageHrefForDetection() : window.location.href;
+  const normalized = CatraSC.normalizeTrackUrl(href);
   const parsed = new URL(normalized);
   const segments = parsed.pathname.split("/").filter(Boolean);
 
@@ -168,84 +208,6 @@ function getPlaylistActionBarControls(container) {
   }
 
   return wrappedControls;
-}
-
-function isPlaylistHeaderActionContainer(container) {
-  if (container.querySelector(`.${TRACK_ACTION_CONTAINER_CLASS}`)) {
-    return false;
-  }
-
-  const row = container.closest(
-    "article, tr, li, [class*='item'], [class*='row'], [class*='track']",
-  );
-
-  if (row && extractTrackUrlFromItem(row)) {
-    return false;
-  }
-
-  return true;
-}
-
-function getAncestorDistance(element, ancestor) {
-  let distance = 0;
-  let node = element;
-
-  while (node && node !== ancestor) {
-    distance += 1;
-    node = node.parentElement;
-  }
-
-  return node === ancestor ? distance : Number.POSITIVE_INFINITY;
-}
-
-function findPlaylistHeaderActionContainer() {
-  const titles = collectElementsDeep(document.documentElement, "h1");
-  const candidates = [];
-
-  for (const div of collectElementsDeep(document.documentElement, "div")) {
-    const controls = getPlaylistActionBarControls(div);
-    if (controls.length < 3 || controls.length > 6) {
-      continue;
-    }
-
-    if (!isPlaylistHeaderActionContainer(div)) {
-      continue;
-    }
-
-    candidates.push({
-      container: div,
-      templateButton: controls.at(-1),
-      controlCount: controls.length,
-    });
-  }
-
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  const title = titles[0] ?? null;
-  if (!title) {
-    return [...candidates].sort(
-      (left, right) =>
-        Math.abs(left.controlCount - PLAYLIST_ACTION_CONTROL_COUNT) -
-        Math.abs(right.controlCount - PLAYLIST_ACTION_CONTROL_COUNT),
-    )[0];
-  }
-
-  let best = null;
-  let bestScore = Number.POSITIVE_INFINITY;
-
-  for (const candidate of candidates) {
-    const distance = getAncestorDistance(candidate.container, title);
-    const score =
-      Math.abs(candidate.controlCount - PLAYLIST_ACTION_CONTROL_COUNT) * 1000 + distance;
-    if (score < bestScore) {
-      bestScore = score;
-      best = candidate;
-    }
-  }
-
-  return best;
 }
 
 function findPrimaryMuiActionContainer() {
@@ -380,20 +342,119 @@ function createDownloadButton({ id, className, onClick }) {
   }
 
   const iconWrapper = document.createElement("div");
+  iconWrapper.className = "catra-sc-download-icon";
   iconWrapper.appendChild(createDownloadIcon());
   button.appendChild(iconWrapper);
+
+  const progressLabel = document.createElement("span");
+  progressLabel.className = "catra-sc-progress-label";
+  progressLabel.hidden = true;
+  button.appendChild(progressLabel);
+
   button.addEventListener("click", onClick);
   return button;
 }
 
-function setButtonState(button, state) {
+function formatProgressLabel(progress) {
+  if (!progress) {
+    return "";
+  }
+
+  if (progress.status === "queued") {
+    return progress.queuePosition ? `待${progress.queuePosition}` : "待";
+  }
+
+  if (progress.status === "importing") {
+    if (progress.current != null && progress.total != null) {
+      return `${progress.current}/${progress.total}`;
+    }
+    return "...";
+  }
+
+  if (progress.percent != null) {
+    const rounded = Math.round(progress.percent);
+    if (progress.current != null && progress.total != null) {
+      return `${progress.current}/${progress.total}`;
+    }
+    return `${rounded}%`;
+  }
+
+  if (progress.current != null && progress.total != null) {
+    return `${progress.current}/${progress.total}`;
+  }
+
+  return "";
+}
+
+function updateButtonProgress(button, progress) {
+  const label = button.querySelector(".catra-sc-progress-label");
+  if (!label) {
+    return;
+  }
+
+  const text = formatProgressLabel(progress);
+  label.textContent = text;
+  label.hidden = !text;
+
+  if (progress?.message) {
+    button.title = progress.message;
+    button.setAttribute("aria-label", progress.message);
+  }
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function pollDownloadProgress(trackUrl, button) {
+  const normalizedUrl = CatraSC.normalizeTrackUrl(trackUrl);
+  const startedAt = Date.now();
+  const timeoutMs = 30 * 60 * 1000;
+
+  while (button?.isConnected) {
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new Error("ダウンロードがタイムアウトしました");
+    }
+
+    const result = await chrome.runtime
+      .sendMessage({
+        type: "GET_DOWNLOAD_PROGRESS",
+        trackUrl: normalizedUrl,
+      })
+      .catch(() => null);
+
+    const progress = result?.progress;
+    if (progress && button.classList.contains("is-loading")) {
+      updateButtonProgress(button, progress);
+    }
+
+    if (progress?.status === "completed") {
+      return;
+    }
+
+    if (progress?.status === "error") {
+      throw new Error(progress.message ?? "ダウンロードに失敗しました");
+    }
+
+    await wait(PROGRESS_POLL_MS);
+  }
+}
+
+function setButtonState(button, state, progress = null) {
   button.classList.remove("is-loading", "is-success", "is-error");
 
   if (state === "loading") {
     button.classList.add("is-loading");
-    button.title = "ダウンロード中...";
-    button.setAttribute("aria-label", "ダウンロード中");
+    button.title = progress?.message ?? "ダウンロード中...";
+    button.setAttribute("aria-label", progress?.message ?? "ダウンロード中");
+    updateButtonProgress(button, progress);
     return;
+  }
+
+  const progressLabel = button.querySelector(".catra-sc-progress-label");
+  if (progressLabel) {
+    progressLabel.hidden = true;
+    progressLabel.textContent = "";
   }
 
   if (state === "success") {
@@ -438,6 +499,7 @@ async function downloadPlaylist(button) {
   }
 
   playlistDownloading = true;
+  const trackUrl = getCurrentPageUrl();
   if (button) {
     setButtonState(button, "loading");
   }
@@ -445,7 +507,7 @@ async function downloadPlaylist(button) {
   try {
     const result = await chrome.runtime.sendMessage({
       type: "DOWNLOAD_PLAYLIST",
-      playlistUrl: getCurrentPageUrl(),
+      playlistUrl: trackUrl,
     });
 
     if (!result?.success) {
@@ -453,6 +515,7 @@ async function downloadPlaylist(button) {
     }
 
     if (button) {
+      await pollDownloadProgress(trackUrl, button);
       setButtonState(button, "success");
       resetButtonAfterSuccess(button);
     }
@@ -471,6 +534,7 @@ async function downloadTrack(trackUrl, button) {
     return;
   }
 
+  const normalizedUrl = CatraSC.normalizeTrackUrl(trackUrl);
   if (button) {
     setButtonState(button, "loading");
   }
@@ -478,7 +542,7 @@ async function downloadTrack(trackUrl, button) {
   try {
     const result = await chrome.runtime.sendMessage({
       type: "DOWNLOAD_TRACK",
-      trackUrl: CatraSC.normalizeTrackUrl(trackUrl),
+      trackUrl: normalizedUrl,
     });
 
     if (!result?.success) {
@@ -486,6 +550,7 @@ async function downloadTrack(trackUrl, button) {
     }
 
     if (button) {
+      await pollDownloadProgress(normalizedUrl, button);
       setButtonState(button, "success");
       resetButtonAfterSuccess(button);
     }
@@ -751,7 +816,11 @@ function ensurePlaylistDownloadButton() {
 function ensureListDownloadButtons() {
   for (const item of findTrackItems()) {
     const trackUrl = extractTrackUrlFromItem(item);
-    if (!trackUrl || trackUrl === getCurrentPageUrl()) {
+    if (!trackUrl) {
+      continue;
+    }
+
+    if (trackUrl === getCurrentPageUrl()) {
       continue;
     }
 
@@ -784,8 +853,8 @@ function ensureListDownloadButtons() {
 
 function refreshButtons() {
   ensureInlineDownloadButton();
-  ensurePlaylistDownloadButton();
   ensureListDownloadButtons();
+  ensurePlaylistDownloadButton();
 }
 
 function scheduleRefresh() {

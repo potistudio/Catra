@@ -1,5 +1,5 @@
 use crate::activity_log::emit_activity_log;
-use crate::download::{download_and_import, download_playlist_and_import};
+use crate::download::{download_and_import, download_playlist_and_import, get_download_progress};
 use serde::Deserialize;
 use tiny_http::{Header, Method, Response, Server, StatusCode};
 use tauri::AppHandle;
@@ -25,6 +25,48 @@ fn cors_headers() -> Vec<Header> {
     ]
 }
 
+fn decode_query_value(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+
+    while index < bytes.len() {
+        match bytes[index] {
+            b'%' if index + 2 < bytes.len() => {
+                if let Ok(byte) =
+                    u8::from_str_radix(std::str::from_utf8(&bytes[index + 1..index + 3]).unwrap_or(""), 16)
+                {
+                    decoded.push(byte);
+                    index += 3;
+                    continue;
+                }
+                decoded.push(bytes[index]);
+                index += 1;
+            }
+            b'+' => {
+                decoded.push(b' ');
+                index += 1;
+            }
+            byte => {
+                decoded.push(byte);
+                index += 1;
+            }
+        }
+    }
+
+    String::from_utf8_lossy(&decoded).into_owned()
+}
+
+fn parse_progress_url(request_url: &str) -> Option<String> {
+    let query = request_url.split_once('?')?.1;
+    for pair in query.split('&') {
+        let (key, value) = pair.split_once('=')?;
+        if key == "url" {
+            return Some(decode_query_value(value));
+        }
+    }
+    None
+}
 fn json_response(status: StatusCode, body: &str) -> Response<std::io::Cursor<Vec<u8>>> {
     let mut response = Response::from_string(body).with_status_code(status);
     for header in cors_headers() {
@@ -52,6 +94,26 @@ fn handle_request(app: &AppHandle, mut request: tiny_http::Request) {
             StatusCode(200),
             r#"{"success":true,"service":"catra"}"#,
         ));
+        return;
+    }
+
+    if method == Method::Get && url.starts_with("/download/progress") {
+        let target_url = parse_progress_url(&url).filter(|value| !value.trim().is_empty());
+
+        if let Some(target_url) = target_url {
+            let progress = get_download_progress(&target_url);
+            let body = serde_json::json!({
+                "success": true,
+                "progress": progress,
+            })
+            .to_string();
+            let _ = request.respond(json_response(StatusCode(200), &body));
+        } else {
+            let _ = request.respond(json_response(
+                StatusCode(400),
+                r#"{"success":false,"error":"url query parameter is required"}"#,
+            ));
+        }
         return;
     }
 

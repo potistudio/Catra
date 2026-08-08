@@ -27,8 +27,32 @@
   pointer-events: none;
 }
 
-.catra-sc-download-btn.is-loading svg {
+.catra-sc-download-btn.is-loading svg,
+.catra-sc-download-btn.is-loading .catra-sc-download-icon svg {
   visibility: hidden;
+}
+
+.catra-sc-progress-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.58rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: currentColor;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.catra-sc-playlist-download-btn .catra-sc-progress-label {
+  font-size: 0.72rem;
+}
+
+.catra-sc-download-btn.is-loading:has(.catra-sc-progress-label:not([hidden]))::after {
+  display: none;
 }
 
 .catra-sc-download-btn.is-loading::after {

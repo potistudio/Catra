@@ -1,12 +1,310 @@
 use crate::activity_log::emit_activity_log;
 use crate::library::{import_file, DuplicateResolver, LibraryState};
-use std::collections::{HashSet, VecDeque};
+use serde::Serialize;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Condvar, Mutex, OnceLock};
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
 use tauri::{AppHandle, Emitter, Manager};
+
+#[derive(Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DownloadPhase {
+    Idle,
+    Queued,
+    Downloading,
+    Importing,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadProgressPayload {
+    pub status: String,
+    pub phase: DownloadPhase,
+    pub percent: Option<f64>,
+    pub current: Option<usize>,
+    pub total: Option<usize>,
+    pub queue_position: Option<usize>,
+    pub message: Option<String>,
+}
+
+struct JobCompletion {
+    success: bool,
+    error: Option<String>,
+    finished_at: Instant,
+}
+
+struct ProgressState {
+    active_url: Option<String>,
+    active_phase: DownloadPhase,
+    percent: Option<f64>,
+    current: Option<usize>,
+    total: Option<usize>,
+    message: Option<String>,
+    queued_urls: Vec<String>,
+    completions: HashMap<String, JobCompletion>,
+}
+
+impl Default for ProgressState {
+    fn default() -> Self {
+        Self {
+            active_url: None,
+            active_phase: DownloadPhase::Idle,
+            percent: None,
+            current: None,
+            total: None,
+            message: None,
+            queued_urls: Vec::new(),
+            completions: HashMap::new(),
+        }
+    }
+}
+
+struct ProgressTracker {
+    state: Mutex<ProgressState>,
+}
+
+impl ProgressTracker {
+    fn global() -> &'static ProgressTracker {
+        static TRACKER: OnceLock<ProgressTracker> = OnceLock::new();
+        TRACKER.get_or_init(|| ProgressTracker {
+            state: Mutex::new(ProgressState::default()),
+        })
+    }
+
+    fn prune_completions(state: &mut ProgressState) {
+        let ttl = Duration::from_secs(30);
+        state
+            .completions
+            .retain(|_, completion| completion.finished_at.elapsed() < ttl);
+    }
+
+    fn emit_progress(app: &AppHandle, state: &ProgressState) {
+        let payload = DownloadProgressPayload {
+            status: match state.active_phase {
+                DownloadPhase::Idle => "idle".to_string(),
+                DownloadPhase::Queued => "queued".to_string(),
+                DownloadPhase::Downloading => "downloading".to_string(),
+                DownloadPhase::Importing => "importing".to_string(),
+            },
+            phase: state.active_phase,
+            percent: state.percent,
+            current: state.current,
+            total: state.total,
+            queue_position: None,
+            message: state.message.clone(),
+        };
+        let _ = app.emit("download-progress", payload);
+    }
+
+    fn set_queued_urls(&self, app: &AppHandle, urls: Vec<String>) {
+        let mut state = self.state.lock().unwrap();
+        state.queued_urls = urls;
+        Self::prune_completions(&mut state);
+        Self::emit_progress(app, &state);
+    }
+
+    fn start_job(&self, app: &AppHandle, url: &str, is_playlist: bool) {
+        let mut state = self.state.lock().unwrap();
+        state.active_url = Some(url.to_string());
+        state.active_phase = DownloadPhase::Downloading;
+        state.percent = None;
+        state.current = None;
+        state.total = None;
+        state.message = Some(if is_playlist {
+            "プレイリストをダウンロード中...".to_string()
+        } else {
+            "ダウンロード中...".to_string()
+        });
+        state
+            .queued_urls
+            .retain(|queued_url| queued_url != url);
+        Self::prune_completions(&mut state);
+        Self::emit_progress(app, &state);
+    }
+
+    fn update_from_yt_dlp_line(&self, app: &AppHandle, line: &str) {
+        let mut state = self.state.lock().unwrap();
+        if state.active_phase != DownloadPhase::Downloading {
+            return;
+        }
+
+        if let Some((current, total)) = parse_playlist_item_line(line) {
+            state.current = Some(current);
+            state.total = Some(total);
+            state.message = Some(format!("{current}/{total} 曲をダウンロード中"));
+        }
+
+        if let Some(percent) = parse_download_percent_line(line) {
+            state.percent = Some(percent);
+            if let (Some(current), Some(total)) = (state.current, state.total) {
+                state.message = Some(format!(
+                    "{current}/{total} 曲 ({percent:.0}%)"
+                ));
+            } else {
+                state.message = Some(format!("ダウンロード中 {percent:.0}%"));
+            }
+        }
+
+        Self::emit_progress(app, &state);
+    }
+
+    fn set_importing(
+        &self,
+        app: &AppHandle,
+        message: &str,
+        current: Option<usize>,
+        total: Option<usize>,
+    ) {
+        let mut state = self.state.lock().unwrap();
+        state.active_phase = DownloadPhase::Importing;
+        state.percent = None;
+        state.current = current;
+        state.total = total;
+        state.message = Some(message.to_string());
+        Self::emit_progress(app, &state);
+    }
+
+    fn finish_job(&self, app: &AppHandle, url: &str, success: bool, error: Option<String>) {
+        let mut state = self.state.lock().unwrap();
+        state.completions.insert(
+            url.to_string(),
+            JobCompletion {
+                success,
+                error: error.clone(),
+                finished_at: Instant::now(),
+            },
+        );
+        state.active_url = None;
+        state.active_phase = DownloadPhase::Idle;
+        state.percent = None;
+        state.current = None;
+        state.total = None;
+        state.message = None;
+        Self::prune_completions(&mut state);
+        Self::emit_progress(app, &state);
+    }
+
+    fn snapshot_for_url(&self, url: &str) -> DownloadProgressPayload {
+        let state = self.state.lock().unwrap();
+
+        if let Some(completion) = state.completions.get(url) {
+            return DownloadProgressPayload {
+                status: if completion.success {
+                    "completed".to_string()
+                } else {
+                    "error".to_string()
+                },
+                phase: DownloadPhase::Idle,
+                percent: if completion.success {
+                    Some(100.0)
+                } else {
+                    None
+                },
+                current: None,
+                total: None,
+                queue_position: None,
+                message: completion.error.clone().or_else(|| {
+                    if completion.success {
+                        Some("完了".to_string())
+                    } else {
+                        None
+                    }
+                }),
+            };
+        }
+
+        if state.active_url.as_deref() == Some(url) {
+            return DownloadProgressPayload {
+                status: match state.active_phase {
+                    DownloadPhase::Idle => "idle".to_string(),
+                    DownloadPhase::Queued => "queued".to_string(),
+                    DownloadPhase::Downloading => "downloading".to_string(),
+                    DownloadPhase::Importing => "importing".to_string(),
+                },
+                phase: state.active_phase,
+                percent: state.percent,
+                current: state.current,
+                total: state.total,
+                queue_position: None,
+                message: state.message.clone(),
+            };
+        }
+
+        if let Some(position) = state
+            .queued_urls
+            .iter()
+            .position(|queued_url| queued_url == url)
+        {
+            return DownloadProgressPayload {
+                status: "queued".to_string(),
+                phase: DownloadPhase::Queued,
+                percent: None,
+                current: None,
+                total: None,
+                queue_position: Some(position + 1),
+                message: Some(format!("待機中 ({}/{})", position + 1, state.queued_urls.len())),
+            };
+        }
+
+        DownloadProgressPayload {
+            status: "idle".to_string(),
+            phase: DownloadPhase::Idle,
+            percent: None,
+            current: None,
+            total: None,
+            queue_position: None,
+            message: None,
+        }
+    }
+}
+
+fn parse_download_percent_line(line: &str) -> Option<f64> {
+    let trimmed = line.trim();
+    if !trimmed.starts_with("[download]") {
+        return None;
+    }
+
+    let after_tag = trimmed.strip_prefix("[download]")?.trim_start();
+    if after_tag.starts_with("Downloading item") {
+        return None;
+    }
+
+    let percent_index = after_tag.find('%')?;
+    let before_percent = after_tag[..percent_index].trim();
+    let value = before_percent.split_whitespace().last()?;
+    value.parse().ok()
+}
+
+fn parse_playlist_item_line(line: &str) -> Option<(usize, usize)> {
+    let rest = line
+        .trim()
+        .strip_prefix("[download] Downloading item ")?
+        .trim();
+    let mut parts = rest.split_whitespace();
+    let current = parts.next()?.parse().ok()?;
+    if parts.next()? != "of" {
+        return None;
+    }
+    let total = parts.next()?.parse().ok()?;
+    Some((current, total))
+}
+
+pub fn get_download_progress(url: &str) -> DownloadProgressPayload {
+    ProgressTracker::global().snapshot_for_url(url)
+}
+
+fn sync_queue_snapshot(app: &AppHandle, jobs: &VecDeque<DownloadJob>) {
+    let urls = jobs
+        .iter()
+        .map(|job| match job {
+            DownloadJob::Track(url) | DownloadJob::Playlist(url) => url.clone(),
+        })
+        .collect();
+    ProgressTracker::global().set_queued_urls(app, urls);
+}
 
 enum DownloadJob {
     Track(String),
@@ -33,10 +331,11 @@ impl DownloadQueue {
         QUEUE.get_or_init(DownloadQueue::new)
     }
 
-    fn enqueue(&self, job: DownloadJob) {
+    fn enqueue(&self, job: DownloadJob, app: &AppHandle) {
         {
             let mut jobs = self.jobs.lock().unwrap();
             jobs.push_back(job);
+            sync_queue_snapshot(app, &jobs);
         }
         self.condvar.notify_one();
     }
@@ -59,7 +358,9 @@ impl DownloadQueue {
                 while jobs.is_empty() {
                     jobs = self.condvar.wait(jobs).unwrap();
                 }
-                jobs.pop_front().unwrap()
+                let job = jobs.pop_front().unwrap();
+                sync_queue_snapshot(&app, &jobs);
+                job
             };
 
             match job {
@@ -219,6 +520,7 @@ fn run_yt_dlp(
             for line in reader.lines().map_while(Result::ok) {
                 let trimmed = line.trim();
                 if !trimmed.is_empty() {
+                    ProgressTracker::global().update_from_yt_dlp_line(&app_stderr, trimmed);
                     emit_activity_log(&app_stderr, "info", trimmed, None);
                 }
             }
@@ -270,6 +572,7 @@ pub fn download_playlist(app: &AppHandle, url: &str) -> Result<Vec<PathBuf>, Str
 }
 
 fn import_downloaded_path(app: &AppHandle, path: &Path) -> Result<(), String> {
+    ProgressTracker::global().set_importing(app, "ライブラリへインポート中...", None, None);
     emit_activity_log(app, "info", "ライブラリへインポート中...", None);
     let state = app.state::<LibraryState>();
     let resolver = app.state::<DuplicateResolver>();
@@ -288,6 +591,7 @@ fn import_downloaded_path(app: &AppHandle, path: &Path) -> Result<(), String> {
 }
 
 fn process_track_download(app: &AppHandle, url: &str) {
+    ProgressTracker::global().start_job(app, url, false);
     emit_activity_log(app, "info", format!("ダウンロードを開始: {url}"), None);
 
     match download_track(app, url).and_then(|path| {
@@ -295,15 +599,19 @@ fn process_track_download(app: &AppHandle, url: &str) {
             format!("インポートに失敗しました: {error}")
         })
     }) {
-        Ok(()) => {}
+        Ok(()) => {
+            ProgressTracker::global().finish_job(app, url, true, None);
+        }
         Err(error) => {
             emit_activity_log(app, "error", "ダウンロードに失敗しました", Some(error.clone()));
-            let _ = app.emit("download-error", error);
+            let _ = app.emit("download-error", error.clone());
+            ProgressTracker::global().finish_job(app, url, false, Some(error));
         }
     }
 }
 
 fn process_playlist_download(app: &AppHandle, url: &str) {
+    ProgressTracker::global().start_job(app, url, true);
     emit_activity_log(
         app,
         "info",
@@ -315,7 +623,8 @@ fn process_playlist_download(app: &AppHandle, url: &str) {
         Ok(paths) => paths,
         Err(error) => {
             emit_activity_log(app, "error", "プレイリストのダウンロードに失敗しました", Some(error.clone()));
-            let _ = app.emit("download-error", error);
+            let _ = app.emit("download-error", error.clone());
+            ProgressTracker::global().finish_job(app, url, false, Some(error));
             return;
         }
     };
@@ -325,6 +634,12 @@ fn process_playlist_download(app: &AppHandle, url: &str) {
     let mut failed = 0usize;
 
     for (index, path) in paths.into_iter().enumerate() {
+        ProgressTracker::global().set_importing(
+            app,
+            &format!("インポート中 ({}/{})", index + 1, total),
+            Some(index + 1),
+            Some(total),
+        );
         emit_activity_log(
             app,
             "info",
@@ -352,12 +667,22 @@ fn process_playlist_download(app: &AppHandle, url: &str) {
         format!("一括ダウンロード完了: 成功 {imported} 曲、失敗 {failed} 曲"),
         Some(url.to_string()),
     );
+    ProgressTracker::global().finish_job(
+        app,
+        url,
+        failed == 0,
+        if failed == 0 {
+            None
+        } else {
+            Some(format!("成功 {imported} 曲、失敗 {failed} 曲"))
+        },
+    );
 }
 
 fn enqueue_job(app: AppHandle, job: DownloadJob) {
     let queue = DownloadQueue::global();
-    queue.ensure_worker(app);
-    queue.enqueue(job);
+    queue.ensure_worker(app.clone());
+    queue.enqueue(job, &app);
 }
 
 pub fn download_and_import(app: AppHandle, url: String) {
