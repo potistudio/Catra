@@ -32,7 +32,7 @@
     aria-describedby="duplicate-context"
   >
     <header class="header">
-      <h2 id="duplicate-title">楽曲が重複しました</h2>
+      <h2 id="duplicate-title">重複した楽曲が見つかりました</h2>
       <p id="duplicate-context" class="context">
         ライブラリに残す方を選択してください。
       </p>
