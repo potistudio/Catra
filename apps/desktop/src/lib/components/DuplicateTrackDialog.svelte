@@ -24,18 +24,14 @@
 </script>
 
 <div class="backdrop" role="presentation">
-  <dialog class="dialog" open aria-labelledby="duplicate-title">
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="duplicate-title">
     <header class="header">
       <h2 id="duplicate-title">重複した楽曲が見つかりました</h2>
       <p class="subtitle">同じ楽曲と判断されたトラックがあります。ライブラリに残す方を選んでください。</p>
     </header>
 
     <div class="choices">
-      <button
-        type="button"
-        class="choice"
-        onclick={() => onchoose("existing")}
-      >
+      <button type="button" class="choice" onclick={() => onchoose("existing")}>
         <span class="choice-label">ライブラリ内</span>
         <div class="choice-body">
           <TrackArtwork
@@ -61,11 +57,7 @@
         <span class="action">このトラックを残す</span>
       </button>
 
-      <button
-        type="button"
-        class="choice"
-        onclick={() => onchoose("new")}
-      >
+      <button type="button" class="choice" onclick={() => onchoose("new")}>
         <span class="choice-label">新規</span>
         <div class="choice-body">
           <TrackArtwork artworkPath={null} title={candidateTitle} size={72} />
@@ -87,7 +79,7 @@
         <span class="action">このトラックを残す</span>
       </button>
     </div>
-  </dialog>
+  </div>
 </div>
 
 <style>
@@ -103,8 +95,9 @@
     backdrop-filter: blur(4px);
   }
 
-  .dialog {
-    width: min(920px, 100%);
+  .panel {
+    width: 100%;
+    max-width: 920px;
     margin: 0;
     padding: 0;
     border: 1px solid var(--border);
@@ -112,6 +105,8 @@
     background: var(--surface-raised);
     color: var(--text);
     box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+    box-sizing: border-box;
+    overflow: hidden;
   }
 
   .header {
@@ -133,32 +128,36 @@
 
   .choices {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 1rem;
     padding: 1.25rem 1.5rem 1.5rem;
+    box-sizing: border-box;
   }
 
   .choice {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    min-width: 0;
+    width: 100%;
     padding: 1rem;
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--surface);
     color: inherit;
+    font: inherit;
     text-align: left;
     cursor: pointer;
+    box-sizing: border-box;
+    appearance: none;
     transition:
       border-color 0.15s ease,
-      background 0.15s ease,
-      transform 0.15s ease;
+      background 0.15s ease;
   }
 
   .choice:hover {
     border-color: var(--accent);
     background: var(--accent-subtle);
-    transform: translateY(-1px);
   }
 
   .choice-label {
@@ -173,6 +172,7 @@
     display: flex;
     gap: 0.875rem;
     align-items: flex-start;
+    min-width: 0;
   }
 
   .meta {
@@ -191,9 +191,20 @@
   }
 
   .track-title {
+    min-width: 0;
     font-size: 0.95rem;
     font-weight: 600;
     line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .artist,
+  .detail {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .artist {
@@ -215,9 +226,9 @@
     font-size: 0.75rem;
     color: var(--text-muted);
     opacity: 0.8;
-    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .action {
@@ -228,7 +239,7 @@
 
   @media (max-width: 720px) {
     .choices {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 </style>
