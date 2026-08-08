@@ -1,5 +1,5 @@
 use crate::activity_log::emit_activity_log;
-use crate::library::{import_file, LibraryState};
+use crate::library::{import_file, DuplicateResolver, LibraryState};
 use std::collections::HashSet;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -172,7 +172,8 @@ pub fn download_and_import(app: AppHandle, url: String) {
             let path = download_track(&app, &url)?;
             emit_activity_log(&app, "info", "ライブラリへインポート中...", None);
             let state = app.state::<LibraryState>();
-            import_file(&state, &path)?;
+            let resolver = app.state::<DuplicateResolver>();
+            import_file(&app, &state, &resolver, &path)?;
             Ok::<_, String>(path)
         })();
 

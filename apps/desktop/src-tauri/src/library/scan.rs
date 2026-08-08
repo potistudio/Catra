@@ -1,4 +1,5 @@
 use super::db::{save_artwork, LibraryState, ScanResult};
+use super::duplicate::{DuplicateChoice, DuplicateResolver, TrackCandidate};
 use crate::activity_log::emit_activity_log;
 use lofty::config::ParseOptions;
 use lofty::file::AudioFile;
@@ -27,7 +28,8 @@ pub struct ScanProgress {
 pub fn start_scan_folder(app: AppHandle, folder: String) {
     std::thread::spawn(move || {
         let state = app.state::<LibraryState>();
-        let result = scan_folder(&app, &state, &folder);
+        let resolver = app.state::<DuplicateResolver>();
+        let result = scan_folder(&app, &state, &resolver, &folder);
 
         match result {
             Ok(scan_result) => {
@@ -52,7 +54,12 @@ pub fn start_scan_folder(app: AppHandle, folder: String) {
     });
 }
 
-pub fn scan_folder(app: &AppHandle, library: &LibraryState, folder: &str) -> Result<ScanResult, String> {
+pub fn scan_folder(
+    app: &AppHandle,
+    library: &LibraryState,
+    resolver: &DuplicateResolver,
+    folder: &str,
+) -> Result<ScanResult, String> {
     let folder_path = Path::new(folder);
     if !folder_path.is_dir() {
         return Err(format!("Not a directory: {folder}"));
@@ -92,28 +99,16 @@ pub fn scan_folder(app: &AppHandle, library: &LibraryState, folder: &str) -> Res
 
         let metadata = read_metadata(path);
 
-        let artwork_path = metadata
-            .artwork
-            .as_ref()
-            .and_then(|(data, mime)| save_artwork(library.artwork_dir(), &path_str, data, mime));
-
-        match library.insert_track(
-            &path_str,
-            metadata.title.as_deref(),
-            metadata.artist.as_deref(),
-            metadata.album.as_deref(),
-            metadata.duration_ms,
-            metadata.bpm,
-            metadata.bitrate_kbps,
-            metadata.genre.as_deref(),
-            metadata.key.as_deref(),
-            metadata.rating,
-            artwork_path.as_deref(),
-            metadata.source.as_deref(),
+        match add_track(
+            app,
+            library,
+            resolver,
+            path,
+            &metadata,
             added_at,
         ) {
-            Ok(true) => added += 1,
-            Ok(false) => skipped += 1,
+            Ok(InsertOutcome::Added) => added += 1,
+            Ok(InsertOutcome::Skipped) => skipped += 1,
             Err(error) => {
                 emit_activity_log(
                     app,
@@ -128,7 +123,12 @@ pub fn scan_folder(app: &AppHandle, library: &LibraryState, folder: &str) -> Res
     Ok(ScanResult { added, skipped })
 }
 
-pub fn import_file(library: &LibraryState, path: &Path) -> Result<bool, String> {
+pub fn import_file(
+    app: &AppHandle,
+    library: &LibraryState,
+    resolver: &DuplicateResolver,
+    path: &Path,
+) -> Result<bool, String> {
     if !path.is_file() {
         return Err(format!("Not a file: {}", path.display()));
     }
@@ -137,32 +137,92 @@ pub fn import_file(library: &LibraryState, path: &Path) -> Result<bool, String> 
         return Err(format!("Not an audio file: {}", path.display()));
     }
 
-    let path_str = path.to_string_lossy().to_string();
     let metadata = read_metadata(path);
     let added_at = chrono::Utc::now().timestamp();
+
+    match add_track(app, library, resolver, path, &metadata, added_at) {
+        Ok(InsertOutcome::Added) => Ok(true),
+        Ok(InsertOutcome::Skipped) => Ok(false),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+enum InsertOutcome {
+    Added,
+    Skipped,
+}
+
+fn add_track(
+    app: &AppHandle,
+    library: &LibraryState,
+    resolver: &DuplicateResolver,
+    path: &Path,
+    metadata: &FileMetadata,
+    added_at: i64,
+) -> Result<InsertOutcome, rusqlite::Error> {
+    let path_str = path.to_string_lossy().to_string();
+
+    if library.track_exists(&path_str)? {
+        return Ok(InsertOutcome::Skipped);
+    }
+
+    if let Some(existing) = library.find_duplicate(
+        &path_str,
+        metadata.title.as_deref(),
+        metadata.artist.as_deref(),
+        metadata.duration_ms,
+    )? {
+        let candidate = TrackCandidate {
+            path: path_str.clone(),
+            title: metadata.title.clone(),
+            artist: metadata.artist.clone(),
+            album: metadata.album.clone(),
+            duration_ms: metadata.duration_ms,
+            bpm: metadata.bpm,
+            bitrate_kbps: metadata.bitrate_kbps,
+            genre: metadata.genre.clone(),
+            key: metadata.key.clone(),
+            rating: metadata.rating,
+            source: metadata.source.clone(),
+        };
+
+        let existing_id = existing.id;
+        let choice = resolver.request_choice(app, existing, candidate);
+
+        match choice {
+            DuplicateChoice::KeepExisting => return Ok(InsertOutcome::Skipped),
+            DuplicateChoice::KeepNew => {
+                library.remove_track(existing_id)?;
+            }
+        }
+    }
 
     let artwork_path = metadata
         .artwork
         .as_ref()
         .and_then(|(data, mime)| save_artwork(library.artwork_dir(), &path_str, data, mime));
 
-    library
-        .insert_track(
-            &path_str,
-            metadata.title.as_deref(),
-            metadata.artist.as_deref(),
-            metadata.album.as_deref(),
-            metadata.duration_ms,
-            metadata.bpm,
-            metadata.bitrate_kbps,
-            metadata.genre.as_deref(),
-            metadata.key.as_deref(),
-            metadata.rating,
-            artwork_path.as_deref(),
-            metadata.source.as_deref(),
-            added_at,
-        )
-        .map_err(|e| e.to_string())
+    let inserted = library.insert_track(
+        &path_str,
+        metadata.title.as_deref(),
+        metadata.artist.as_deref(),
+        metadata.album.as_deref(),
+        metadata.duration_ms,
+        metadata.bpm,
+        metadata.bitrate_kbps,
+        metadata.genre.as_deref(),
+        metadata.key.as_deref(),
+        metadata.rating,
+        artwork_path.as_deref(),
+        metadata.source.as_deref(),
+        added_at,
+    )?;
+
+    if inserted {
+        Ok(InsertOutcome::Added)
+    } else {
+        Ok(InsertOutcome::Skipped)
+    }
 }
 
 fn is_audio_file(path: &Path) -> bool {

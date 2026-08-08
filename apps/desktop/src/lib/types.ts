@@ -17,6 +17,27 @@ export interface Track {
   addedAt: number;
 }
 
+export interface TrackCandidate {
+  path: string;
+  title: string | null;
+  artist: string | null;
+  album: string | null;
+  durationMs: number | null;
+  bpm: number | null;
+  bitrateKbps: number | null;
+  genre: string | null;
+  key: string | null;
+  rating: number | null;
+  source: TrackSource | null;
+}
+
+export interface DuplicateFoundPayload {
+  existing: Track;
+  candidate: TrackCandidate;
+}
+
+export type DuplicateChoice = "existing" | "new";
+
 export interface ScanResult {
   added: number;
   skipped: number;

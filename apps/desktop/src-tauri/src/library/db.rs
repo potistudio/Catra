@@ -1,3 +1,4 @@
+use super::duplicate::is_same_track;
 use rusqlite::{params, Connection};
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
@@ -120,6 +121,29 @@ impl LibraryState {
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(tracks)
+    }
+
+    pub fn track_exists(&self, path: &str) -> Result<bool, rusqlite::Error> {
+        let conn = lock_conn(&self.conn)?;
+        let count = conn.query_row(
+            "SELECT COUNT(*) FROM tracks WHERE path = ?1",
+            params![path],
+            |row| row.get::<_, i64>(0),
+        )?;
+        Ok(count > 0)
+    }
+
+    pub fn find_duplicate(
+        &self,
+        path: &str,
+        title: Option<&str>,
+        artist: Option<&str>,
+        duration_ms: Option<u64>,
+    ) -> Result<Option<Track>, rusqlite::Error> {
+        let tracks = self.list_tracks()?;
+        Ok(tracks
+            .into_iter()
+            .find(|track| track.path != path && is_same_track(track, title, artist, duration_ms)))
     }
 
     pub fn insert_track(
@@ -265,6 +289,7 @@ pub fn init_library(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     let state = LibraryState::new(db_path, artwork_dir)?;
     app.manage(state);
+    app.manage(crate::library::DuplicateResolver::new());
 
     Ok(())
 }

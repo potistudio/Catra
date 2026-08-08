@@ -1,4 +1,4 @@
-use crate::library::{start_scan_folder, LibraryState, Track};
+use crate::library::{start_scan_folder, DuplicateChoice, DuplicateResolver, LibraryState, Track};
 use std::path::Path;
 use tauri::{AppHandle, State};
 
@@ -30,4 +30,18 @@ pub fn library_remove_track(state: State<'_, LibraryState>, id: i64) -> Result<(
 #[tauri::command]
 pub fn library_remove_tracks(state: State<'_, LibraryState>, ids: Vec<i64>) -> Result<u32, String> {
     state.remove_tracks(&ids).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn library_resolve_duplicate(
+    resolver: State<'_, DuplicateResolver>,
+    choice: String,
+) -> Result<(), String> {
+    let choice = match choice.as_str() {
+        "existing" => DuplicateChoice::KeepExisting,
+        "new" => DuplicateChoice::KeepNew,
+        _ => return Err(format!("Invalid duplicate choice: {choice}")),
+    };
+
+    resolver.resolve(choice)
 }

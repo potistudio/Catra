@@ -3,16 +3,18 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { onMount } from "svelte";
   import { pushActivityLog, pushActivityLogPayload } from "$lib/activityLog.svelte";
-  import { listTracks, removeTrack, removeTracks, scanFolder } from "$lib/api";
+  import { listTracks, removeTrack, removeTracks, resolveDuplicate, scanFolder } from "$lib/api";
   import ActivityConsole from "$lib/components/ActivityConsole.svelte";
+  import DuplicateTrackDialog from "$lib/components/DuplicateTrackDialog.svelte";
   import PreviewPlayer from "$lib/components/PreviewPlayer.svelte";
   import TrackList from "$lib/components/TrackList.svelte";
-  import type { ActivityLogPayload, ScanProgress, ScanResult, Track } from "$lib/types";
+  import type { ActivityLogPayload, DuplicateFoundPayload, ScanProgress, ScanResult, Track } from "$lib/types";
 
   let tracks = $state<Track[]>([]);
   let selectedTrack = $state<Track | null>(null);
   let loading = $state(false);
   let scanning = $state(false);
+  let duplicatePayload = $state<DuplicateFoundPayload | null>(null);
 
   async function loadTracks(silent = true) {
     loading = true;
@@ -86,6 +88,19 @@
     }
   }
 
+  async function handleDuplicateChoice(choice: "existing" | "new") {
+    try {
+      await resolveDuplicate(choice);
+      duplicatePayload = null;
+      pushActivityLog(
+        "info",
+        choice === "existing" ? "既存のトラックを残しました" : "新しいトラックをライブラリに追加しました",
+      );
+    } catch (e) {
+      pushActivityLog("error", "重複の解決に失敗しました", String(e));
+    }
+  }
+
   onMount(() => {
     pushActivityLog("info", "Catra を起動しました");
     void loadTracks(false);
@@ -95,6 +110,7 @@
     let unlistenScanComplete: (() => void) | undefined;
     let unlistenScanError: (() => void) | undefined;
     let unlistenScanProgress: (() => void) | undefined;
+    let unlistenDuplicate: (() => void) | undefined;
 
     void listen("library-updated", () => {
       void loadTracks();
@@ -127,15 +143,26 @@
       unlistenScanProgress = unlisten;
     });
 
+    void listen<DuplicateFoundPayload>("library-duplicate-found", (event) => {
+      duplicatePayload = event.payload;
+    }).then((unlisten) => {
+      unlistenDuplicate = unlisten;
+    });
+
     return () => {
       unlistenUpdated?.();
       unlistenActivity?.();
       unlistenScanComplete?.();
       unlistenScanError?.();
       unlistenScanProgress?.();
+      unlistenDuplicate?.();
     };
   });
 </script>
+
+{#if duplicatePayload}
+  <DuplicateTrackDialog payload={duplicatePayload} onchoose={handleDuplicateChoice} />
+{/if}
 
 <div class="app">
   <header class="toolbar">
