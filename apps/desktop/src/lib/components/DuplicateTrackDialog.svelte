@@ -28,8 +28,16 @@
     class="panel"
     role="dialog"
     aria-modal="true"
-    aria-label="重複トラックの選択"
+    aria-labelledby="duplicate-title"
+    aria-describedby="duplicate-context"
   >
+    <header class="header">
+      <h2 id="duplicate-title">重複の解消</h2>
+      <p id="duplicate-context" class="context">
+        追加しようとした楽曲が、ライブラリに既にあります。
+      </p>
+    </header>
+
     <div class="choices">
       <button
         type="button"
@@ -115,6 +123,23 @@
     box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
     box-sizing: border-box;
     overflow: hidden;
+  }
+
+  .header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .header h2 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+  }
+
+  .context {
+    margin: 0.35rem 0 0;
+    font-size: 0.875rem;
+    color: var(--text-muted);
   }
 
   .choices {
