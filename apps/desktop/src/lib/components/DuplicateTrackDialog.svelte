@@ -27,7 +27,7 @@
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="duplicate-title">
     <header class="header">
       <h2 id="duplicate-title">重複した楽曲が見つかりました</h2>
-      <p class="subtitle">残したいトラックのカードをクリックしてください。</p>
+      <p class="subtitle">同じ楽曲と判断されたトラックがあります。</p>
     </header>
 
     <div class="choices">
@@ -160,14 +160,12 @@
     appearance: none;
     transition:
       border-color 0.15s ease,
-      background 0.15s ease,
-      box-shadow 0.15s ease;
+      background 0.15s ease;
   }
 
   .choice:hover {
     border-color: var(--accent);
     background: var(--accent-subtle);
-    box-shadow: 0 0 0 1px var(--accent);
   }
 
   .choice:focus-visible {
@@ -181,11 +179,6 @@
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--text-muted);
-  }
-
-  .choice:hover .choice-label,
-  .choice:focus-visible .choice-label {
-    color: var(--accent);
   }
 
   .choice-body {
