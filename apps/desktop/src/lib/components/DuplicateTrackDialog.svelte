@@ -27,11 +27,16 @@
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="duplicate-title">
     <header class="header">
       <h2 id="duplicate-title">重複した楽曲が見つかりました</h2>
-      <p class="subtitle">同じ楽曲と判断されたトラックがあります。ライブラリに残す方を選んでください。</p>
+      <p class="subtitle">残したいトラックのカードをクリックしてください。</p>
     </header>
 
     <div class="choices">
-      <button type="button" class="choice" onclick={() => onchoose("existing")}>
+      <button
+        type="button"
+        class="choice"
+        aria-label={`ライブラリ内のトラックを残す: ${existingTitle}`}
+        onclick={() => onchoose("existing")}
+      >
         <span class="choice-label">ライブラリ内</span>
         <div class="choice-body">
           <TrackArtwork
@@ -54,10 +59,14 @@
             <span class="path" title={payload.existing.path}>{payload.existing.path}</span>
           </div>
         </div>
-        <span class="action">このトラックを残す</span>
       </button>
 
-      <button type="button" class="choice" onclick={() => onchoose("new")}>
+      <button
+        type="button"
+        class="choice"
+        aria-label={`新しいトラックを残す: ${candidateTitle}`}
+        onclick={() => onchoose("new")}
+      >
         <span class="choice-label">新規</span>
         <div class="choice-body">
           <TrackArtwork artworkPath={null} title={candidateTitle} size={72} />
@@ -76,7 +85,6 @@
             <span class="path" title={payload.candidate.path}>{payload.candidate.path}</span>
           </div>
         </div>
-        <span class="action">このトラックを残す</span>
       </button>
     </div>
   </div>
@@ -152,12 +160,19 @@
     appearance: none;
     transition:
       border-color 0.15s ease,
-      background 0.15s ease;
+      background 0.15s ease,
+      box-shadow 0.15s ease;
   }
 
   .choice:hover {
     border-color: var(--accent);
     background: var(--accent-subtle);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  .choice:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 
   .choice-label {
@@ -166,6 +181,11 @@
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--text-muted);
+  }
+
+  .choice:hover .choice-label,
+  .choice:focus-visible .choice-label {
+    color: var(--accent);
   }
 
   .choice-body {
@@ -229,12 +249,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .action {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--accent);
   }
 
   @media (max-width: 720px) {
