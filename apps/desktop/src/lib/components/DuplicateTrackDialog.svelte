@@ -27,7 +27,6 @@
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="duplicate-title">
     <header class="header">
       <h2 id="duplicate-title">重複した楽曲が見つかりました</h2>
-      <p class="subtitle">同じ楽曲と判断されたトラックがあります。</p>
     </header>
 
     <div class="choices">
@@ -118,7 +117,7 @@
   }
 
   .header {
-    padding: 1.25rem 1.5rem 0.75rem;
+    padding: 1.25rem 1.5rem;
     border-bottom: 1px solid var(--border-subtle);
   }
 
@@ -126,12 +125,6 @@
     margin: 0;
     font-size: 1.1rem;
     font-weight: 600;
-  }
-
-  .subtitle {
-    margin: 0.35rem 0 0;
-    font-size: 0.875rem;
-    color: var(--text-muted);
   }
 
   .choices {
