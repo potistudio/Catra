@@ -2,8 +2,17 @@ use rusqlite::{params, Connection};
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use tauri::{AppHandle, Manager};
+
+fn lock_conn(conn: &Mutex<Connection>) -> Result<MutexGuard<'_, Connection>, rusqlite::Error> {
+    conn.lock().map_err(|_| {
+        rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_INTERNAL),
+            Some("database lock poisoned".to_string()),
+        )
+    })
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,8 +53,10 @@ impl LibraryState {
         std::fs::create_dir_all(&artwork_dir).ok();
 
         let conn = Connection::open(db_path)?;
+        conn.busy_timeout(std::time::Duration::from_secs(5))?;
         conn.execute_batch(
             "
+            PRAGMA journal_mode=WAL;
             CREATE TABLE IF NOT EXISTS tracks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 path TEXT NOT NULL UNIQUE,
@@ -79,7 +90,7 @@ impl LibraryState {
     }
 
     pub fn list_tracks(&self) -> Result<Vec<Track>, rusqlite::Error> {
-        let conn = self.conn.lock().unwrap();
+        let conn = lock_conn(&self.conn)?;
         let mut stmt = conn.prepare(
             "SELECT id, path, title, artist, album, duration_ms, bpm, bitrate_kbps,
                     genre, key_name, rating, artwork_path, source, added_at
@@ -127,7 +138,7 @@ impl LibraryState {
         source: Option<&str>,
         added_at: i64,
     ) -> Result<bool, rusqlite::Error> {
-        let conn = self.conn.lock().unwrap();
+        let conn = lock_conn(&self.conn)?;
         let rows = conn.execute(
             "INSERT OR IGNORE INTO tracks (
                 path, title, artist, album, duration_ms, bpm, bitrate_kbps,
@@ -162,7 +173,7 @@ impl LibraryState {
             return Ok(0);
         }
 
-        let conn = self.conn.lock().unwrap();
+        let conn = lock_conn(&self.conn)?;
         let tx = conn.unchecked_transaction()?;
 
         let mut artwork_paths = Vec::new();
@@ -188,8 +199,12 @@ impl LibraryState {
 
         tx.commit()?;
 
-        for path in artwork_paths {
-            std::fs::remove_file(path).ok();
+        if !artwork_paths.is_empty() {
+            std::thread::spawn(move || {
+                for path in artwork_paths {
+                    std::fs::remove_file(path).ok();
+                }
+            });
         }
 
         Ok(deleted)

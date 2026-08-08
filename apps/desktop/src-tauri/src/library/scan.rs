@@ -1,16 +1,58 @@
 use super::db::{save_artwork, LibraryState, ScanResult};
+use crate::activity_log::emit_activity_log;
+use lofty::config::ParseOptions;
 use lofty::file::AudioFile;
 use lofty::file::TaggedFileExt;
 use lofty::picture::PictureType;
 use lofty::probe::Probe;
 use lofty::tag::Accessor;
 use lofty::tag::ItemKey;
+use serde::Serialize;
 use std::path::Path;
+use tauri::{AppHandle, Emitter, Manager};
 use walkdir::WalkDir;
 
 const AUDIO_EXTENSIONS: &[&str] = &["mp3", "flac", "wav", "aiff", "aif", "m4a", "ogg", "opus", "wma"];
+const SCAN_PROGRESS_INTERVAL: u32 = 10;
 
-pub fn scan_folder(library: &LibraryState, folder: &str) -> Result<ScanResult, String> {
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanProgress {
+    pub processed: u32,
+    pub added: u32,
+    pub skipped: u32,
+    pub current_path: String,
+}
+
+pub fn start_scan_folder(app: AppHandle, folder: String) {
+    std::thread::spawn(move || {
+        let state = app.state::<LibraryState>();
+        let result = scan_folder(&app, &state, &folder);
+
+        match result {
+            Ok(scan_result) => {
+                emit_activity_log(
+                    &app,
+                    "success",
+                    format!(
+                        "スキャン完了: {} 曲を追加 ({} 曲は既存)",
+                        scan_result.added,
+                        scan_result.skipped
+                    ),
+                    Some(folder),
+                );
+                let _ = app.emit("library-scan-complete", scan_result);
+                let _ = app.emit("library-updated", ());
+            }
+            Err(error) => {
+                emit_activity_log(&app, "error", "スキャンに失敗しました", Some(error.clone()));
+                let _ = app.emit("library-scan-error", error);
+            }
+        }
+    });
+}
+
+pub fn scan_folder(app: &AppHandle, library: &LibraryState, folder: &str) -> Result<ScanResult, String> {
     let folder_path = Path::new(folder);
     if !folder_path.is_dir() {
         return Err(format!("Not a directory: {folder}"));
@@ -19,6 +61,7 @@ pub fn scan_folder(library: &LibraryState, folder: &str) -> Result<ScanResult, S
     let added_at = chrono::Utc::now().timestamp();
     let mut added = 0u32;
     let mut skipped = 0u32;
+    let mut processed = 0u32;
 
     for entry in WalkDir::new(folder_path)
         .follow_links(false)
@@ -34,7 +77,19 @@ pub fn scan_folder(library: &LibraryState, folder: &str) -> Result<ScanResult, S
             continue;
         }
 
+        processed += 1;
         let path_str = path.to_string_lossy().to_string();
+
+        if processed == 1 || processed % SCAN_PROGRESS_INTERVAL == 0 {
+            let progress = ScanProgress {
+                processed,
+                added,
+                skipped,
+                current_path: path_str.clone(),
+            };
+            let _ = app.emit("library-scan-progress", progress);
+        }
+
         let metadata = read_metadata(path);
 
         let artwork_path = metadata
@@ -42,28 +97,31 @@ pub fn scan_folder(library: &LibraryState, folder: &str) -> Result<ScanResult, S
             .as_ref()
             .and_then(|(data, mime)| save_artwork(library.artwork_dir(), &path_str, data, mime));
 
-        let inserted = library
-            .insert_track(
-                &path_str,
-                metadata.title.as_deref(),
-                metadata.artist.as_deref(),
-                metadata.album.as_deref(),
-                metadata.duration_ms,
-                metadata.bpm,
-                metadata.bitrate_kbps,
-                metadata.genre.as_deref(),
-                metadata.key.as_deref(),
-                metadata.rating,
-                artwork_path.as_deref(),
-                metadata.source.as_deref(),
-                added_at,
-            )
-            .map_err(|e| e.to_string())?;
-
-        if inserted {
-            added += 1;
-        } else {
-            skipped += 1;
+        match library.insert_track(
+            &path_str,
+            metadata.title.as_deref(),
+            metadata.artist.as_deref(),
+            metadata.album.as_deref(),
+            metadata.duration_ms,
+            metadata.bpm,
+            metadata.bitrate_kbps,
+            metadata.genre.as_deref(),
+            metadata.key.as_deref(),
+            metadata.rating,
+            artwork_path.as_deref(),
+            metadata.source.as_deref(),
+            added_at,
+        ) {
+            Ok(true) => added += 1,
+            Ok(false) => skipped += 1,
+            Err(error) => {
+                emit_activity_log(
+                    app,
+                    "warning",
+                    format!("スキップ: {}", path.file_name().unwrap_or_default().to_string_lossy()),
+                    Some(error.to_string()),
+                );
+            }
         }
     }
 
@@ -134,7 +192,10 @@ fn read_metadata(path: &Path) -> FileMetadata {
         .and_then(|s| s.to_str())
         .map(|s| s.to_string());
 
-    let tagged_file = match Probe::open(path).and_then(|p| p.read()) {
+    let options = ParseOptions::new().max_junk_bytes(4096);
+    let tagged_file = match Probe::open(path)
+        .and_then(|probe| probe.options(options).read())
+    {
         Ok(file) => file,
         Err(_) => {
             return empty_metadata(fallback_title);

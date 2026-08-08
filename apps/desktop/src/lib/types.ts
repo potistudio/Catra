@@ -22,6 +22,13 @@ export interface ScanResult {
   skipped: number;
 }
 
+export interface ScanProgress {
+  processed: number;
+  added: number;
+  skipped: number;
+  currentPath: string;
+}
+
 export type ActivityLogLevel = "info" | "success" | "warning" | "error";
 
 export interface ActivityLogEntry {

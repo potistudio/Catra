@@ -7,11 +7,12 @@
   import ActivityConsole from "$lib/components/ActivityConsole.svelte";
   import PreviewPlayer from "$lib/components/PreviewPlayer.svelte";
   import TrackList from "$lib/components/TrackList.svelte";
-  import type { ActivityLogPayload, Track } from "$lib/types";
+  import type { ActivityLogPayload, ScanProgress, ScanResult, Track } from "$lib/types";
 
   let tracks = $state<Track[]>([]);
   let selectedTrack = $state<Track | null>(null);
   let loading = $state(false);
+  let scanning = $state(false);
 
   async function loadTracks(silent = true) {
     loading = true;
@@ -40,21 +41,14 @@
 
     if (!selected || typeof selected !== "string") return;
 
-    loading = true;
+    scanning = true;
     pushActivityLog("info", "フォルダをスキャン中...", selected);
 
     try {
-      const result = await scanFolder(selected);
-      pushActivityLog(
-        "success",
-        `スキャン完了: ${result.added} 曲を追加 (${result.skipped} 曲は既存)`,
-        selected,
-      );
-      await loadTracks();
+      await scanFolder(selected);
     } catch (e) {
+      scanning = false;
       pushActivityLog("error", "スキャンに失敗しました", String(e));
-    } finally {
-      loading = false;
     }
   }
 
@@ -98,6 +92,9 @@
 
     let unlistenUpdated: (() => void) | undefined;
     let unlistenActivity: (() => void) | undefined;
+    let unlistenScanComplete: (() => void) | undefined;
+    let unlistenScanError: (() => void) | undefined;
+    let unlistenScanProgress: (() => void) | undefined;
 
     void listen("library-updated", () => {
       void loadTracks();
@@ -111,9 +108,31 @@
       unlistenActivity = unlisten;
     });
 
+    void listen<ScanResult>("library-scan-complete", () => {
+      scanning = false;
+    }).then((unlisten) => {
+      unlistenScanComplete = unlisten;
+    });
+
+    void listen<string>("library-scan-error", (event) => {
+      scanning = false;
+      pushActivityLog("error", "スキャンに失敗しました", event.payload);
+    }).then((unlisten) => {
+      unlistenScanError = unlisten;
+    });
+
+    void listen<ScanProgress>("library-scan-progress", () => {
+      // Progress events are available for future UI; avoid flooding the activity log.
+    }).then((unlisten) => {
+      unlistenScanProgress = unlisten;
+    });
+
     return () => {
       unlistenUpdated?.();
       unlistenActivity?.();
+      unlistenScanComplete?.();
+      unlistenScanError?.();
+      unlistenScanProgress?.();
     };
   });
 </script>
@@ -121,7 +140,7 @@
 <div class="app">
   <header class="toolbar">
     <h1 class="logo">Catra</h1>
-    <button class="btn primary" onclick={handleAddFolder} disabled={loading}>
+    <button class="btn primary" onclick={handleAddFolder} disabled={loading || scanning}>
       Add Folder
     </button>
   </header>

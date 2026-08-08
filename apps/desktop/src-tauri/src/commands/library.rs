@@ -1,5 +1,6 @@
-use crate::library::{scan_folder, LibraryState, ScanResult, Track};
-use tauri::State;
+use crate::library::{start_scan_folder, LibraryState, Track};
+use std::path::Path;
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub fn library_list_tracks(state: State<'_, LibraryState>) -> Result<Vec<Track>, String> {
@@ -7,11 +8,13 @@ pub fn library_list_tracks(state: State<'_, LibraryState>) -> Result<Vec<Track>,
 }
 
 #[tauri::command]
-pub fn library_scan_folder(
-    state: State<'_, LibraryState>,
-    folder: String,
-) -> Result<ScanResult, String> {
-    scan_folder(&state, &folder)
+pub fn library_scan_folder(app: AppHandle, folder: String) -> Result<(), String> {
+    if !Path::new(&folder).is_dir() {
+        return Err(format!("Not a directory: {folder}"));
+    }
+
+    start_scan_folder(app, folder);
+    Ok(())
 }
 
 #[tauri::command]
