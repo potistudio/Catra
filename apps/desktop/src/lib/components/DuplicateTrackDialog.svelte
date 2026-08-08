@@ -32,7 +32,7 @@
     aria-describedby="duplicate-context"
   >
     <header class="header">
-      <h2 id="duplicate-title">重複の解消</h2>
+      <h2 id="duplicate-title">重複トラック</h2>
       <p id="duplicate-context" class="context">
         追加しようとした楽曲が、ライブラリに既にあります。
       </p>
