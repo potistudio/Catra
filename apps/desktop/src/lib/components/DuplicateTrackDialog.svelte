@@ -32,10 +32,10 @@
     aria-describedby="duplicate-context"
   >
     <header class="header">
+      <h2 id="duplicate-title">どちらをライブラリに残しますか？</h2>
       <p id="duplicate-context" class="context">
         追加しようとした楽曲が、ライブラリに既にあります。
       </p>
-      <h2 id="duplicate-title">どちらをライブラリに残しますか？</h2>
     </header>
 
     <div class="choices">
@@ -130,16 +130,16 @@
     border-bottom: 1px solid var(--border-subtle);
   }
 
-  .context {
-    margin: 0;
-    font-size: 0.875rem;
-    color: var(--text-muted);
-  }
-
   .header h2 {
-    margin: 0.35rem 0 0;
+    margin: 0;
     font-size: 1.1rem;
     font-weight: 600;
+  }
+
+  .context {
+    margin: 0.35rem 0 0;
+    font-size: 0.875rem;
+    color: var(--text-muted);
   }
 
   .choices {
