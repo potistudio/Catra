@@ -56,6 +56,10 @@
   z-index: 2;
 }
 
+.catra-sc-playlist-download-btn {
+  color: inherit;
+}
+
 @keyframes catra-sc-spin {
   to {
     transform: rotate(360deg);

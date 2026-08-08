@@ -1,7 +1,6 @@
 use crate::activity_log::emit_activity_log;
-use crate::download::download_and_import;
+use crate::download::{download_and_import, download_playlist_and_import};
 use serde::Deserialize;
-use std::io::Read;
 use tiny_http::{Header, Method, Response, Server, StatusCode};
 use tauri::AppHandle;
 
@@ -9,6 +8,11 @@ pub const PORT: u16 = 17340;
 
 #[derive(Debug, Deserialize)]
 struct DownloadRequest {
+    url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct PlaylistDownloadRequest {
     url: String,
 }
 
@@ -87,6 +91,49 @@ fn handle_request(app: &AppHandle, mut request: tiny_http::Request) {
             Some(payload.url.clone()),
         );
         download_and_import(app.clone(), payload.url);
+        let _ = request.respond(json_response(
+            StatusCode(202),
+            r#"{"success":true,"status":"started"}"#,
+        ));
+        return;
+    }
+
+    if method == Method::Post && url == "/download/playlist" {
+        let mut body = String::new();
+        if request.as_reader().read_to_string(&mut body).is_err() {
+            let _ = request.respond(json_response(
+                StatusCode(400),
+                r#"{"success":false,"error":"Invalid request body"}"#,
+            ));
+            return;
+        }
+
+        let payload = match serde_json::from_str::<PlaylistDownloadRequest>(&body) {
+            Ok(payload) => payload,
+            Err(_) => {
+                let _ = request.respond(json_response(
+                    StatusCode(400),
+                    r#"{"success":false,"error":"Invalid JSON"}"#,
+                ));
+                return;
+            }
+        };
+
+        if payload.url.trim().is_empty() {
+            let _ = request.respond(json_response(
+                StatusCode(400),
+                r#"{"success":false,"error":"URL is required"}"#,
+            ));
+            return;
+        }
+
+        emit_activity_log(
+            app,
+            "info",
+            "Chrome 拡張からプレイリスト一括ダウンロード要求を受信",
+            Some(payload.url.clone()),
+        );
+        download_playlist_and_import(app.clone(), payload.url);
         let _ = request.respond(json_response(
             StatusCode(202),
             r#"{"success":true,"status":"started"}"#,

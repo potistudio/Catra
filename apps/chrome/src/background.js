@@ -1,6 +1,6 @@
 const CATRA_API = "http://127.0.0.1:17340";
 
-async function downloadViaCatra(trackUrl) {
+async function ensureCatraAvailable() {
   try {
     const health = await fetch(`${CATRA_API}/health`);
     if (!health.ok) {
@@ -9,13 +9,17 @@ async function downloadViaCatra(trackUrl) {
   } catch {
     throw new Error("Catra が起動していません。デスクトップアプリを起動してください。");
   }
+}
 
-  const response = await fetch(`${CATRA_API}/download`, {
+async function postJson(path, body) {
+  await ensureCatraAvailable();
+
+  const response = await fetch(`${CATRA_API}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ url: trackUrl }),
+    body: JSON.stringify(body),
   });
 
   const result = await response.json().catch(() => null);
@@ -27,20 +31,35 @@ async function downloadViaCatra(trackUrl) {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message.type !== "DOWNLOAD_TRACK") {
-    return false;
+  if (message.type === "DOWNLOAD_TRACK") {
+    postJson("/download", { url: message.trackUrl })
+      .then((result) => {
+        sendResponse(result);
+      })
+      .catch((error) => {
+        sendResponse({
+          success: false,
+          error: error?.message ?? "ダウンロードに失敗しました",
+        });
+      });
+
+    return true;
   }
 
-  downloadViaCatra(message.trackUrl)
-    .then((result) => {
-      sendResponse(result);
-    })
-    .catch((error) => {
-      sendResponse({
-        success: false,
-        error: error?.message ?? "ダウンロードに失敗しました",
+  if (message.type === "DOWNLOAD_PLAYLIST") {
+    postJson("/download/playlist", { url: message.playlistUrl })
+      .then((result) => {
+        sendResponse(result);
+      })
+      .catch((error) => {
+        sendResponse({
+          success: false,
+          error: error?.message ?? "プレイリストのダウンロードに失敗しました",
+        });
       });
-    });
 
-  return true;
+    return true;
+  }
+
+  return false;
 });

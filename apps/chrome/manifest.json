@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Catra SoundCloud Downloader",
-  "version": "0.4.0",
-  "description": "Add download buttons to SoundCloud tracks via Catra desktop app",
+  "version": "0.6.0",
+  "description": "Add track and playlist download buttons to SoundCloud via Catra desktop app",
   "host_permissions": [
     "http://127.0.0.1:17340/*",
     "https://soundcloud.com/*",

@@ -1,6 +1,7 @@
 const INLINE_BUTTON_ID = "catra-sc-inline-download";
+const PLAYLIST_BUTTON_ID = "catra-sc-playlist-download";
 const LIST_BUTTON_CLASS = "catra-sc-list-download";
-const ACTION_CONTAINER_CLASS = "mui-16ytee5";
+const TRACK_ACTION_CONTAINER_CLASS = "mui-16ytee5";
 const MORE_MENU_SELECTOR = 'button[aria-label="More menu"]';
 const SUCCESS_RESET_MS = 2000;
 const POLL_INTERVAL_MS = 500;
@@ -33,6 +34,7 @@ const NON_TRACK_SEGMENTS = new Set([
 ]);
 
 let inlineDownloading = false;
+let playlistDownloading = false;
 let successResetTimeout = null;
 let observer = null;
 let pollTimer = null;
@@ -60,13 +62,29 @@ function collectElementsDeep(root, selector) {
   return results;
 }
 
-function getPathSegments() {
-  const segments = window.location.pathname.split("/").filter(Boolean);
+function getPageHrefForDetection() {
+  try {
+    if (window.top?.location?.hostname?.includes?.("soundcloud.com")) {
+      return window.top.location.href;
+    }
+  } catch {
+    // Access to top frame location can be blocked in edge cases.
+  }
+
+  return window.location.href;
+}
+
+function getPathSegmentsFromHref(href) {
+  const segments = new URL(href).pathname.split("/").filter(Boolean);
   if (segments[0]?.toLowerCase() === "n") {
     return segments.slice(1);
   }
 
   return segments;
+}
+
+function getPathSegments() {
+  return getPathSegmentsFromHref(getPageHrefForDetection());
 }
 
 function isTrackPage() {
@@ -78,13 +96,21 @@ function isTrackPage() {
   return !segments.some((segment) => NON_TRACK_SEGMENTS.has(segment.toLowerCase()));
 }
 
+const PLAYLIST_ACTION_CONTROL_COUNT = 4;
+
 function isPlaylistPage() {
-  const segments = getPathSegments();
-  return segments.length === 3 && segments[1].toLowerCase() === "sets";
+  for (const href of [getPageHrefForDetection(), window.location.href]) {
+    const segments = getPathSegmentsFromHref(href);
+    if (segments.length === 3 && segments[1].toLowerCase() === "sets") {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function getCurrentPageUrl() {
-  const normalized = CatraSC.normalizeTrackUrl(window.location.href);
+  const normalized = CatraSC.normalizeTrackUrl(getPageHrefForDetection());
   const parsed = new URL(normalized);
   const segments = parsed.pathname.split("/").filter(Boolean);
 
@@ -107,13 +133,128 @@ function hasEmbeddedTrackIframe() {
   return false;
 }
 
+function isPlaylistActionBarControl(element) {
+  if (!(element instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (!element.querySelector("svg")) {
+    return false;
+  }
+
+  return element.tagName === "BUTTON" || element.getAttribute("role") === "button";
+}
+
+function getPlaylistActionBarControls(container) {
+  const directControls = [...container.children].filter(isPlaylistActionBarControl);
+  if (directControls.length >= 3) {
+    return directControls;
+  }
+
+  const wrappedControls = [];
+
+  for (const child of container.children) {
+    if (!(child instanceof HTMLElement)) {
+      continue;
+    }
+
+    const control = child.matches("button, [role='button']")
+      ? child
+      : child.querySelector(":scope > button, :scope > [role='button']");
+
+    if (isPlaylistActionBarControl(control)) {
+      wrappedControls.push(control);
+    }
+  }
+
+  return wrappedControls;
+}
+
+function isPlaylistHeaderActionContainer(container) {
+  if (container.querySelector(`.${TRACK_ACTION_CONTAINER_CLASS}`)) {
+    return false;
+  }
+
+  const row = container.closest(
+    "article, tr, li, [class*='item'], [class*='row'], [class*='track']",
+  );
+
+  if (row && extractTrackUrlFromItem(row)) {
+    return false;
+  }
+
+  return true;
+}
+
+function getAncestorDistance(element, ancestor) {
+  let distance = 0;
+  let node = element;
+
+  while (node && node !== ancestor) {
+    distance += 1;
+    node = node.parentElement;
+  }
+
+  return node === ancestor ? distance : Number.POSITIVE_INFINITY;
+}
+
+function findPlaylistHeaderActionContainer() {
+  const titles = collectElementsDeep(document.documentElement, "h1");
+  const candidates = [];
+
+  for (const div of collectElementsDeep(document.documentElement, "div")) {
+    const controls = getPlaylistActionBarControls(div);
+    if (controls.length < 3 || controls.length > 6) {
+      continue;
+    }
+
+    if (!isPlaylistHeaderActionContainer(div)) {
+      continue;
+    }
+
+    candidates.push({
+      container: div,
+      templateButton: controls.at(-1),
+      controlCount: controls.length,
+    });
+  }
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const title = titles[0] ?? null;
+  if (!title) {
+    return [...candidates].sort(
+      (left, right) =>
+        Math.abs(left.controlCount - PLAYLIST_ACTION_CONTROL_COUNT) -
+        Math.abs(right.controlCount - PLAYLIST_ACTION_CONTROL_COUNT),
+    )[0];
+  }
+
+  let best = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  for (const candidate of candidates) {
+    const distance = getAncestorDistance(candidate.container, title);
+    const score =
+      Math.abs(candidate.controlCount - PLAYLIST_ACTION_CONTROL_COUNT) * 1000 + distance;
+    if (score < bestScore) {
+      bestScore = score;
+      best = candidate;
+    }
+  }
+
+  return best;
+}
+
 function findPrimaryMuiActionContainer() {
   let bestContainer = null;
   let bestVisibleButtons = 0;
 
   for (const container of collectElementsDeep(
     document.documentElement,
-    `.${ACTION_CONTAINER_CLASS}`,
+    `.${TRACK_ACTION_CONTAINER_CLASS}`,
   )) {
     const visibleButtons = [...container.querySelectorAll("button.MuiIconButton-root")].filter(
       (button) => button.offsetParent !== null,
@@ -149,7 +290,7 @@ function shouldHandleInlineButton() {
 }
 
 function findMuiActionContainerWithin(root) {
-  const inRoot = root.querySelector?.(`.${ACTION_CONTAINER_CLASS}`);
+  const inRoot = root.querySelector?.(`.${TRACK_ACTION_CONTAINER_CLASS}`);
   if (inRoot) {
     return inRoot;
   }
@@ -157,11 +298,11 @@ function findMuiActionContainerWithin(root) {
   if (root instanceof Element && root !== document.documentElement) {
     let node = root.parentElement;
     while (node && node !== document.documentElement) {
-      if (node.classList?.contains(ACTION_CONTAINER_CLASS)) {
+      if (node.classList?.contains(TRACK_ACTION_CONTAINER_CLASS)) {
         return node;
       }
 
-      const nested = node.querySelector?.(`.${ACTION_CONTAINER_CLASS}`);
+      const nested = node.querySelector?.(`.${TRACK_ACTION_CONTAINER_CLASS}`);
       if (nested) {
         return nested;
       }
@@ -281,8 +422,48 @@ function resetButtonAfterSuccess(button) {
   successResetTimeout = setTimeout(() => {
     successResetTimeout = null;
     inlineDownloading = false;
+    if (button.id === PLAYLIST_BUTTON_ID) {
+      button.classList.remove("is-loading", "is-success", "is-error");
+      updatePlaylistButtonPresentation(button);
+      return;
+    }
+
     setButtonState(button, "idle");
   }, SUCCESS_RESET_MS);
+}
+
+async function downloadPlaylist(button) {
+  if (playlistDownloading || button?.classList.contains("is-loading")) {
+    return;
+  }
+
+  playlistDownloading = true;
+  if (button) {
+    setButtonState(button, "loading");
+  }
+
+  try {
+    const result = await chrome.runtime.sendMessage({
+      type: "DOWNLOAD_PLAYLIST",
+      playlistUrl: getCurrentPageUrl(),
+    });
+
+    if (!result?.success) {
+      throw new Error(result?.error ?? "一括ダウンロードの開始に失敗しました");
+    }
+
+    if (button) {
+      setButtonState(button, "success");
+      resetButtonAfterSuccess(button);
+    }
+  } catch (error) {
+    console.error("Catra SoundCloud playlist download error:", error);
+    if (button) {
+      setButtonState(button, "error");
+    }
+  } finally {
+    playlistDownloading = false;
+  }
 }
 
 async function downloadTrack(trackUrl, button) {
@@ -454,7 +635,7 @@ function findTrackItems() {
 
   for (const container of collectElementsDeep(
     document.documentElement,
-    `.${ACTION_CONTAINER_CLASS}`,
+    `.${TRACK_ACTION_CONTAINER_CLASS}`,
   )) {
     const row = container.closest(
       "article, tr, li, [class*='item'], [class*='row'], [class*='track']",
@@ -487,6 +668,84 @@ function createListDownloadButton(trackUrl, templateButton) {
   });
   button.dataset.trackUrl = trackUrl;
   return button;
+}
+
+function getPlaylistButtonClassName(templateButton) {
+  const classes = ["catra-sc-download-btn", "catra-sc-playlist-download-btn"];
+
+  if (templateButton) {
+    classes.unshift(templateButton.className);
+  }
+
+  return classes.join(" ");
+}
+
+function createPlaylistDownloadButton({ templateButton }) {
+  const button = createDownloadButton({
+    id: PLAYLIST_BUTTON_ID,
+    className: getPlaylistButtonClassName(templateButton),
+    onClick: async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await downloadPlaylist(button);
+    },
+  });
+  button.title = "プレイリストを一括ダウンロード";
+  button.setAttribute("aria-label", "一括ダウンロード");
+  return button;
+}
+
+function getPlaylistButton() {
+  const existing = document.getElementById(PLAYLIST_BUTTON_ID);
+  if (existing?.isConnected) {
+    return existing;
+  }
+
+  if (existing) {
+    existing.remove();
+  }
+
+  return null;
+}
+
+function removePlaylistDownloadButton() {
+  playlistDownloading = false;
+  document.getElementById(PLAYLIST_BUTTON_ID)?.remove();
+}
+
+function updatePlaylistButtonPresentation(button) {
+  button.title = "プレイリストを一括ダウンロード";
+  button.setAttribute("aria-label", "一括ダウンロード");
+}
+
+function ensurePlaylistDownloadButton() {
+  if (!isPlaylistPage()) {
+    removePlaylistDownloadButton();
+    return false;
+  }
+
+  const actionTarget = findPlaylistHeaderActionContainer();
+  if (!actionTarget) {
+    removePlaylistDownloadButton();
+    return false;
+  }
+
+  let button = getPlaylistButton();
+  if (!button) {
+    button = createPlaylistDownloadButton({
+      templateButton: actionTarget.templateButton,
+    });
+    actionTarget.container.appendChild(button);
+  } else if (!actionTarget.container.contains(button)) {
+    actionTarget.container.appendChild(button);
+  }
+
+  if (!playlistDownloading) {
+    button.classList.remove("is-loading", "is-success", "is-error");
+    updatePlaylistButtonPresentation(button);
+  }
+
+  return true;
 }
 
 function ensureListDownloadButtons() {
@@ -525,6 +784,7 @@ function ensureListDownloadButtons() {
 
 function refreshButtons() {
   ensureInlineDownloadButton();
+  ensurePlaylistDownloadButton();
   ensureListDownloadButtons();
 }
 
@@ -559,7 +819,9 @@ function onNavigation() {
 
   lastUrl = currentUrl;
   inlineDownloading = false;
+  playlistDownloading = false;
   removeInlineDownloadButton();
+  removePlaylistDownloadButton();
   scheduleRefresh();
   startPolling();
 }
@@ -577,9 +839,10 @@ function shouldScheduleRefreshFromMutation(mutation) {
     const element = node;
     if (
       element.id === INLINE_BUTTON_ID ||
-      element.classList?.contains(ACTION_CONTAINER_CLASS) ||
+      element.id === PLAYLIST_BUTTON_ID ||
+      element.classList?.contains(TRACK_ACTION_CONTAINER_CLASS) ||
       element.matches?.(MORE_MENU_SELECTOR) ||
-      element.querySelector?.(`.${ACTION_CONTAINER_CLASS}`) ||
+      element.querySelector?.(`.${TRACK_ACTION_CONTAINER_CLASS}`) ||
       element.querySelector?.(MORE_MENU_SELECTOR)
     ) {
       return true;
@@ -594,7 +857,9 @@ function shouldScheduleRefreshFromMutation(mutation) {
     const element = node;
     if (
       element.id === INLINE_BUTTON_ID ||
-      element.querySelector?.(`#${INLINE_BUTTON_ID}`)
+      element.id === PLAYLIST_BUTTON_ID ||
+      element.querySelector?.(`#${INLINE_BUTTON_ID}`) ||
+      element.querySelector?.(`#${PLAYLIST_BUTTON_ID}`)
     ) {
       return true;
     }
