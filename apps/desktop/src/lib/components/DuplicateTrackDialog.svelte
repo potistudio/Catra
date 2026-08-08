@@ -12,8 +12,6 @@
   import { isTrackSource } from "$lib/trackSource";
   import type { DuplicateFoundPayload } from "$lib/types";
 
-  const DURATION_TOLERANCE_MS = 3000;
-
   interface Props {
     payload: DuplicateFoundPayload;
     onchoose: (choice: "existing" | "new") => void | Promise<void>;
@@ -23,31 +21,6 @@
 
   const existingTitle = displayTitle(payload.existing);
   const candidateTitle = displayTitle(payload.candidate);
-
-  function normalizeField(value: string | null | undefined): string {
-    return value?.trim().toLowerCase() ?? "";
-  }
-
-  function hasValue(value: string | null | undefined): boolean {
-    return Boolean(value?.trim());
-  }
-
-  const titleMatches =
-    hasValue(payload.existing.title) &&
-    hasValue(payload.candidate.title) &&
-    normalizeField(payload.existing.title) === normalizeField(payload.candidate.title);
-
-  const artistMatches =
-    hasValue(payload.existing.artist) &&
-    hasValue(payload.candidate.artist) &&
-    normalizeField(payload.existing.artist) === normalizeField(payload.candidate.artist);
-
-  const durationMatches = (() => {
-    const existing = payload.existing.durationMs;
-    const candidate = payload.candidate.durationMs;
-    if (existing == null || candidate == null) return false;
-    return Math.abs(existing - candidate) <= DURATION_TOLERANCE_MS;
-  })();
 </script>
 
 <div class="backdrop" role="presentation">
@@ -55,7 +28,7 @@
     class="panel"
     role="dialog"
     aria-modal="true"
-    aria-label="同じ楽曲の重複。残すトラックを選択"
+    aria-label="重複トラックの選択"
   >
     <div class="choices">
       <button
@@ -64,7 +37,7 @@
         aria-label={`既存のトラックを残す: ${existingTitle}`}
         onclick={() => onchoose("existing")}
       >
-        <span class="role-badge existing">既存</span>
+        <span class="role-badge">既存</span>
         <div class="choice-body">
           <TrackArtwork
             artworkPath={payload.existing.artworkPath}
@@ -73,32 +46,20 @@
           />
           <div class="meta">
             <div class="title-row">
-              <span class="track-title" class:matched={titleMatches}>{existingTitle}</span>
+              <span class="track-title">{existingTitle}</span>
               {#if isTrackSource(payload.existing.source)}
                 <TrackSourceBadge source={payload.existing.source} size={14} />
               {/if}
             </div>
-            <span class="field artist" class:matched={artistMatches}>
-              {displayArtist(payload.existing)}
+            <span class="artist">{displayArtist(payload.existing)}</span>
+            <span class="detail">{displayValue(payload.existing.album)}</span>
+            <span class="detail mono">
+              {formatDuration(payload.existing.durationMs)} · {formatBitrate(payload.existing.bitrateKbps)} · {formatBpm(payload.existing.bpm)}
             </span>
-            <span class="field detail">{displayValue(payload.existing.album)}</span>
-            <span class="field detail mono" class:matched={durationMatches}>
-              {formatDuration(payload.existing.durationMs)}
-            </span>
-            <span class="field detail mono">{formatBitrate(payload.existing.bitrateKbps)}</span>
-            <span class="field detail mono">{formatBpm(payload.existing.bpm)}</span>
             <span class="path" title={payload.existing.path}>{payload.existing.path}</span>
           </div>
         </div>
       </button>
-
-      <div class="relation" aria-hidden="true">
-        <div class="relation-icon">
-          <span class="relation-square back"></span>
-          <span class="relation-square front"></span>
-          <span class="relation-equals">=</span>
-        </div>
-      </div>
 
       <button
         type="button"
@@ -111,20 +72,16 @@
           <TrackArtwork artworkPath={null} title={candidateTitle} size={72} />
           <div class="meta">
             <div class="title-row">
-              <span class="track-title" class:matched={titleMatches}>{candidateTitle}</span>
+              <span class="track-title">{candidateTitle}</span>
               {#if isTrackSource(payload.candidate.source)}
                 <TrackSourceBadge source={payload.candidate.source} size={14} />
               {/if}
             </div>
-            <span class="field artist" class:matched={artistMatches}>
-              {displayArtist(payload.candidate)}
+            <span class="artist">{displayArtist(payload.candidate)}</span>
+            <span class="detail">{displayValue(payload.candidate.album)}</span>
+            <span class="detail mono">
+              {formatDuration(payload.candidate.durationMs)} · {formatBitrate(payload.candidate.bitrateKbps)} · {formatBpm(payload.candidate.bpm)}
             </span>
-            <span class="field detail">{displayValue(payload.candidate.album)}</span>
-            <span class="field detail mono" class:matched={durationMatches}>
-              {formatDuration(payload.candidate.durationMs)}
-            </span>
-            <span class="field detail mono">{formatBitrate(payload.candidate.bitrateKbps)}</span>
-            <span class="field detail mono">{formatBpm(payload.candidate.bpm)}</span>
             <span class="path" title={payload.candidate.path}>{payload.candidate.path}</span>
           </div>
         </div>
@@ -162,9 +119,8 @@
 
   .choices {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    gap: 0.75rem;
-    align-items: center;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1rem;
     padding: 1.25rem 1.5rem 1.5rem;
     box-sizing: border-box;
   }
@@ -208,9 +164,6 @@
     font-weight: 700;
     letter-spacing: 0.06em;
     line-height: 1.2;
-  }
-
-  .role-badge.existing {
     background: var(--surface-hover);
     color: var(--text-muted);
   }
@@ -218,52 +171,6 @@
   .role-badge.new {
     background: color-mix(in srgb, var(--accent) 22%, transparent);
     color: var(--accent);
-  }
-
-  .relation {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 0.15rem;
-  }
-
-  .relation-icon {
-    position: relative;
-    width: 2.5rem;
-    height: 2.5rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .relation-square {
-    position: absolute;
-    width: 1.35rem;
-    height: 1.35rem;
-    border-radius: 4px;
-    border: 1.5px solid var(--accent);
-    background: var(--surface);
-  }
-
-  .relation-square.back {
-    top: 0.15rem;
-    left: 0;
-    opacity: 0.55;
-  }
-
-  .relation-square.front {
-    bottom: 0.15rem;
-    right: 0;
-    background: var(--accent-subtle);
-  }
-
-  .relation-equals {
-    position: relative;
-    z-index: 1;
-    font-size: 0.875rem;
-    font-weight: 700;
-    color: var(--accent);
-    line-height: 1;
   }
 
   .choice-body {
@@ -298,19 +205,11 @@
     white-space: nowrap;
   }
 
-  .field {
-    display: block;
+  .artist,
+  .detail {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    border-radius: 3px;
-    padding: 0 0.2rem;
-    margin: 0 -0.2rem;
-  }
-
-  .field.matched {
-    background: var(--accent-subtle);
-    color: var(--text);
   }
 
   .artist {
@@ -335,21 +234,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    padding: 0;
   }
 
   @media (max-width: 720px) {
     .choices {
       grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: auto auto auto;
-    }
-
-    .relation {
-      padding: 0.25rem 0;
-    }
-
-    .relation-icon {
-      transform: rotate(90deg);
     }
   }
 </style>
