@@ -32,9 +32,9 @@
     aria-describedby="duplicate-context"
   >
     <header class="header">
-      <h2 id="duplicate-title">どちらをライブラリに残しますか？</h2>
+      <h2 id="duplicate-title">楽曲が重複しました</h2>
       <p id="duplicate-context" class="context">
-        追加しようとした楽曲が、ライブラリに既にあります。
+        ライブラリに残す方を選択してください。
       </p>
     </header>
 
