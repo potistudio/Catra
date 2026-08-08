@@ -27,16 +27,22 @@
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="duplicate-title">
     <header class="header">
       <h2 id="duplicate-title">どちらをライブラリに残しますか？</h2>
+      <p class="explanation">
+        追加しようとしたトラックが、ライブラリ内の曲と同じ楽曲と判断されました。タイトル・アーティスト・長さが一致しています。
+      </p>
     </header>
 
     <div class="choices">
       <button
         type="button"
         class="choice"
-        aria-label={`現在のトラックを残す: ${existingTitle}`}
+        aria-label={`ライブラリ内のトラックを残す: ${existingTitle}`}
         onclick={() => onchoose("existing")}
       >
-        <span class="choice-heading">現在のトラックを残す</span>
+        <div class="choice-intro">
+          <span class="choice-role">ライブラリに入っているトラック</span>
+          <span class="choice-outcome">このまま残す</span>
+        </div>
         <div class="choice-body">
           <TrackArtwork
             artworkPath={payload.existing.artworkPath}
@@ -63,10 +69,13 @@
       <button
         type="button"
         class="choice"
-        aria-label={`新しいトラックで置き換え: ${candidateTitle}`}
+        aria-label={`追加しようとしたトラックで置き換え: ${candidateTitle}`}
         onclick={() => onchoose("new")}
       >
-        <span class="choice-heading">新しいトラックで置き換え</span>
+        <div class="choice-intro">
+          <span class="choice-role">追加しようとしたトラック</span>
+          <span class="choice-outcome">こちらで置き換える</span>
+        </div>
         <div class="choice-body">
           <TrackArtwork artworkPath={null} title={candidateTitle} size={72} />
           <div class="meta">
@@ -127,6 +136,13 @@
     font-weight: 600;
   }
 
+  .explanation {
+    margin: 0.4rem 0 0;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
+
   .choices {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -166,7 +182,18 @@
     outline-offset: 2px;
   }
 
-  .choice-heading {
+  .choice-intro {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .choice-role {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+  }
+
+  .choice-outcome {
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--text);
