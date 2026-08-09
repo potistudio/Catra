@@ -3,26 +3,48 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { onMount } from "svelte";
   import { pushActivityLog, pushActivityLogPayload } from "$lib/activityLog.svelte";
-  import { listTracks, removeTrack, removeTracks, resolveDuplicate, scanFolder } from "$lib/api";
+  import { listTracks, rekordboxCheck, rekordboxGetContent, removeTrack, removeTracks, resolveDuplicate, scanFolder } from "$lib/api";
   import ActivityConsole from "$lib/components/ActivityConsole.svelte";
   import DuplicateTrackDialog from "$lib/components/DuplicateTrackDialog.svelte";
   import PreviewPlayer from "$lib/components/PreviewPlayer.svelte";
+  import RekordboxList from "$lib/components/RekordboxList.svelte";
   import TrackList from "$lib/components/TrackList.svelte";
+  import { rekordboxContentToPreview } from "$lib/rekordboxListView";
   import type {
     ActivityLogPayload,
     DownloadProgress,
     DuplicateFoundPayload,
+    PreviewableTrack,
+    RekordboxCheck,
+    RekordboxContent,
     ScanProgress,
     ScanResult,
     Track,
   } from "$lib/types";
 
+  type AppTab = "library" | "rekordbox";
+
+  let activeTab = $state<AppTab>("library");
   let tracks = $state<Track[]>([]);
   let selectedTrack = $state<Track | null>(null);
+  let rekordboxTracks = $state<RekordboxContent[]>([]);
+  let selectedRekordboxId = $state<string | null>(null);
+  let rekordboxStatus = $state<RekordboxCheck | null>(null);
+  let rekordboxLoading = $state(false);
   let loading = $state(false);
   let scanning = $state(false);
   let duplicatePayload = $state<DuplicateFoundPayload | null>(null);
   let downloadProgress = $state<DownloadProgress | null>(null);
+
+  let previewTrack = $derived.by((): PreviewableTrack | null => {
+    if (activeTab === "library") {
+      return selectedTrack;
+    }
+
+    if (!selectedRekordboxId) return null;
+    const content = rekordboxTracks.find((track) => track.id === selectedRekordboxId);
+    return content ? rekordboxContentToPreview(content) : null;
+  });
 
   async function loadTracks(silent = true) {
     loading = true;
@@ -40,6 +62,41 @@
     } finally {
       loading = false;
     }
+  }
+
+  async function loadRekordbox(silent = true) {
+    rekordboxLoading = true;
+    try {
+      rekordboxStatus = await rekordboxCheck();
+      rekordboxTracks = await rekordboxGetContent();
+      if (selectedRekordboxId) {
+        const updated = rekordboxTracks.find((track) => track.id === selectedRekordboxId);
+        if (!updated) {
+          selectedRekordboxId = null;
+        }
+      }
+      if (!silent) {
+        pushActivityLog(
+          "info",
+          `Rekordbox を読み込みました (${rekordboxTracks.length} 曲)`,
+        );
+      }
+    } catch (e) {
+      pushActivityLog("error", "Rekordbox の読み込みに失敗しました", String(e));
+    } finally {
+      rekordboxLoading = false;
+    }
+  }
+
+  function switchTab(tab: AppTab) {
+    activeTab = tab;
+    if (tab === "rekordbox" && rekordboxTracks.length === 0 && !rekordboxLoading) {
+      void loadRekordbox(false);
+    }
+  }
+
+  function handleSelectRekordbox(track: RekordboxContent) {
+    selectedRekordboxId = track.id;
   }
 
   async function handleAddFolder() {
@@ -189,6 +246,28 @@
 <div class="app">
   <header class="toolbar">
     <h1 class="logo">Catra</h1>
+    <div class="tabs" role="tablist" aria-label="ライブラリ切替">
+      <button
+        type="button"
+        class="tab"
+        class:active={activeTab === "library"}
+        role="tab"
+        aria-selected={activeTab === "library"}
+        onclick={() => switchTab("library")}
+      >
+        Library
+      </button>
+      <button
+        type="button"
+        class="tab"
+        class:active={activeTab === "rekordbox"}
+        role="tab"
+        aria-selected={activeTab === "rekordbox"}
+        onclick={() => switchTab("rekordbox")}
+      >
+        Rekordbox
+      </button>
+    </div>
     {#if downloadProgress}
       <div class="download-status" aria-live="polite">
         <span class="download-message">
@@ -210,23 +289,38 @@
         {/if}
       </div>
     {/if}
-    <button class="btn primary" onclick={handleAddFolder} disabled={loading || scanning}>
+    <button
+      class="btn primary"
+      onclick={handleAddFolder}
+      disabled={loading || scanning || activeTab !== "library"}
+    >
       Add Folder
     </button>
   </header>
 
   <main class="content">
-    <TrackList
-      {tracks}
-      selectedId={selectedTrack?.id ?? null}
-      onselect={handleSelect}
-      onremove={handleRemove}
-      onbulkremove={handleBulkRemove}
-    />
+    {#if activeTab === "library"}
+      <TrackList
+        {tracks}
+        selectedId={selectedTrack?.id ?? null}
+        onselect={handleSelect}
+        onremove={handleRemove}
+        onbulkremove={handleBulkRemove}
+      />
+    {:else}
+      <RekordboxList
+        tracks={rekordboxTracks}
+        selectedId={selectedRekordboxId}
+        loading={rekordboxLoading}
+        status={rekordboxStatus}
+        onselect={handleSelectRekordbox}
+        onrefresh={() => loadRekordbox(false)}
+      />
+    {/if}
   </main>
 
   <ActivityConsole />
-  <PreviewPlayer track={selectedTrack} />
+  <PreviewPlayer track={previewTrack} />
 </div>
 
 <style>
@@ -252,6 +346,38 @@
     font-weight: 700;
     letter-spacing: -0.02em;
     flex-shrink: 0;
+  }
+
+  .tabs {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .tab {
+    padding: 0.4rem 0.85rem;
+    border: none;
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .tab:not(:last-child) {
+    border-right: 1px solid var(--border);
+  }
+
+  .tab:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+  }
+
+  .tab.active {
+    background: var(--accent-subtle);
+    color: var(--accent);
   }
 
   .download-status {

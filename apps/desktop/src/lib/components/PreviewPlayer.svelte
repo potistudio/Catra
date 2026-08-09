@@ -1,7 +1,7 @@
 <script lang="ts">
   import { convertFileSrc } from "@tauri-apps/api/core";
   import TrackArtwork from "$lib/components/TrackArtwork.svelte";
-  import type { Track } from "$lib/types";
+  import type { PreviewableTrack } from "$lib/types";
   import {
     displayArtist,
     displayTitle,
@@ -13,7 +13,7 @@
   } from "$lib/format";
 
   interface Props {
-    track: Track | null;
+    track: PreviewableTrack | null;
   }
 
   let { track }: Props = $props();
@@ -90,7 +90,7 @@
     ></audio>
 
     <TrackArtwork
-      artworkPath={track.artworkPath}
+      artworkPath={track.artworkPath ?? null}
       title={displayTitle(track)}
       size={56}
     />
