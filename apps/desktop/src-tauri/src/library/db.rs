@@ -55,6 +55,8 @@ impl LibraryState {
 
         let conn = Connection::open(db_path)?;
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
+        conn.pragma_update(None, "cipher_plaintext_header_size", 0)
+            .ok();
         conn.execute_batch(
             "
             PRAGMA journal_mode=WAL;

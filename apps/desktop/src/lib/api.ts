@@ -20,3 +20,25 @@ export async function removeTracks(ids: number[]): Promise<number> {
 export async function resolveDuplicate(choice: DuplicateChoice): Promise<void> {
   return invoke("library_resolve_duplicate", { choice });
 }
+
+export interface RekordboxCheck {
+  dbPath: string | null;
+  analysisRoot: string | null;
+  settingsRoot: string | null;
+  installDir: string | null;
+  version: string | null;
+  rekordboxRunning: boolean;
+}
+
+export interface RekordboxDbStatus {
+  trackCount: number;
+  playlistCount: number;
+}
+
+export async function rekordboxCheck(): Promise<RekordboxCheck> {
+  return invoke<RekordboxCheck>("rekordbox_check");
+}
+
+export async function rekordboxDbStatus(): Promise<RekordboxDbStatus> {
+  return invoke<RekordboxDbStatus>("rekordbox_db_status");
+}

@@ -12,19 +12,16 @@ pnpm install
 pnpm dev
 ```
 
-### Rekordbox (pyrekordbox)
-
-```bash
-pnpm setup:rekordbox          # create venv + install pyrekordbox
-pnpm rekordbox info           # version check
-pnpm rekordbox check          # Rekordbox install paths
-pnpm rekordbox db-status      # master.db track/playlist counts (JSON)
-```
-
-Python package lives in `apps/desktop/python/`.
-
 ### Structure
 
 - `apps/desktop` — Tauri + SvelteKit desktop app
-- `apps/desktop/python` — pyrekordbox wrapper CLI for Rekordbox integration
 - `apps/chrome` — SoundCloud Chrome extension (load unpacked from this directory)
+
+Rekordbox integration is a Rust reimplementation of pyrekordbox (`apps/desktop/src-tauri/src/rekordbox/`). Catra library storage is unchanged (`library.db`).
+
+Build requires OpenSSL for SQLCipher on Windows:
+
+```powershell
+winget install ShiningLight.OpenSSL.Light
+$env:OPENSSL_DIR = "C:\Program Files\OpenSSL-Win64"
+```
