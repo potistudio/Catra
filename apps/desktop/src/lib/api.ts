@@ -42,3 +42,34 @@ export async function rekordboxCheck(): Promise<RekordboxCheck> {
 export async function rekordboxDbStatus(): Promise<RekordboxDbStatus> {
   return invoke<RekordboxDbStatus>("rekordbox_db_status");
 }
+
+export interface RekordboxContent {
+  id: string;
+  folderPath: string;
+  fileName: string | null;
+  title: string | null;
+  artist: string | null;
+  album: string | null;
+  genre: string | null;
+  bpm: number | null;
+  lengthSecs: number | null;
+  trackNo: number | null;
+  bitRate: number | null;
+  bitDepth: number | null;
+  comment: string | null;
+  fileType: number | null;
+  rating: number | null;
+  releaseYear: number | null;
+  key: string | null;
+  remixer: string | null;
+  label: string | null;
+  composer: string | null;
+  fileSize: number | null;
+  discNo: number | null;
+}
+
+export async function rekordboxGetContent(
+  id?: string,
+): Promise<RekordboxContent[]> {
+  return invoke<RekordboxContent[]>("rekordbox_get_content", { id });
+}

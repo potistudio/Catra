@@ -1,6 +1,9 @@
 mod config;
+mod content;
 mod db;
 mod key;
+
+pub use content::RekordboxContent;
 
 use config::{is_rekordbox_running, load_config, RekordboxConfig};
 use db::MasterDatabase;
@@ -35,6 +38,11 @@ pub fn db_status() -> Result<RekordboxDbStatus, String> {
         track_count: db.track_count()?,
         playlist_count: db.playlist_count()?,
     })
+}
+
+pub fn get_content(id: Option<String>) -> Result<Vec<RekordboxContent>, String> {
+    let db = MasterDatabase::open()?;
+    db.get_content(id.as_deref())
 }
 
 fn to_check(config: RekordboxConfig) -> RekordboxCheck {

@@ -8,6 +8,10 @@ pub struct MasterDatabase {
 }
 
 impl MasterDatabase {
+    pub(crate) fn conn(&self) -> &Connection {
+        &self.conn
+    }
+
     pub fn open() -> Result<Self, String> {
         let config = load_config()?;
         let db_path = config
