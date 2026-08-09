@@ -131,6 +131,11 @@ impl ProgressTracker {
             return;
         }
 
+        let previous_percent = state.percent;
+        let previous_current = state.current;
+        let previous_total = state.total;
+        let previous_message = state.message.clone();
+
         if let Some((current, total)) = parse_playlist_item_line(line) {
             state.current = Some(current);
             state.total = Some(total);
@@ -139,7 +144,9 @@ impl ProgressTracker {
 
         if let Some(percent) = parse_download_percent_line(line) {
             state.percent = Some(percent);
-            if let (Some(current), Some(total)) = (state.current, state.total) {
+            if line.contains("[ExtractAudio]") {
+                state.message = Some("音声を変換中...".to_string());
+            } else if let (Some(current), Some(total)) = (state.current, state.total) {
                 state.message = Some(format!(
                     "{current}/{total} 曲 ({percent:.0}%)"
                 ));
@@ -148,7 +155,13 @@ impl ProgressTracker {
             }
         }
 
-        Self::emit_progress(app, &state);
+        if state.percent != previous_percent
+            || state.current != previous_current
+            || state.total != previous_total
+            || state.message != previous_message
+        {
+            Self::emit_progress(app, &state);
+        }
     }
 
     fn set_importing(
@@ -265,19 +278,35 @@ impl ProgressTracker {
 
 fn parse_download_percent_line(line: &str) -> Option<f64> {
     let trimmed = line.trim();
-    if !trimmed.starts_with("[download]") {
-        return None;
+
+    if trimmed.starts_with("[download]") {
+        let after_tag = trimmed.strip_prefix("[download]")?.trim_start();
+        if after_tag.starts_with("Downloading item") {
+            return None;
+        }
+
+        if let Some(percent) = extract_percent_value(after_tag) {
+            return Some(percent);
+        }
     }
 
-    let after_tag = trimmed.strip_prefix("[download]")?.trim_start();
-    if after_tag.starts_with("Downloading item") {
-        return None;
+    if trimmed.starts_with("[ExtractAudio]") || trimmed.starts_with("[Metadata]") {
+        return Some(100.0);
     }
 
-    let percent_index = after_tag.find('%')?;
-    let before_percent = after_tag[..percent_index].trim();
+    extract_percent_value(trimmed)
+}
+
+fn extract_percent_value(text: &str) -> Option<f64> {
+    let percent_index = text.find('%')?;
+    let before_percent = text[..percent_index].trim();
     let value = before_percent.split_whitespace().last()?;
-    value.parse().ok()
+    let percent: f64 = value.trim_end_matches('%').parse().ok()?;
+    if (0.0..=100.0).contains(&percent) {
+        Some(percent)
+    } else {
+        None
+    }
 }
 
 fn parse_playlist_item_line(line: &str) -> Option<(usize, usize)> {
@@ -340,7 +369,7 @@ fn is_yt_dlp_progress_line(line: &str) -> bool {
         || trimmed.starts_with("[Metadata]")
 }
 
-fn process_yt_dlp_stderr_line(app: &AppHandle, line: &str) {
+fn process_yt_dlp_output_line(app: &AppHandle, line: &str) {
     let trimmed = line.trim();
     if trimmed.is_empty() {
         return;
@@ -352,9 +381,9 @@ fn process_yt_dlp_stderr_line(app: &AppHandle, line: &str) {
     }
 }
 
-fn read_yt_dlp_stderr(app: AppHandle, stderr: impl Read + Send + 'static) {
+fn read_yt_dlp_stream(app: AppHandle, stream: impl Read + Send + 'static) {
     std::thread::spawn(move || {
-        let mut reader = BufReader::new(stderr);
+        let mut reader = BufReader::new(stream);
         let mut buffer = Vec::new();
         let mut chunk = [0u8; 4096];
 
@@ -366,7 +395,7 @@ fn read_yt_dlp_stderr(app: AppHandle, stderr: impl Read + Send + 'static) {
                         if byte == b'\n' || byte == b'\r' {
                             if !buffer.is_empty() {
                                 let line = decode_process_output(&buffer);
-                                process_yt_dlp_stderr_line(&app, &line);
+                                process_yt_dlp_output_line(&app, &line);
                                 buffer.clear();
                             }
                         } else {
@@ -380,7 +409,7 @@ fn read_yt_dlp_stderr(app: AppHandle, stderr: impl Read + Send + 'static) {
 
         if !buffer.is_empty() {
             let line = decode_process_output(&buffer);
-            process_yt_dlp_stderr_line(&app, &line);
+            process_yt_dlp_output_line(&app, &line);
         }
     });
 }
@@ -581,13 +610,13 @@ fn run_yt_dlp(
         "--add-metadata".to_string(),
         "--encoding".to_string(),
         "utf-8".to_string(),
+        "--no-quiet".to_string(),
+        "--progress".to_string(),
         "--newline".to_string(),
         "--progress-delta".to_string(),
         "1".to_string(),
         "-o".to_string(),
         output_template.to_string_lossy().to_string(),
-        "--print".to_string(),
-        "after_move:filepath".to_string(),
     ];
 
     if !allow_playlist {
@@ -597,6 +626,7 @@ fn run_yt_dlp(
     args.push(url.to_string());
 
     let mut child = Command::new("yt-dlp")
+        .env("PYTHONUNBUFFERED", "1")
         .env("PYTHONUTF8", "1")
         .env("PYTHONIOENCODING", "utf-8")
         .args(&args)
@@ -605,25 +635,23 @@ fn run_yt_dlp(
         .spawn()
         .map_err(|e| format!("yt-dlp を実行できませんでした: {e}"))?;
 
-    if let Some(stderr) = child.stderr.take() {
-        read_yt_dlp_stderr(app.clone(), stderr);
+    if let Some(stdout) = child.stdout.take() {
+        read_yt_dlp_stream(app.clone(), stdout);
     }
 
-    let output = child
-        .wait_with_output()
+    if let Some(stderr) = child.stderr.take() {
+        read_yt_dlp_stream(app.clone(), stderr);
+    }
+
+    let status = child
+        .wait()
         .map_err(|e| format!("yt-dlp の完了待ちに失敗しました: {e}"))?;
 
-    if !output.status.success() {
-        let stderr = decode_process_output(&output.stderr);
-        let message = if stderr.trim().is_empty() {
-            format!("yt-dlp が終了コード {} で失敗しました", output.status)
-        } else {
-            stderr.trim().to_string()
-        };
-        return Err(message);
+    if !status.success() {
+        return Err(format!("yt-dlp が終了コード {} で失敗しました", status));
     }
 
-    Ok((output.stdout, files_before, output_dir))
+    Ok((Vec::new(), files_before, output_dir))
 }
 
 pub fn download_track(app: &AppHandle, url: &str) -> Result<PathBuf, String> {
