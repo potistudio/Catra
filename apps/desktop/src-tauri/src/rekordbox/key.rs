@@ -3,6 +3,10 @@
 const BLOB_KEY: &[u8] = b"657f48f84c437cc1";
 const BLOB: &[u8] = b"PN_Pq^*N>(JYe*u^8;Yg76HuZ<mR13S?=>)b9;DpoTXV(6ItkU`}8*m6tx_I{Solh_N#dfe{v=";
 
+/// RFC 1924 Base85 alphabet (Python `base64.b85decode`).
+const B85_ALPHABET: &[u8; 85] =
+    b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~";
+
 pub fn master_db_key() -> Result<String, String> {
     let key = deobfuscate(BLOB)?;
     if !key.starts_with("402fd") {
@@ -15,7 +19,7 @@ fn deobfuscate(blob: &[u8]) -> Result<String, String> {
     use flate2::read::ZlibDecoder;
     use std::io::Read;
 
-    let decoded = decode_ascii85(blob)?;
+    let decoded = decode_base85(blob)?;
     let xored: Vec<u8> = decoded
         .iter()
         .enumerate()
@@ -30,63 +34,63 @@ fn deobfuscate(blob: &[u8]) -> Result<String, String> {
     Ok(key)
 }
 
-fn decode_ascii85(input: &[u8]) -> Result<Vec<u8>, String> {
-    let mut output = Vec::new();
-    let mut value: u32 = 0;
-    let mut group_len: i32 = 0;
+fn decode_base85(input: &[u8]) -> Result<Vec<u8>, String> {
+    let mut decode_map = [0xff_u8; 256];
+    for (index, &byte) in B85_ALPHABET.iter().enumerate() {
+        decode_map[byte as usize] = index as u8;
+    }
+
+    let mut output = Vec::with_capacity(input.len() * 4 / 5);
+    let mut chunk = [0_u8; 5];
+    let mut chunk_len = 0;
 
     for &byte in input {
-        if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b'\x0c') {
-            continue;
+        if decode_map[byte as usize] == 0xff {
+            return Err(format!("invalid Base85 byte: {byte}"));
         }
-
-        if byte == b'z' {
-            if group_len != 0 {
-                return Err("invalid ASCII85: 'z' inside a group".to_string());
-            }
-            output.extend_from_slice(&[0, 0, 0, 0]);
-            continue;
-        }
-
-        if !(b'!'..=b'u').contains(&byte) {
-            return Err(format!("invalid ASCII85 byte: {byte}"));
-        }
-
-        value = value
-            .checked_mul(85)
-            .and_then(|next| next.checked_add((byte - b'!') as u32))
-            .ok_or_else(|| "invalid ASCII85 value".to_string())?;
-        group_len += 1;
-
-        if group_len == 5 {
-            output.push((value >> 24) as u8);
-            output.push((value >> 16) as u8);
-            output.push((value >> 8) as u8);
-            output.push(value as u8);
-            value = 0;
-            group_len = 0;
+        chunk[chunk_len] = byte;
+        chunk_len += 1;
+        if chunk_len == 5 {
+            decode_base85_chunk(&decode_map, &chunk, 5, &mut output)?;
+            chunk_len = 0;
         }
     }
 
-    if group_len > 0 {
-        for _ in group_len..5 {
-            value = value
-                .checked_mul(85)
-                .and_then(|next| next.checked_add(84))
-                .ok_or_else(|| "invalid ASCII85 value".to_string())?;
+    if chunk_len > 0 {
+        // Pad short final group with '~' (last alphabet char), matching Python b85decode.
+        for slot in chunk.iter_mut().take(5).skip(chunk_len) {
+            *slot = b'~';
         }
-
-        let bytes = group_len.saturating_sub(1);
-        output.push((value >> 24) as u8);
-        if bytes >= 2 {
-            output.push((value >> 16) as u8);
-        }
-        if bytes >= 3 {
-            output.push((value >> 8) as u8);
-        }
+        decode_base85_chunk(&decode_map, &chunk, chunk_len, &mut output)?;
     }
 
     Ok(output)
+}
+
+fn decode_base85_chunk(
+    decode_map: &[u8; 256],
+    chunk: &[u8; 5],
+    raw_len: usize,
+    output: &mut Vec<u8>,
+) -> Result<(), String> {
+    let mut value: u32 = 0;
+    for &byte in chunk {
+        let digit = decode_map[byte as usize];
+        value = value
+            .checked_mul(85)
+            .and_then(|next| next.checked_add(u32::from(digit)))
+            .ok_or_else(|| "invalid Base85 value".to_string())?;
+    }
+
+    let bytes = [
+        (value >> 24) as u8,
+        (value >> 16) as u8,
+        (value >> 8) as u8,
+        value as u8,
+    ];
+    let out_len = if raw_len == 5 { 4 } else { raw_len - 1 };
+    output.extend_from_slice(&bytes[..out_len]);
+    Ok(())
 }
 
 #[cfg(test)]
