@@ -2,3 +2,4 @@
 biome = "latest"
 node = "lts"
 pnpm = "latest"
+python = "3.12"

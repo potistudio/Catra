@@ -6,6 +6,8 @@
 		"build": "pnpm --dir apps/desktop tauri build",
 		"check": "pnpm --dir apps/desktop check",
 		"lint": "biome check .",
-		"lint:fix": "biome check --write ."
+		"lint:fix": "biome check --write .",
+		"setup:rekordbox": "bash apps/desktop/python/scripts/setup.sh",
+		"rekordbox": "bash apps/desktop/python/scripts/run.sh"
 	}
 }
