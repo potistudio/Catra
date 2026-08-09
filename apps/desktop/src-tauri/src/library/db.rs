@@ -109,7 +109,9 @@ impl LibraryState {
                     title: row.get(2)?,
                     artist: row.get(3)?,
                     album: row.get(4)?,
-                    duration_ms: row.get(5)?,
+                    duration_ms: row
+                        .get::<_, Option<i64>>(5)?
+                        .map(|value| value as u64),
                     bpm: row.get(6)?,
                     bitrate_kbps: row.get(7)?,
                     genre: row.get(8)?,
@@ -175,7 +177,7 @@ impl LibraryState {
                 title,
                 artist,
                 album,
-                duration_ms,
+                duration_ms.map(|value| value as i64),
                 bpm,
                 bitrate_kbps,
                 genre,

@@ -421,7 +421,6 @@ name = "catra"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "data-encoding",
  "dirs",
  "encoding_rs",
  "flate2",

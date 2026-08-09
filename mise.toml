@@ -2,3 +2,6 @@
 biome = "latest"
 node = "lts"
 pnpm = "latest"
+
+[env]
+OPENSSL_DIR = "C:/Program Files/OpenSSL-Win64"

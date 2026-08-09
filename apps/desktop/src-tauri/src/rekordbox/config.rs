@@ -153,7 +153,7 @@ fn newest_version_dir(root: &Path) -> Option<InstallInfo> {
         if !path.is_dir() {
             continue;
         }
-        let name = entry.file_name().to_string_lossy();
+        let name = entry.file_name().to_string_lossy().into_owned();
         if let Some(version) = name.strip_prefix("rekordbox ") {
             candidates.push(InstallInfo {
                 path,
