@@ -23,5 +23,19 @@ Build requires OpenSSL for SQLCipher on Windows:
 
 ```powershell
 winget install ShiningLight.OpenSSL.Light
-$env:OPENSSL_DIR = "C:\Program Files\OpenSSL-Win64"
 ```
+
+Shining Light installs import libraries under `lib\VC\x64\`, not `lib\` directly. Set:
+
+```powershell
+$env:OPENSSL_DIR = "C:\Program Files\OpenSSL-Win64"
+$env:OPENSSL_INCLUDE_DIR = "C:\Program Files\OpenSSL-Win64\include"
+# pnpm dev (debug):
+$env:OPENSSL_LIB_DIR = "C:\Program Files\OpenSSL-Win64\lib\VC\x64\MDd"
+# pnpm build (release):
+# $env:OPENSSL_LIB_DIR = "C:\Program Files\OpenSSL-Win64\lib\VC\x64\MD"
+```
+
+`mise.toml`, `.cargo/config.toml`, and `apps/desktop/.cargo/config.toml` set these for local dev (MDd).
+
+After changing OpenSSL settings, run `cargo clean` in `apps/desktop/src-tauri` once.

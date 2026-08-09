@@ -1,10 +1,6 @@
-[tools]
-biome = "latest"
-node = "lts"
-pnpm = "latest"
-
+# Tauri runs cargo from apps/desktop, so OpenSSL env must live here (not src-tauri).
+# Shining Light OpenSSL puts import libs in lib/VC/x64/{MD,MDd}.
 [env]
 OPENSSL_DIR = "C:/Program Files/OpenSSL-Win64"
 OPENSSL_INCLUDE_DIR = "C:/Program Files/OpenSSL-Win64/include"
-# Debug builds (pnpm dev): MDd. Release builds (pnpm build): change to .../MD
 OPENSSL_LIB_DIR = "C:/Program Files/OpenSSL-Win64/lib/VC/x64/MDd"

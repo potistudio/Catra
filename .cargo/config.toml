@@ -1,10 +1,4 @@
-[tools]
-biome = "latest"
-node = "lts"
-pnpm = "latest"
-
 [env]
 OPENSSL_DIR = "C:/Program Files/OpenSSL-Win64"
 OPENSSL_INCLUDE_DIR = "C:/Program Files/OpenSSL-Win64/include"
-# Debug builds (pnpm dev): MDd. Release builds (pnpm build): change to .../MD
 OPENSSL_LIB_DIR = "C:/Program Files/OpenSSL-Win64/lib/VC/x64/MDd"
