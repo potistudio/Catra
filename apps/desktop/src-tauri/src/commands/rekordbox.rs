@@ -5,34 +5,36 @@ use crate::rekordbox::{
     RekordboxContent, RekordboxContentUpdate, RekordboxDbStatus, RekordboxPlaylist,
 };
 
-#[tauri::command]
+// Blocking I/O (SQLCipher, filesystem, process list). `async` runs the handler off the
+// UI main thread; non-async Tauri commands execute on the main thread.
+#[tauri::command(async)]
 pub fn rekordbox_check() -> Result<RekordboxCheck, String> {
     check()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rekordbox_db_status() -> Result<RekordboxDbStatus, String> {
     db_status()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rekordbox_get_content(id: Option<String>) -> Result<Vec<RekordboxContent>, String> {
     get_content(id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rekordbox_list_playlists() -> Result<Vec<RekordboxPlaylist>, String> {
     list_playlists()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rekordbox_get_playlist_content(
     playlist_id: String,
 ) -> Result<Vec<RekordboxContent>, String> {
     get_playlist_content(playlist_id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rekordbox_create_playlist(
     name: String,
     parent_id: Option<String>,
@@ -40,7 +42,7 @@ pub fn rekordbox_create_playlist(
     create_playlist(name, parent_id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rekordbox_create_playlist_folder(
     name: String,
     parent_id: Option<String>,
@@ -48,17 +50,17 @@ pub fn rekordbox_create_playlist_folder(
     create_playlist_folder(name, parent_id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rekordbox_rename_playlist(id: String, name: String) -> Result<RekordboxPlaylist, String> {
     rename_playlist(id, name)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rekordbox_delete_playlist(id: String) -> Result<(), String> {
     delete_playlist(id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rekordbox_add_to_playlist(
     playlist_id: String,
     content_id: String,
@@ -67,7 +69,7 @@ pub fn rekordbox_add_to_playlist(
     add_to_playlist(playlist_id, content_id, track_no)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rekordbox_remove_from_playlist(
     playlist_id: String,
     song_playlist_id: String,
@@ -75,7 +77,7 @@ pub fn rekordbox_remove_from_playlist(
     remove_from_playlist(playlist_id, song_playlist_id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rekordbox_move_song_in_playlist(
     playlist_id: String,
     song_playlist_id: String,
@@ -84,7 +86,7 @@ pub fn rekordbox_move_song_in_playlist(
     move_song_in_playlist(playlist_id, song_playlist_id, new_track_no)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rekordbox_add_content(
     path: String,
     title: Option<String>,
@@ -92,7 +94,7 @@ pub fn rekordbox_add_content(
     add_content(path, title)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rekordbox_update_content(
     id: String,
     fields: RekordboxContentUpdate,
@@ -100,7 +102,7 @@ pub fn rekordbox_update_content(
     update_content(id, fields)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rekordbox_delete_content(id: String) -> Result<(), String> {
     delete_content(id)
 }

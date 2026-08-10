@@ -169,8 +169,9 @@ fn newest_version_dir(root: &Path) -> Option<InstallInfo> {
 pub fn is_rekordbox_running() -> bool {
     use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
+    // Process name is enough to detect rekordbox.exe; skip full process metadata refresh.
     let mut system = System::new_with_specifics(
-        RefreshKind::nothing().with_processes(ProcessRefreshKind::everything()),
+        RefreshKind::nothing().with_processes(ProcessRefreshKind::nothing()),
     );
     system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
 
