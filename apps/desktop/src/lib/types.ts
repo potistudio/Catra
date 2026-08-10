@@ -137,4 +137,19 @@ export interface RekordboxContent {
   fileSize: number | null;
   discNo: number | null;
   artworkPath: string | null;
+  /** Present when the row comes from a playlist membership query. */
+  songPlaylistId?: string | null;
+}
+
+export interface RekordboxContentUpdate {
+  title?: string | null;
+  artist?: string | null;
+  album?: string | null;
+  genre?: string | null;
+  comment?: string | null;
+  bpm?: number | null;
+  rating?: number | null;
+  trackNo?: number | null;
+  releaseYear?: number | null;
+  key?: string | null;
 }

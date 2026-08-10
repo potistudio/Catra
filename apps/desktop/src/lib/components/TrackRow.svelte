@@ -18,6 +18,7 @@
     selected: boolean;
     checked: boolean;
     readonly?: boolean;
+    removeTitle?: string;
     onselect: (track: Track) => void;
     onremove?: (track: Track) => void;
     ontogglecheck?: (track: Track) => void;
@@ -28,6 +29,7 @@
     selected,
     checked,
     readonly = false,
+    removeTitle = "ライブラリから削除",
     onselect,
     onremove,
     ontogglecheck,
@@ -95,8 +97,8 @@
           e.stopPropagation();
           onremove(track);
         }}
-        aria-label="Remove from library"
-        title="ライブラリから削除"
+        aria-label={removeTitle}
+        title={removeTitle}
       >
         ✕
       </button>

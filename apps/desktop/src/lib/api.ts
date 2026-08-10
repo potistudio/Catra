@@ -3,6 +3,7 @@ import type {
   DuplicateChoice,
   RekordboxCheck,
   RekordboxContent,
+  RekordboxContentUpdate,
   RekordboxDbStatus,
   RekordboxPlaylist,
   Track,
@@ -11,6 +12,7 @@ import type {
 export type {
   RekordboxCheck,
   RekordboxContent,
+  RekordboxContentUpdate,
   RekordboxDbStatus,
   RekordboxPlaylist,
 };
@@ -59,4 +61,90 @@ export async function rekordboxGetPlaylistContent(
   return invoke<RekordboxContent[]>("rekordbox_get_playlist_content", {
     playlistId,
   });
+}
+
+export async function rekordboxCreatePlaylist(
+  name: string,
+  parentId?: string | null,
+): Promise<RekordboxPlaylist> {
+  return invoke<RekordboxPlaylist>("rekordbox_create_playlist", {
+    name,
+    parentId: parentId ?? null,
+  });
+}
+
+export async function rekordboxCreatePlaylistFolder(
+  name: string,
+  parentId?: string | null,
+): Promise<RekordboxPlaylist> {
+  return invoke<RekordboxPlaylist>("rekordbox_create_playlist_folder", {
+    name,
+    parentId: parentId ?? null,
+  });
+}
+
+export async function rekordboxRenamePlaylist(
+  id: string,
+  name: string,
+): Promise<RekordboxPlaylist> {
+  return invoke<RekordboxPlaylist>("rekordbox_rename_playlist", { id, name });
+}
+
+export async function rekordboxDeletePlaylist(id: string): Promise<void> {
+  return invoke("rekordbox_delete_playlist", { id });
+}
+
+export async function rekordboxAddToPlaylist(
+  playlistId: string,
+  contentId: string,
+  trackNo?: number | null,
+): Promise<string> {
+  return invoke<string>("rekordbox_add_to_playlist", {
+    playlistId,
+    contentId,
+    trackNo: trackNo ?? null,
+  });
+}
+
+export async function rekordboxRemoveFromPlaylist(
+  playlistId: string,
+  songPlaylistId: string,
+): Promise<void> {
+  return invoke("rekordbox_remove_from_playlist", {
+    playlistId,
+    songPlaylistId,
+  });
+}
+
+export async function rekordboxMoveSongInPlaylist(
+  playlistId: string,
+  songPlaylistId: string,
+  newTrackNo: number,
+): Promise<void> {
+  return invoke("rekordbox_move_song_in_playlist", {
+    playlistId,
+    songPlaylistId,
+    newTrackNo,
+  });
+}
+
+export async function rekordboxAddContent(
+  path: string,
+  title?: string | null,
+): Promise<RekordboxContent> {
+  return invoke<RekordboxContent>("rekordbox_add_content", {
+    path,
+    title: title ?? null,
+  });
+}
+
+export async function rekordboxUpdateContent(
+  id: string,
+  fields: RekordboxContentUpdate,
+): Promise<RekordboxContent> {
+  return invoke<RekordboxContent>("rekordbox_update_content", { id, fields });
+}
+
+export async function rekordboxDeleteContent(id: string): Promise<void> {
+  return invoke("rekordbox_delete_content", { id });
 }

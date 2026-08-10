@@ -1,6 +1,12 @@
 use super::db::MasterDatabase;
-use rusqlite::{params, Row};
-use serde::Serialize;
+use super::ids::{new_uuid, unused_numeric_id};
+use super::write::{now_local, timestamp_sql, WriteSession};
+use lofty::config::ParseOptions;
+use lofty::file::{AudioFile, TaggedFileExt};
+use lofty::probe::Probe;
+use lofty::tag::{Accessor, ItemKey};
+use rusqlite::{params, OptionalExtension, Row};
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize)]
@@ -29,10 +35,63 @@ pub struct RekordboxContent {
     pub file_size: Option<i32>,
     pub disc_no: Option<i32>,
     pub artwork_path: Option<String>,
+    /// `djmdSongPlaylist.ID` when loaded via playlist membership.
+    pub song_playlist_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RekordboxContentUpdate {
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub genre: Option<String>,
+    pub comment: Option<String>,
+    pub bpm: Option<f32>,
+    pub rating: Option<i32>,
+    pub track_no: Option<i32>,
+    pub release_year: Option<i32>,
+    pub key: Option<String>,
 }
 
 pub(crate) const CONTENT_QUERY: &str = "
 SELECT
+    c.ID,
+    c.FolderPath,
+    c.FileNameL,
+    c.Title,
+    artist.Name,
+    album.Name,
+    genre.Name,
+    c.BPM,
+    c.Length,
+    c.TrackNo,
+    c.BitRate,
+    c.BitDepth,
+    c.Commnt,
+    c.FileType,
+    c.Rating,
+    c.ReleaseYear,
+    djmd_key.ScaleName,
+    remixer.Name,
+    label.Name,
+    composer.Name,
+    c.FileSize,
+    c.DiscNo,
+    c.ImagePath
+FROM djmdContent c
+LEFT JOIN djmdArtist artist ON c.ArtistID = artist.ID
+LEFT JOIN djmdAlbum album ON c.AlbumID = album.ID
+LEFT JOIN djmdGenre genre ON c.GenreID = genre.ID
+LEFT JOIN djmdKey djmd_key ON c.KeyID = djmd_key.ID
+LEFT JOIN djmdArtist remixer ON c.RemixerID = remixer.ID
+LEFT JOIN djmdLabel label ON c.LabelID = label.ID
+LEFT JOIN djmdArtist composer ON c.ComposerID = composer.ID
+";
+
+pub(crate) const CONTENT_QUERY_WITH_SONG: &str = "
+SELECT
+    sp.ID,
     c.ID,
     c.FolderPath,
     c.FileNameL,
@@ -101,33 +160,475 @@ impl MasterDatabase {
     }
 }
 
+pub fn add_content(path: String, title: Option<String>) -> Result<RekordboxContent, String> {
+    let path = PathBuf::from(path);
+    if !path.is_file() {
+        return Err(format!("file not found: {}", path.display()));
+    }
+
+    let folder_path = path.to_string_lossy().replace('/', "\\");
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(str::to_string)
+        .ok_or_else(|| "invalid file name".to_string())?;
+    let file_size = std::fs::metadata(&path)
+        .map(|meta| meta.len().min(i32::MAX as u64) as i32)
+        .ok();
+    let file_type = file_type_from_path(&path);
+    let meta = read_file_metadata(&path);
+    let title = title
+        .filter(|value| !value.trim().is_empty())
+        .or(meta.title.clone())
+        .or_else(|| {
+            path.file_stem()
+                .and_then(|value| value.to_str())
+                .map(str::to_string)
+        });
+
+    let mut session = WriteSession::open()?;
+    let id = unused_numeric_id(session.conn(), "djmdContent")?;
+    let uuid = new_uuid();
+    let now = now_local();
+    let ts = timestamp_sql(now);
+
+    let artist_id = {
+        let (conn, usn) = session.conn_and_usn();
+        ensure_named_row(conn, usn, "djmdArtist", "Name", meta.artist.as_deref(), &ts)?
+    };
+    let album_id = {
+        let (conn, usn) = session.conn_and_usn();
+        ensure_named_row(conn, usn, "djmdAlbum", "Name", meta.album.as_deref(), &ts)?
+    };
+    let genre_id = {
+        let (conn, usn) = session.conn_and_usn();
+        ensure_named_row(conn, usn, "djmdGenre", "Name", meta.genre.as_deref(), &ts)?
+    };
+    let key_id = {
+        let (conn, usn) = session.conn_and_usn();
+        ensure_named_row(conn, usn, "djmdKey", "ScaleName", meta.key.as_deref(), &ts)?
+    };
+
+    let bpm_db = meta.bpm.map(|value| (value * 100.0).round() as i32);
+    let rating_db = denormalize_rating(meta.rating);
+
+    session
+        .conn()
+        .execute(
+            "INSERT INTO djmdContent (
+                ID, FolderPath, FileNameL, Title,
+                ArtistID, AlbumID, GenreID, BPM, Length,
+                BitRate, FileType, Rating, KeyID, FileSize, SampleRate,
+                OrgFolderPath, DateCreated,
+                UUID, rb_data_status, rb_local_data_status,
+                rb_local_deleted, rb_local_synced, created_at, updated_at
+             ) VALUES (
+                ?1, ?2, ?3, ?4,
+                ?5, ?6, ?7, ?8, ?9,
+                ?10, ?11, ?12, ?13, ?14, ?15,
+                ?2, ?16,
+                ?17, 0, 0, 0, 0, ?16, ?16
+             )",
+            params![
+                id.as_str(),
+                folder_path.as_str(),
+                file_name.as_str(),
+                title.as_deref(),
+                artist_id.as_deref(),
+                album_id.as_deref(),
+                genre_id.as_deref(),
+                bpm_db,
+                meta.length_secs,
+                meta.bit_rate,
+                file_type,
+                rating_db,
+                key_id.as_deref(),
+                file_size,
+                meta.sample_rate,
+                ts.as_str(),
+                uuid.as_str(),
+            ],
+        )
+        .map_err(|error| format!("failed to add content: {error}"))?;
+
+    session.usn.track("djmdContent", id.clone());
+    let db_dir = session.db_dir.clone();
+    session.commit()?;
+
+    let db = MasterDatabase::open()?;
+    let mut contents = db.get_content(Some(&id), &db_dir)?;
+    contents
+        .pop()
+        .ok_or_else(|| "added content could not be reloaded".to_string())
+}
+
+pub fn update_content(
+    id: String,
+    fields: RekordboxContentUpdate,
+) -> Result<RekordboxContent, String> {
+    let mut session = WriteSession::open()?;
+    let exists: bool = session
+        .conn()
+        .prepare("SELECT 1 FROM djmdContent WHERE ID = ?1 LIMIT 1")
+        .map_err(|error| error.to_string())?
+        .exists(params![id.as_str()])
+        .map_err(|error| error.to_string())?;
+    if !exists {
+        return Err(format!("content {id} was not found"));
+    }
+
+    let now = now_local();
+    let ts = timestamp_sql(now);
+
+    if let Some(title) = fields.title.as_ref() {
+        session
+            .conn()
+            .execute(
+                "UPDATE djmdContent SET Title = ?1, updated_at = ?2 WHERE ID = ?3",
+                params![title.as_str(), ts.as_str(), id.as_str()],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    if let Some(comment) = fields.comment.as_ref() {
+        session
+            .conn()
+            .execute(
+                "UPDATE djmdContent SET Commnt = ?1, updated_at = ?2 WHERE ID = ?3",
+                params![comment.as_str(), ts.as_str(), id.as_str()],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    if let Some(bpm) = fields.bpm {
+        let bpm_db = (bpm * 100.0).round() as i32;
+        session
+            .conn()
+            .execute(
+                "UPDATE djmdContent SET BPM = ?1, updated_at = ?2 WHERE ID = ?3",
+                params![bpm_db, ts.as_str(), id.as_str()],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    if let Some(rating) = fields.rating {
+        let rating_db = denormalize_rating(Some(rating)).unwrap_or(0);
+        session
+            .conn()
+            .execute(
+                "UPDATE djmdContent SET Rating = ?1, updated_at = ?2 WHERE ID = ?3",
+                params![rating_db, ts.as_str(), id.as_str()],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    if let Some(track_no) = fields.track_no {
+        session
+            .conn()
+            .execute(
+                "UPDATE djmdContent SET TrackNo = ?1, updated_at = ?2 WHERE ID = ?3",
+                params![track_no, ts.as_str(), id.as_str()],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    if let Some(release_year) = fields.release_year {
+        session
+            .conn()
+            .execute(
+                "UPDATE djmdContent SET ReleaseYear = ?1, updated_at = ?2 WHERE ID = ?3",
+                params![release_year, ts.as_str(), id.as_str()],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+
+    if let Some(artist) = fields.artist.as_ref() {
+        let artist_id = {
+            let (conn, usn) = session.conn_and_usn();
+            ensure_named_row(conn, usn, "djmdArtist", "Name", Some(artist.as_str()), &ts)?
+        };
+        session
+            .conn()
+            .execute(
+                "UPDATE djmdContent SET ArtistID = ?1, updated_at = ?2 WHERE ID = ?3",
+                params![artist_id.as_deref(), ts.as_str(), id.as_str()],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    if let Some(album) = fields.album.as_ref() {
+        let album_id = {
+            let (conn, usn) = session.conn_and_usn();
+            ensure_named_row(conn, usn, "djmdAlbum", "Name", Some(album.as_str()), &ts)?
+        };
+        session
+            .conn()
+            .execute(
+                "UPDATE djmdContent SET AlbumID = ?1, updated_at = ?2 WHERE ID = ?3",
+                params![album_id.as_deref(), ts.as_str(), id.as_str()],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    if let Some(genre) = fields.genre.as_ref() {
+        let genre_id = {
+            let (conn, usn) = session.conn_and_usn();
+            ensure_named_row(conn, usn, "djmdGenre", "Name", Some(genre.as_str()), &ts)?
+        };
+        session
+            .conn()
+            .execute(
+                "UPDATE djmdContent SET GenreID = ?1, updated_at = ?2 WHERE ID = ?3",
+                params![genre_id.as_deref(), ts.as_str(), id.as_str()],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    if let Some(key) = fields.key.as_ref() {
+        let key_id = {
+            let (conn, usn) = session.conn_and_usn();
+            ensure_named_row(conn, usn, "djmdKey", "ScaleName", Some(key.as_str()), &ts)?
+        };
+        session
+            .conn()
+            .execute(
+                "UPDATE djmdContent SET KeyID = ?1, updated_at = ?2 WHERE ID = ?3",
+                params![key_id.as_deref(), ts.as_str(), id.as_str()],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+
+    session.usn.track("djmdContent", id.clone());
+    let db_dir = session.db_dir.clone();
+    session.commit()?;
+
+    let db = MasterDatabase::open()?;
+    let mut contents = db.get_content(Some(&id), &db_dir)?;
+    contents
+        .pop()
+        .ok_or_else(|| "updated content could not be reloaded".to_string())
+}
+
+pub fn delete_content(id: String) -> Result<(), String> {
+    let mut session = WriteSession::open()?;
+    let exists: bool = session
+        .conn()
+        .prepare("SELECT 1 FROM djmdContent WHERE ID = ?1 LIMIT 1")
+        .map_err(|error| error.to_string())?
+        .exists(params![id.as_str()])
+        .map_err(|error| error.to_string())?;
+    if !exists {
+        return Err(format!("content {id} was not found"));
+    }
+
+    let song_ids: Vec<String> = {
+        let mut stmt = session
+            .conn()
+            .prepare("SELECT ID FROM djmdSongPlaylist WHERE ContentID = ?1")
+            .map_err(|error| error.to_string())?;
+        let rows = stmt
+            .query_map(params![id.as_str()], |row| row.get(0))
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())?
+    };
+    session
+        .usn
+        .track_many("djmdSongPlaylist", song_ids);
+    session
+        .conn()
+        .execute(
+            "DELETE FROM djmdSongPlaylist WHERE ContentID = ?1",
+            params![id.as_str()],
+        )
+        .map_err(|error| error.to_string())?;
+
+    for table in [
+        "djmdSongMyTag",
+        "djmdSongHistory",
+        "djmdSongRelatedTracks",
+        "djmdCue",
+    ] {
+        let _ = session.conn().execute(
+            &format!("DELETE FROM {table} WHERE ContentID = ?1"),
+            params![id.as_str()],
+        );
+    }
+
+    session
+        .conn()
+        .execute("DELETE FROM djmdContent WHERE ID = ?1", params![id.as_str()])
+        .map_err(|error| error.to_string())?;
+    session.usn.track("djmdContent", id);
+
+    session.commit()?;
+    Ok(())
+}
+
+fn ensure_named_row(
+    conn: &rusqlite::Connection,
+    usn: &mut super::registry::UsnBuffer,
+    table: &'static str,
+    name_column: &str,
+    name: Option<&str>,
+    ts: &str,
+) -> Result<Option<String>, String> {
+    let Some(name) = name.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+
+    let existing: Option<String> = conn
+        .query_row(
+            &format!("SELECT ID FROM {table} WHERE {name_column} = ?1 LIMIT 1"),
+            params![name],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    if let Some(id) = existing {
+        return Ok(Some(id));
+    }
+
+    let id = unused_numeric_id(conn, table)?;
+    let uuid = new_uuid();
+    conn.execute(
+        &format!(
+            "INSERT INTO {table} (
+                ID, {name_column}, UUID,
+                rb_data_status, rb_local_data_status, rb_local_deleted, rb_local_synced,
+                created_at, updated_at
+             ) VALUES (
+                ?1, ?2, ?3, 0, 0, 0, 0, ?4, ?4
+             )"
+        ),
+        params![id.as_str(), name, uuid.as_str(), ts],
+    )
+    .map_err(|error| format!("failed to insert into {table}: {error}"))?;
+    usn.track(table, id.clone());
+    Ok(Some(id))
+}
+
+struct FileMeta {
+    title: Option<String>,
+    artist: Option<String>,
+    album: Option<String>,
+    genre: Option<String>,
+    key: Option<String>,
+    bpm: Option<f32>,
+    rating: Option<i32>,
+    length_secs: Option<i32>,
+    bit_rate: Option<i32>,
+    sample_rate: Option<i32>,
+}
+
+fn read_file_metadata(path: &Path) -> FileMeta {
+    let fallback_title = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .map(str::to_string);
+    let options = ParseOptions::new().max_junk_bytes(4096);
+    let Ok(tagged_file) = Probe::open(path).and_then(|probe| probe.options(options).read()) else {
+        return FileMeta {
+            title: fallback_title,
+            artist: None,
+            album: None,
+            genre: None,
+            key: None,
+            bpm: None,
+            rating: None,
+            length_secs: None,
+            bit_rate: None,
+            sample_rate: None,
+        };
+    };
+
+    let properties = tagged_file.properties();
+    let length_secs = Some(properties.duration().as_secs().min(i32::MAX as u64) as i32);
+    let bit_rate = properties.audio_bitrate().map(|value| value as i32);
+    let sample_rate = properties.sample_rate().map(|value| value as i32);
+
+    if let Some(tag) = tagged_file.primary_tag() {
+        return FileMeta {
+            title: tag.title().map(|value| value.to_string()).or(fallback_title),
+            artist: tag.artist().map(|value| value.to_string()),
+            album: tag.album().map(|value| value.to_string()),
+            genre: tag.genre().map(|value| value.to_string()),
+            key: tag
+                .get_string(&ItemKey::InitialKey)
+                .map(|value| value.to_string()),
+            bpm: tag
+                .get_string(&ItemKey::Bpm)
+                .or_else(|| tag.get_string(&ItemKey::IntegerBpm))
+                .and_then(|value| value.parse::<f32>().ok()),
+            rating: None,
+            length_secs,
+            bit_rate,
+            sample_rate,
+        };
+    }
+
+    FileMeta {
+        title: fallback_title,
+        artist: None,
+        album: None,
+        genre: None,
+        key: None,
+        bpm: None,
+        rating: None,
+        length_secs,
+        bit_rate,
+        sample_rate,
+    }
+}
+
+fn file_type_from_path(path: &Path) -> Option<i32> {
+    match path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("mp3") => Some(1),
+        Some("m4a") | Some("mp4") | Some("aac") => Some(4),
+        Some("flac") => Some(5),
+        Some("wav") => Some(11),
+        Some("aif") | Some("aiff") => Some(12),
+        _ => None,
+    }
+}
+
 pub(crate) fn map_content_row(row: &Row<'_>) -> rusqlite::Result<RekordboxContent> {
-    let bpm_raw: Option<i32> = row.get(7)?;
+    map_content_columns(row, 0, None)
+}
+
+pub(crate) fn map_content_row_with_song_id(row: &Row<'_>) -> rusqlite::Result<RekordboxContent> {
+    let song_playlist_id: String = row.get(0)?;
+    map_content_columns(row, 1, Some(song_playlist_id))
+}
+
+fn map_content_columns(
+    row: &Row<'_>,
+    offset: usize,
+    song_playlist_id: Option<String>,
+) -> rusqlite::Result<RekordboxContent> {
+    let bpm_raw: Option<i32> = row.get(offset + 7)?;
     Ok(RekordboxContent {
-        id: row.get(0)?,
-        folder_path: row.get(1)?,
-        file_name: row.get(2)?,
-        title: row.get(3)?,
-        artist: row.get(4)?,
-        album: row.get(5)?,
-        genre: row.get(6)?,
+        id: row.get(offset)?,
+        folder_path: row.get(offset + 1)?,
+        file_name: row.get(offset + 2)?,
+        title: row.get(offset + 3)?,
+        artist: row.get(offset + 4)?,
+        album: row.get(offset + 5)?,
+        genre: row.get(offset + 6)?,
         bpm: bpm_raw.map(|value| value as f32 / 100.0),
-        length_secs: row.get(8)?,
-        track_no: row.get(9)?,
-        bit_rate: row.get(10)?,
-        bit_depth: row.get(11)?,
-        comment: row.get(12)?,
-        file_type: row.get(13)?,
-        rating: normalize_rating(row.get(14)?),
-        release_year: row.get(15)?,
-        key: row.get(16)?,
-        remixer: row.get(17)?,
-        label: row.get(18)?,
-        composer: row.get(19)?,
-        file_size: row.get(20)?,
-        disc_no: row.get(21)?,
-        // Temporary: relative ImagePath; resolved in get_content.
-        artwork_path: row.get(22)?,
+        length_secs: row.get(offset + 8)?,
+        track_no: row.get(offset + 9)?,
+        bit_rate: row.get(offset + 10)?,
+        bit_depth: row.get(offset + 11)?,
+        comment: row.get(offset + 12)?,
+        file_type: row.get(offset + 13)?,
+        rating: normalize_rating(row.get(offset + 14)?),
+        release_year: row.get(offset + 15)?,
+        key: row.get(offset + 16)?,
+        remixer: row.get(offset + 17)?,
+        label: row.get(offset + 18)?,
+        composer: row.get(offset + 19)?,
+        file_size: row.get(offset + 20)?,
+        disc_no: row.get(offset + 21)?,
+        artwork_path: row.get(offset + 22)?,
+        song_playlist_id,
     })
 }
 
@@ -142,6 +643,14 @@ fn normalize_rating(rating: Option<i32>) -> Option<i32> {
     }
 }
 
+fn denormalize_rating(rating: Option<i32>) -> Option<i32> {
+    match rating {
+        None => None,
+        Some(value) if (0..=5).contains(&value) => Some(value),
+        Some(value) => Some(((value.clamp(0, 255) as f32) / 51.0).round() as i32),
+    }
+}
+
 /// Resolve Rekordbox `ImagePath` to an absolute file path under the DB directory.
 pub(crate) fn resolve_artwork_path(db_dir: &Path, image_path: Option<&str>) -> Option<String> {
     let relative = normalize_image_path(image_path?)?;
@@ -151,10 +660,7 @@ pub(crate) fn resolve_artwork_path(db_dir: &Path, image_path: Option<&str>) -> O
         vec![path.to_path_buf()]
     } else {
         // ImagePath is stored like `/PIONEER/Artwork/.../artwork.jpg` (share-relative).
-        vec![
-            db_dir.join("share").join(path),
-            db_dir.join(path),
-        ]
+        vec![db_dir.join("share").join(path), db_dir.join(path)]
     };
 
     for candidate in candidates {
@@ -232,11 +738,9 @@ mod tests {
         fs::write(&jpg, b"full").unwrap();
         fs::write(&medium, b"med").unwrap();
 
-        let resolved = resolve_artwork_path(
-            &root,
-            Some("/PIONEER/Artwork/000/abc/artwork.jpg"),
-        )
-        .expect("resolved");
+        let resolved =
+            resolve_artwork_path(&root, Some("/PIONEER/Artwork/000/abc/artwork.jpg"))
+                .expect("resolved");
         assert_eq!(PathBuf::from(resolved), medium);
 
         let _ = fs::remove_dir_all(root);
@@ -258,11 +762,9 @@ mod tests {
         fs::write(&jpg, b"full").unwrap();
         fs::write(&medium, b"med").unwrap();
 
-        let resolved = resolve_artwork_path(
-            &root,
-            Some("share/PIONEER/Artwork/000/abc/artwork.jpg"),
-        )
-        .expect("resolved");
+        let resolved =
+            resolve_artwork_path(&root, Some("share/PIONEER/Artwork/000/abc/artwork.jpg"))
+                .expect("resolved");
         assert_eq!(PathBuf::from(resolved), medium);
 
         let _ = fs::remove_dir_all(root);
@@ -286,4 +788,3 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 }
-

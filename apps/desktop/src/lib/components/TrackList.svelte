@@ -32,6 +32,8 @@
     searchPlaceholder?: string;
     emptyTitle?: string;
     emptyHint?: string;
+    bulkRemoveConfirmMessage?: string;
+    removeTitle?: string;
     headerExtra?: Snippet;
     onselect: (track: Track) => void;
     onremove?: (track: Track) => void;
@@ -45,6 +47,8 @@
     searchPlaceholder = "トラックを検索...",
     emptyTitle = "ライブラリにトラックがありません",
     emptyHint = "フォルダを追加して音楽をスキャンしてください",
+    bulkRemoveConfirmMessage = "曲をライブラリから削除しますか？",
+    removeTitle = "ライブラリから削除",
     headerExtra,
     onselect,
     onremove,
@@ -155,7 +159,7 @@
     if (!onbulkremove) return;
     const ids = [...checkedIds];
     if (ids.length === 0) return;
-    if (!confirm(`${ids.length} 曲をライブラリから削除しますか？`)) return;
+    if (!confirm(`${ids.length} ${bulkRemoveConfirmMessage}`)) return;
 
     await onbulkremove(ids);
     checkedIds = new Set();
@@ -419,6 +423,7 @@
                 selected={selectedId === track.id}
                 checked={checkedIds.has(track.id)}
                 {readonly}
+                {removeTitle}
                 {onselect}
                 {onremove}
                 ontogglecheck={readonly ? undefined : toggleCheck}

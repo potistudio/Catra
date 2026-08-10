@@ -1,14 +1,25 @@
 mod config;
 mod content;
 mod db;
+mod ids;
 mod key;
 mod playlist;
+mod playlist_xml;
+mod registry;
+mod write;
 
-pub use content::RekordboxContent;
+pub use content::{RekordboxContent, RekordboxContentUpdate};
 pub use playlist::RekordboxPlaylist;
 
 use config::{is_rekordbox_running, load_config, RekordboxConfig};
+use content::{add_content as add_content_impl, delete_content as delete_content_impl, update_content as update_content_impl};
 use db::MasterDatabase;
+use playlist::{
+    add_to_playlist as add_to_playlist_impl, create_playlist as create_playlist_impl,
+    create_playlist_folder as create_playlist_folder_impl, delete_playlist as delete_playlist_impl,
+    move_song_in_playlist as move_song_in_playlist_impl,
+    remove_from_playlist as remove_from_playlist_impl, rename_playlist as rename_playlist_impl,
+};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -55,6 +66,63 @@ pub fn list_playlists() -> Result<Vec<RekordboxPlaylist>, String> {
 pub fn get_playlist_content(playlist_id: String) -> Result<Vec<RekordboxContent>, String> {
     let (db, db_dir) = open_db()?;
     db.get_playlist_content(&playlist_id, &db_dir)
+}
+
+pub fn create_playlist(
+    name: String,
+    parent_id: Option<String>,
+) -> Result<RekordboxPlaylist, String> {
+    create_playlist_impl(name, parent_id)
+}
+
+pub fn create_playlist_folder(
+    name: String,
+    parent_id: Option<String>,
+) -> Result<RekordboxPlaylist, String> {
+    create_playlist_folder_impl(name, parent_id)
+}
+
+pub fn rename_playlist(id: String, name: String) -> Result<RekordboxPlaylist, String> {
+    rename_playlist_impl(id, name)
+}
+
+pub fn delete_playlist(id: String) -> Result<(), String> {
+    delete_playlist_impl(id)
+}
+
+pub fn add_to_playlist(
+    playlist_id: String,
+    content_id: String,
+    track_no: Option<i32>,
+) -> Result<String, String> {
+    add_to_playlist_impl(playlist_id, content_id, track_no)
+}
+
+pub fn remove_from_playlist(playlist_id: String, song_playlist_id: String) -> Result<(), String> {
+    remove_from_playlist_impl(playlist_id, song_playlist_id)
+}
+
+pub fn move_song_in_playlist(
+    playlist_id: String,
+    song_playlist_id: String,
+    new_track_no: i32,
+) -> Result<(), String> {
+    move_song_in_playlist_impl(playlist_id, song_playlist_id, new_track_no)
+}
+
+pub fn add_content(path: String, title: Option<String>) -> Result<RekordboxContent, String> {
+    add_content_impl(path, title)
+}
+
+pub fn update_content(
+    id: String,
+    fields: RekordboxContentUpdate,
+) -> Result<RekordboxContent, String> {
+    update_content_impl(id, fields)
+}
+
+pub fn delete_content(id: String) -> Result<(), String> {
+    delete_content_impl(id)
 }
 
 fn open_db() -> Result<(MasterDatabase, std::path::PathBuf), String> {

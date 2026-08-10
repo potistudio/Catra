@@ -1,6 +1,8 @@
 use crate::rekordbox::{
-    check, db_status, get_content, get_playlist_content, list_playlists, RekordboxCheck,
-    RekordboxContent, RekordboxDbStatus, RekordboxPlaylist,
+    add_content, add_to_playlist, check, create_playlist, create_playlist_folder, db_status,
+    delete_content, delete_playlist, get_content, get_playlist_content, list_playlists,
+    move_song_in_playlist, remove_from_playlist, rename_playlist, update_content, RekordboxCheck,
+    RekordboxContent, RekordboxContentUpdate, RekordboxDbStatus, RekordboxPlaylist,
 };
 
 #[tauri::command]
@@ -28,4 +30,77 @@ pub fn rekordbox_get_playlist_content(
     playlist_id: String,
 ) -> Result<Vec<RekordboxContent>, String> {
     get_playlist_content(playlist_id)
+}
+
+#[tauri::command]
+pub fn rekordbox_create_playlist(
+    name: String,
+    parent_id: Option<String>,
+) -> Result<RekordboxPlaylist, String> {
+    create_playlist(name, parent_id)
+}
+
+#[tauri::command]
+pub fn rekordbox_create_playlist_folder(
+    name: String,
+    parent_id: Option<String>,
+) -> Result<RekordboxPlaylist, String> {
+    create_playlist_folder(name, parent_id)
+}
+
+#[tauri::command]
+pub fn rekordbox_rename_playlist(id: String, name: String) -> Result<RekordboxPlaylist, String> {
+    rename_playlist(id, name)
+}
+
+#[tauri::command]
+pub fn rekordbox_delete_playlist(id: String) -> Result<(), String> {
+    delete_playlist(id)
+}
+
+#[tauri::command]
+pub fn rekordbox_add_to_playlist(
+    playlist_id: String,
+    content_id: String,
+    track_no: Option<i32>,
+) -> Result<String, String> {
+    add_to_playlist(playlist_id, content_id, track_no)
+}
+
+#[tauri::command]
+pub fn rekordbox_remove_from_playlist(
+    playlist_id: String,
+    song_playlist_id: String,
+) -> Result<(), String> {
+    remove_from_playlist(playlist_id, song_playlist_id)
+}
+
+#[tauri::command]
+pub fn rekordbox_move_song_in_playlist(
+    playlist_id: String,
+    song_playlist_id: String,
+    new_track_no: i32,
+) -> Result<(), String> {
+    move_song_in_playlist(playlist_id, song_playlist_id, new_track_no)
+}
+
+#[tauri::command]
+pub fn rekordbox_add_content(
+    path: String,
+    title: Option<String>,
+) -> Result<RekordboxContent, String> {
+    add_content(path, title)
+}
+
+#[tauri::command]
+pub fn rekordbox_update_content(
+    id: String,
+    fields: RekordboxContentUpdate,
+) -> Result<RekordboxContent, String> {
+    update_content(id, fields)
+}
+
+#[tauri::command]
+pub fn rekordbox_delete_content(id: String) -> Result<(), String> {
+    delete_content(id)
 }

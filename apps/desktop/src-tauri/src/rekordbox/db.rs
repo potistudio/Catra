@@ -4,7 +4,7 @@ use rusqlite::Connection;
 use std::path::Path;
 
 pub struct MasterDatabase {
-    conn: Connection,
+    pub(crate) conn: Connection,
 }
 
 impl MasterDatabase {
