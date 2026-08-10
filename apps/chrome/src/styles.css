@@ -90,18 +90,26 @@
 
 .catra-sc-classic-download.catra-sc-download-btn {
   position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
-.catra-sc-classic-download.is-loading {
-  color: transparent !important;
+.catra-sc-classic-download .catra-sc-download-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
 }
 
-.catra-sc-classic-download.is-loading::before {
-  visibility: hidden;
+.catra-sc-classic-download.catra-sc-download-btn svg,
+.catra-sc-classic-download .catra-sc-download-icon svg {
+  width: unset;
+  height: unset;
+  display: block;
+  fill: currentColor;
 }
 
 .catra-sc-classic-download .catra-sc-progress-label {
-  color: #333;
   font-size: 0.55rem;
 }
 

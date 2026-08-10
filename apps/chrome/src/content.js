@@ -766,24 +766,67 @@ function createListDownloadButton(trackUrl, templateButton) {
 }
 
 function getClassicButtonClassName(templateButton) {
-  if (templateButton?.className) {
-    return `${templateButton.className
-      .replace(/\bsc-button-more\b/g, "sc-button-download")
-      .replace(/\bsc-button-selected\b/g, "")
-      .replace(/\s+/g, " ")
-      .trim()} ${LIST_BUTTON_CLASS} catra-sc-download-btn catra-sc-classic-download`;
+  const classes = new Set([LIST_BUTTON_CLASS, "catra-sc-download-btn", "catra-sc-classic-download"]);
+
+  if (templateButton?.classList) {
+    for (const className of templateButton.classList) {
+      if (
+        className === "sc-button-more" ||
+        className === "sc-button-download" ||
+        className === "sc-button-selected" ||
+        className === LIST_BUTTON_CLASS ||
+        className === "catra-sc-download-btn" ||
+        className === "catra-sc-classic-download"
+      ) {
+        continue;
+      }
+      classes.add(className);
+    }
+  } else {
+    for (const className of [
+      "sc-button-small",
+      "sc-button-icon",
+      "sc-button-responsive",
+      "sc-button",
+    ]) {
+      classes.add(className);
+    }
   }
 
-  return [
-    "sc-button-small",
-    "sc-button-icon",
-    "sc-button-responsive",
-    "sc-button",
-    "sc-button-download",
-    LIST_BUTTON_CLASS,
-    "catra-sc-download-btn",
-    "catra-sc-classic-download",
-  ].join(" ");
+  return [...classes].join(" ");
+}
+
+function createClassicDownloadIcon(templateButton) {
+  const templateSvg = templateButton?.querySelector?.("svg");
+  const width =
+    templateSvg?.getAttribute("width") ||
+    templateSvg?.getAttribute("viewBox")?.split(/\s+/)[2] ||
+    "16";
+  const height =
+    templateSvg?.getAttribute("height") ||
+    templateSvg?.getAttribute("viewBox")?.split(/\s+/)[3] ||
+    "16";
+
+  const icon = createDownloadIcon();
+  icon.setAttribute("width", String(width));
+  icon.setAttribute("height", String(height));
+  icon.setAttribute("viewBox", "0 0 24 24");
+  icon.style.width = `${width}px`;
+  icon.style.height = `${height}px`;
+
+  if (templateSvg) {
+    for (const attr of ["class", "fill", "stroke", "aria-hidden", "focusable", "role"]) {
+      const value = templateSvg.getAttribute(attr);
+      if (value != null) {
+        icon.setAttribute(attr, value);
+      }
+    }
+  } else {
+    icon.setAttribute("aria-hidden", "true");
+    icon.setAttribute("focusable", "false");
+  }
+
+  return icon;
 }
 
 function createClassicListDownloadButton(trackUrl, templateButton) {
@@ -793,8 +836,12 @@ function createClassicListDownloadButton(trackUrl, templateButton) {
   button.className = getClassicButtonClassName(templateButton);
   button.title = "Download";
   button.setAttribute("aria-label", "ダウンロード");
-  button.textContent = "Download";
   button.dataset.trackUrl = trackUrl;
+
+  const iconWrapper = document.createElement("div");
+  iconWrapper.className = "catra-sc-download-icon";
+  iconWrapper.appendChild(createClassicDownloadIcon(templateButton));
+  button.appendChild(iconWrapper);
 
   const progressLabel = document.createElement("span");
   progressLabel.className = "catra-sc-progress-label";
@@ -877,9 +924,11 @@ function ensurePlayableTileDownloadButtons() {
     document.documentElement,
     PLAYABLE_TILE_ACTION_WRAPPER,
   )) {
-    if (wrapper.querySelector(`.${LIST_BUTTON_CLASS}`)) {
+    const existing = wrapper.querySelector(`.${LIST_BUTTON_CLASS}`);
+    if (existing?.querySelector("svg")) {
       continue;
     }
+    existing?.remove();
 
     const trackUrl = extractTrackUrlFromPlayableTile(wrapper);
     if (!trackUrl) {
