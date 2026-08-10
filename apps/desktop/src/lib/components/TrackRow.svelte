@@ -143,7 +143,7 @@
     background: var(--surface-hover);
   }
 
-  /* Preview focus: accent edge. Checkbox selection: surface fill. */
+  /* Preview: left accent bar. Checked: surface fill. */
   .table-row.checked {
     background: var(--surface-selected);
   }
@@ -175,6 +175,7 @@
   }
 
   .checkbox-cell {
+    position: relative;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -194,8 +195,14 @@
     background: inherit;
   }
 
-  .table-row.selected .sticky-col {
-    box-shadow: inset 3px 0 0 var(--accent);
+  .table-row.selected .sticky-col::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 12px;
+    background: var(--accent);
   }
 
   .artwork-wrap {

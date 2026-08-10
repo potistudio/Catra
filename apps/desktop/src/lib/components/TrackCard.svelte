@@ -97,6 +97,7 @@
 
 <style>
   .track-card {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
@@ -119,9 +120,21 @@
     background: var(--surface-hover);
   }
 
-  /* Preview focus: accent frame only. Checkbox selection: surface fill. */
+  /* Preview: left accent bar. Checked: surface fill. */
   .track-card.selected {
-    border-color: var(--accent);
+    border-color: transparent;
+  }
+
+  .track-card.selected::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 12px;
+    border-radius: 8px 0 0 8px;
+    background: var(--accent);
+    pointer-events: none;
   }
 
   .track-card.checked {
@@ -130,7 +143,6 @@
 
   .track-card.selected.checked {
     background: var(--surface-selected);
-    border-color: var(--accent);
   }
 
   .track-card.selected:hover {
