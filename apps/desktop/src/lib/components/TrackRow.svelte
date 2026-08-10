@@ -344,6 +344,11 @@
     opacity: 1;
   }
 
+  .table-row:hover .rb-btn:disabled,
+  .table-row:focus-within .rb-btn:disabled {
+    opacity: 0.35;
+  }
+
   .rb-btn.add:hover:not(:disabled) {
     background: var(--accent-subtle);
     color: var(--accent);
@@ -355,7 +360,6 @@
   }
 
   .rb-btn:disabled {
-    opacity: 0.35;
     cursor: not-allowed;
   }
 

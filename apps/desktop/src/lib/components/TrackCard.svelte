@@ -296,6 +296,11 @@
     opacity: 1;
   }
 
+  .track-card:hover .rb-btn:disabled,
+  .track-card:focus-within .rb-btn:disabled {
+    opacity: 0.35;
+  }
+
   .rb-btn.add:hover:not(:disabled) {
     background: var(--accent);
   }
@@ -305,7 +310,6 @@
   }
 
   .rb-btn:disabled {
-    opacity: 0.35;
     cursor: not-allowed;
   }
 
