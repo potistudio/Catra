@@ -3,13 +3,27 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { onMount } from "svelte";
   import { pushActivityLog, pushActivityLogPayload } from "$lib/activityLog.svelte";
-  import { listTracks, rekordboxCheck, rekordboxGetContent, removeTrack, removeTracks, resolveDuplicate, scanFolder } from "$lib/api";
+  import {
+    listTracks,
+    rekordboxAddContent,
+    rekordboxCheck,
+    rekordboxDeleteContent,
+    rekordboxGetContent,
+    removeTrack,
+    removeTracks,
+    resolveDuplicate,
+    scanFolder,
+  } from "$lib/api";
   import ActivityConsole from "$lib/components/ActivityConsole.svelte";
   import DuplicateTrackDialog from "$lib/components/DuplicateTrackDialog.svelte";
   import PreviewPlayer from "$lib/components/PreviewPlayer.svelte";
   import RekordboxList from "$lib/components/RekordboxList.svelte";
   import StatusBar from "$lib/components/StatusBar.svelte";
   import TrackList from "$lib/components/TrackList.svelte";
+  import {
+    buildRekordboxPathIndex,
+    contentIdForPath,
+  } from "$lib/rekordboxMembership";
   import { rekordboxContentToPreview } from "$lib/rekordboxListView";
   import type {
     ActivityLogPayload,
@@ -32,10 +46,25 @@
   let selectedRekordboxId = $state<string | null>(null);
   let rekordboxStatus = $state<RekordboxCheck | null>(null);
   let rekordboxLoading = $state(false);
+  let rekordboxBusy = $state(false);
   let loading = $state(false);
   let scanning = $state(false);
   let duplicatePayload = $state<DuplicateFoundPayload | null>(null);
   let downloadProgress = $state<DownloadProgress | null>(null);
+
+  let rekordboxPathIndex = $derived(buildRekordboxPathIndex(rekordboxTracks));
+  let rekordboxWritable = $derived(
+    !!rekordboxStatus?.dbPath && !rekordboxStatus.rekordboxRunning,
+  );
+  let rekordboxLockedHint = $derived.by((): string | null => {
+    if (!rekordboxStatus?.dbPath) {
+      return "Rekordbox ライブラリが見つかりません";
+    }
+    if (rekordboxStatus.rekordboxRunning) {
+      return "Rekordbox を終了すると編集できます";
+    }
+    return null;
+  });
 
   let previewTrack = $derived.by((): PreviewableTrack | null => {
     if (activeTab === "library") {
@@ -98,6 +127,97 @@
 
   function handleSelectRekordbox(track: RekordboxContent) {
     selectedRekordboxId = track.id;
+  }
+
+  function ensureRekordboxWritable(): boolean {
+    if (!rekordboxStatus?.dbPath) {
+      pushActivityLog("warning", "Rekordbox ライブラリが見つかりません");
+      return false;
+    }
+    if (rekordboxStatus.rekordboxRunning) {
+      pushActivityLog(
+        "warning",
+        "Rekordbox が起動中です。終了してから編集してください",
+      );
+      return false;
+    }
+    return true;
+  }
+
+  async function handleAddToRekordbox(selected: Track[]) {
+    if (selected.length === 0 || rekordboxBusy) return;
+    if (!ensureRekordboxWritable()) return;
+
+    rekordboxBusy = true;
+    let added = 0;
+    let skipped = 0;
+    let failed = 0;
+    try {
+      for (const track of selected) {
+        if (contentIdForPath(track.path, rekordboxPathIndex)) {
+          skipped += 1;
+          continue;
+        }
+        try {
+          await rekordboxAddContent(track.path, track.title);
+          added += 1;
+        } catch (e) {
+          failed += 1;
+          pushActivityLog(
+            "error",
+            `Rekordbox への追加に失敗: ${track.title ?? track.path}`,
+            String(e),
+          );
+        }
+      }
+      await loadRekordbox(true);
+      if (added > 0) {
+        pushActivityLog("success", `${added} 曲を Rekordbox に追加しました`);
+      }
+      if (skipped > 0) {
+        pushActivityLog("info", `${skipped} 曲は既に Rekordbox に登録済みです`);
+      }
+      if (failed > 0 && added === 0) {
+        pushActivityLog("error", `${failed} 曲の追加に失敗しました`);
+      }
+    } finally {
+      rekordboxBusy = false;
+    }
+  }
+
+  async function handleRemoveFromRekordbox(selected: Track[]) {
+    if (selected.length === 0 || rekordboxBusy) return;
+    if (!ensureRekordboxWritable()) return;
+
+    rekordboxBusy = true;
+    let removed = 0;
+    let failed = 0;
+    try {
+      for (const track of selected) {
+        const contentId = contentIdForPath(track.path, rekordboxPathIndex);
+        if (!contentId) continue;
+        try {
+          await rekordboxDeleteContent(contentId);
+          removed += 1;
+        } catch (e) {
+          failed += 1;
+          pushActivityLog(
+            "error",
+            `Rekordbox からの削除に失敗: ${track.title ?? track.path}`,
+            String(e),
+          );
+        }
+      }
+      await loadRekordbox(true);
+      if (removed > 0) {
+        pushActivityLog("success", `${removed} 曲を Rekordbox から削除しました`);
+      }
+      if (failed > 0 && removed === 0) {
+        pushActivityLog("error", `${failed} 曲の削除に失敗しました`);
+      }
+    } finally {
+      rekordboxBusy = false;
+    }
   }
 
   async function handleAddFolder() {
@@ -170,6 +290,7 @@
   onMount(() => {
     pushActivityLog("info", "Catra を起動しました");
     void loadTracks(false);
+    void loadRekordbox(true);
 
     let unlistenUpdated: (() => void) | undefined;
     let unlistenActivity: (() => void) | undefined;
@@ -310,9 +431,15 @@
         <TrackList
           {tracks}
           selectedId={selectedTrack?.id ?? null}
+          {rekordboxPathIndex}
+          {rekordboxWritable}
+          {rekordboxBusy}
+          {rekordboxLockedHint}
           onselect={handleSelect}
           onremove={handleRemove}
           onbulkremove={handleBulkRemove}
+          onAddToRekordbox={handleAddToRekordbox}
+          onRemoveFromRekordbox={handleRemoveFromRekordbox}
         />
       </div>
       <div

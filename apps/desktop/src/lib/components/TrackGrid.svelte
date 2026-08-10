@@ -1,6 +1,7 @@
 <script lang="ts">
   import TrackCard from "$lib/components/TrackCard.svelte";
   import type { Track } from "$lib/types";
+  import { isInRekordbox } from "$lib/rekordboxMembership";
   import {
     getGridColumnCount,
     getVisibleGridRange,
@@ -13,9 +14,14 @@
     selectedId: number | null;
     checkedIds: Set<number>;
     readonly?: boolean;
+    rekordboxPathIndex?: Map<string, string>;
+    rekordboxWritable?: boolean;
+    rekordboxBusy?: boolean;
     onselect: (track: Track) => void;
     onremove?: (track: Track) => void;
     ontogglecheck?: (track: Track) => void;
+    onAddToRekordbox?: (track: Track) => void | Promise<void>;
+    onRemoveFromRekordbox?: (track: Track) => void | Promise<void>;
   }
 
   let {
@@ -23,9 +29,14 @@
     selectedId,
     checkedIds,
     readonly = false,
+    rekordboxPathIndex,
+    rekordboxWritable = false,
+    rekordboxBusy = false,
     onselect,
     onremove,
     ontogglecheck,
+    onAddToRekordbox,
+    onRemoveFromRekordbox,
   }: Props = $props();
 
   let scrollTop = $state(0);
@@ -84,9 +95,16 @@
           selected={selectedId === track.id}
           checked={checkedIds.has(track.id)}
           {readonly}
+          inRekordbox={rekordboxPathIndex
+            ? isInRekordbox(track.path, rekordboxPathIndex)
+            : false}
+          {rekordboxWritable}
+          {rekordboxBusy}
           {onselect}
           {onremove}
           {ontogglecheck}
+          {onAddToRekordbox}
+          {onRemoveFromRekordbox}
         />
       {/each}
     </div>

@@ -19,9 +19,14 @@
     checked: boolean;
     readonly?: boolean;
     removeTitle?: string;
+    inRekordbox?: boolean;
+    rekordboxWritable?: boolean;
+    rekordboxBusy?: boolean;
     onselect: (track: Track) => void;
     onremove?: (track: Track) => void;
     ontogglecheck?: (track: Track) => void;
+    onAddToRekordbox?: (track: Track) => void | Promise<void>;
+    onRemoveFromRekordbox?: (track: Track) => void | Promise<void>;
   }
 
   let {
@@ -30,10 +35,21 @@
     checked,
     readonly = false,
     removeTitle = "ライブラリから削除",
+    inRekordbox = false,
+    rekordboxWritable = false,
+    rekordboxBusy = false,
     onselect,
     onremove,
     ontogglecheck,
+    onAddToRekordbox,
+    onRemoveFromRekordbox,
   }: Props = $props();
+
+  let showRekordboxToggle = $derived(
+    !readonly &&
+      rekordboxWritable &&
+      (inRekordbox ? !!onRemoveFromRekordbox : !!onAddToRekordbox),
+  );
 
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === "Enter" || event.key === " ") {
@@ -78,7 +94,12 @@
       {/if}
     </div>
   </span>
-  <span class="cell title" role="gridcell">{displayTitle(track)}</span>
+  <span class="cell title" role="gridcell">
+    <span class="title-text">{displayTitle(track)}</span>
+    {#if inRekordbox}
+      <span class="rb-badge" title="Rekordbox に登録済み">RB</span>
+    {/if}
+  </span>
   <span class="cell" role="gridcell">{displayArtist(track)}</span>
   <span class="cell muted" role="gridcell">{displayValue(track.album)}</span>
   <span class="cell mono" role="gridcell">{formatBpm(track.bpm)}</span>
@@ -90,6 +111,37 @@
   </span>
   <span class="cell mono" role="gridcell">{formatDuration(track.durationMs)}</span>
   <span class="cell actions" role="gridcell">
+    {#if showRekordboxToggle}
+      {#if inRekordbox}
+        <button
+          type="button"
+          class="rb-btn remove"
+          disabled={rekordboxBusy}
+          onclick={(e) => {
+            e.stopPropagation();
+            void onRemoveFromRekordbox?.(track);
+          }}
+          aria-label="Rekordbox から削除"
+          title="Rekordbox から削除"
+        >
+          −RB
+        </button>
+      {:else}
+        <button
+          type="button"
+          class="rb-btn add"
+          disabled={rekordboxBusy}
+          onclick={(e) => {
+            e.stopPropagation();
+            void onAddToRekordbox?.(track);
+          }}
+          aria-label="Rekordbox に追加"
+          title="Rekordbox に追加"
+        >
+          +RB
+        </button>
+      {/if}
+    {/if}
     {#if !readonly && onremove}
       <button
         class="remove-btn"
@@ -111,7 +163,7 @@
     display: grid;
     grid-template-columns:
       2.5rem 3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
-      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 2rem;
+      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 5.5rem;
     gap: 0.6rem;
     align-items: center;
     height: 48px;
@@ -208,7 +260,29 @@
   }
 
   .title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
     font-weight: 500;
+    min-width: 0;
+  }
+
+  .title-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .rb-badge {
+    flex-shrink: 0;
+    padding: 0.05rem 0.3rem;
+    border-radius: 3px;
+    background: var(--accent-subtle);
+    color: var(--accent);
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1.3;
   }
 
   .muted {
@@ -229,7 +303,25 @@
 
   .actions {
     display: flex;
-    justify-content: center;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.15rem;
+  }
+
+  .rb-btn {
+    height: 24px;
+    padding: 0 0.35rem;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    opacity: 0;
+    transition: opacity 0.15s;
+    white-space: nowrap;
   }
 
   .remove-btn {
@@ -245,9 +337,26 @@
     transition: opacity 0.15s;
   }
 
+  .table-row:hover .rb-btn,
+  .table-row:focus-within .rb-btn,
   .table-row:hover .remove-btn,
   .table-row:focus-within .remove-btn {
     opacity: 1;
+  }
+
+  .rb-btn.add:hover:not(:disabled) {
+    background: var(--accent-subtle);
+    color: var(--accent);
+  }
+
+  .rb-btn.remove:hover:not(:disabled) {
+    background: var(--danger-subtle);
+    color: var(--danger);
+  }
+
+  .rb-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
   }
 
   .remove-btn:hover {

@@ -4,6 +4,7 @@
   import TrackGrid from "$lib/components/TrackGrid.svelte";
   import TrackRow from "$lib/components/TrackRow.svelte";
   import type { Track } from "$lib/types";
+  import { isInRekordbox } from "$lib/rekordboxMembership";
   import {
     filterTracks,
     getVisibleTrackRange,
@@ -36,9 +37,15 @@
     bulkRemoveConfirmMessage?: string;
     removeTitle?: string;
     headerExtra?: Snippet;
+    rekordboxPathIndex?: Map<string, string>;
+    rekordboxWritable?: boolean;
+    rekordboxBusy?: boolean;
+    rekordboxLockedHint?: string | null;
     onselect: (track: Track) => void;
     onremove?: (track: Track) => void;
     onbulkremove?: (ids: number[]) => void | Promise<void>;
+    onAddToRekordbox?: (tracks: Track[]) => void | Promise<void>;
+    onRemoveFromRekordbox?: (tracks: Track[]) => void | Promise<void>;
   }
 
   let {
@@ -51,9 +58,15 @@
     bulkRemoveConfirmMessage = "曲をライブラリから削除しますか？",
     removeTitle = "ライブラリから削除",
     headerExtra,
+    rekordboxPathIndex,
+    rekordboxWritable = false,
+    rekordboxBusy = false,
+    rekordboxLockedHint = null,
     onselect,
     onremove,
     onbulkremove,
+    onAddToRekordbox,
+    onRemoveFromRekordbox,
   }: Props = $props();
 
   let checkedIds = $state<Set<number>>(new Set());
@@ -109,6 +122,21 @@
   );
   let someVisibleSelected = $derived(
     sorted.some((track) => checkedIds.has(track.id)) && !allVisibleSelected,
+  );
+
+  let selectedTracks = $derived(tracks.filter((track) => checkedIds.has(track.id)));
+  let selectedNotInRekordbox = $derived(
+    rekordboxPathIndex
+      ? selectedTracks.filter((track) => !isInRekordbox(track.path, rekordboxPathIndex))
+      : [],
+  );
+  let selectedInRekordbox = $derived(
+    rekordboxPathIndex
+      ? selectedTracks.filter((track) => isInRekordbox(track.path, rekordboxPathIndex))
+      : [],
+  );
+  let showRekordboxBulk = $derived(
+    !readonly && !!rekordboxPathIndex && (!!onAddToRekordbox || !!onRemoveFromRekordbox),
   );
 
   $effect(() => {
@@ -168,6 +196,36 @@
 
     await onbulkremove(ids);
     checkedIds = new Set();
+  }
+
+  async function handleBulkAddToRekordbox() {
+    if (!onAddToRekordbox || selectedNotInRekordbox.length === 0) return;
+    await onAddToRekordbox(selectedNotInRekordbox);
+  }
+
+  async function handleBulkRemoveFromRekordbox() {
+    if (!onRemoveFromRekordbox || selectedInRekordbox.length === 0) return;
+    const confirmed = await ask(
+      `選択中の ${selectedInRekordbox.length} 曲を Rekordbox から削除しますか？`,
+      { title: "Rekordbox から削除", kind: "warning" },
+    );
+    if (!confirmed) return;
+    await onRemoveFromRekordbox(selectedInRekordbox);
+  }
+
+  function handleRowAddToRekordbox(track: Track) {
+    void onAddToRekordbox?.([track]);
+  }
+
+  async function handleRowRemoveFromRekordbox(track: Track) {
+    if (!onRemoveFromRekordbox) return;
+    const label = track.title ?? track.path;
+    const confirmed = await ask(`「${label}」を Rekordbox から削除しますか？`, {
+      title: "Rekordbox から削除",
+      kind: "warning",
+    });
+    if (!confirmed) return;
+    await onRemoveFromRekordbox([track]);
   }
 
   function handleScroll(event: Event) {
@@ -239,12 +297,48 @@
     <span class="count">{sorted.length} tracks</span>
     {#if !readonly && checkedCount > 0}
       <span class="selection-count">{checkedCount} 曲を選択中</span>
+      {#if showRekordboxBulk}
+        {#if onAddToRekordbox}
+          <button
+            type="button"
+            class="bulk-btn accent"
+            disabled={!rekordboxWritable || rekordboxBusy || selectedNotInRekordbox.length === 0}
+            onclick={handleBulkAddToRekordbox}
+            title={rekordboxWritable
+              ? "選択曲を Rekordbox に追加"
+              : (rekordboxLockedHint ?? "Rekordbox を編集できません")}
+          >
+            Rekordboxに追加
+            {#if selectedNotInRekordbox.length > 0}
+              ({selectedNotInRekordbox.length})
+            {/if}
+          </button>
+        {/if}
+        {#if onRemoveFromRekordbox}
+          <button
+            type="button"
+            class="bulk-btn"
+            disabled={!rekordboxWritable || rekordboxBusy || selectedInRekordbox.length === 0}
+            onclick={handleBulkRemoveFromRekordbox}
+            title={rekordboxWritable
+              ? "選択曲を Rekordbox から削除"
+              : (rekordboxLockedHint ?? "Rekordbox を編集できません")}
+          >
+            Rekordboxから削除
+            {#if selectedInRekordbox.length > 0}
+              ({selectedInRekordbox.length})
+            {/if}
+          </button>
+        {/if}
+      {/if}
       <button type="button" class="bulk-btn danger" onclick={handleBulkRemove}>
         削除
       </button>
       <button type="button" class="bulk-btn" onclick={clearSelection}>
         選択解除
       </button>
+    {:else if showRekordboxBulk && !rekordboxWritable && rekordboxLockedHint}
+      <span class="rb-hint">{rekordboxLockedHint}</span>
     {/if}
     {#if headerExtra}
       {@render headerExtra()}
@@ -297,9 +391,16 @@
       selectedId={selectedId}
       {checkedIds}
       {readonly}
+      {rekordboxPathIndex}
+      {rekordboxWritable}
+      {rekordboxBusy}
       {onselect}
       {onremove}
       ontogglecheck={readonly ? undefined : toggleCheck}
+      onAddToRekordbox={onAddToRekordbox ? handleRowAddToRekordbox : undefined}
+      onRemoveFromRekordbox={onRemoveFromRekordbox
+        ? handleRowRemoveFromRekordbox
+        : undefined}
     />
   {:else}
     <div
@@ -429,9 +530,20 @@
                 checked={checkedIds.has(track.id)}
                 {readonly}
                 {removeTitle}
+                inRekordbox={rekordboxPathIndex
+                  ? isInRekordbox(track.path, rekordboxPathIndex)
+                  : false}
+                {rekordboxWritable}
+                {rekordboxBusy}
                 {onselect}
                 {onremove}
                 ontogglecheck={readonly ? undefined : toggleCheck}
+                onAddToRekordbox={onAddToRekordbox
+                  ? handleRowAddToRekordbox
+                  : undefined}
+                onRemoveFromRekordbox={onRemoveFromRekordbox
+                  ? handleRowRemoveFromRekordbox
+                  : undefined}
               />
             {/each}
           </div>
@@ -484,6 +596,12 @@
     white-space: nowrap;
   }
 
+  .rb-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
   .bulk-btn {
     padding: 0.35rem 0.75rem;
     border: 1px solid var(--border);
@@ -496,8 +614,22 @@
     white-space: nowrap;
   }
 
-  .bulk-btn:hover {
+  .bulk-btn:hover:not(:disabled) {
     background: var(--surface-hover);
+  }
+
+  .bulk-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .bulk-btn.accent {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .bulk-btn.accent:hover:not(:disabled) {
+    background: var(--accent-subtle);
   }
 
   .bulk-btn.danger {
@@ -505,7 +637,7 @@
     color: var(--danger);
   }
 
-  .bulk-btn.danger:hover {
+  .bulk-btn.danger:hover:not(:disabled) {
     background: var(--danger-subtle);
   }
 
@@ -644,7 +776,7 @@
     display: grid;
     grid-template-columns:
       2.5rem 3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
-      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 2rem;
+      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 5.5rem;
     gap: 0.6rem;
     align-items: center;
     padding: 0 1rem;

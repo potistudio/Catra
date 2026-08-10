@@ -1,3 +1,4 @@
+use super::config::load_config;
 use super::db::MasterDatabase;
 use super::ids::{new_uuid, unused_numeric_id};
 use super::write::{now_local, timestamp_sql, WriteSession};
@@ -167,6 +168,29 @@ pub fn add_content(path: String, title: Option<String>) -> Result<RekordboxConte
     }
 
     let folder_path = path.to_string_lossy().replace('/', "\\");
+
+    {
+        let db = MasterDatabase::open()?;
+        let existing_id: Option<String> = db
+            .conn()
+            .query_row(
+                "SELECT ID FROM djmdContent WHERE FolderPath = ?1 LIMIT 1",
+                params![folder_path.as_str()],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| format!("failed to lookup existing content: {error}"))?;
+        if let Some(id) = existing_id {
+            let db_dir = load_config()?
+                .db_dir
+                .ok_or_else(|| "Rekordbox database directory was not found".to_string())?;
+            let mut contents = db.get_content(Some(&id), &db_dir)?;
+            if let Some(content) = contents.pop() {
+                return Ok(content);
+            }
+        }
+    }
+
     let file_name = path
         .file_name()
         .and_then(|value| value.to_str())
