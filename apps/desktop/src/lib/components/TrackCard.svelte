@@ -119,17 +119,24 @@
     background: var(--surface-hover);
   }
 
-  .track-card.selected,
-  .track-card.checked {
-    background: var(--surface-selected);
-    border-color: var(--border);
-  }
-
+  /* Preview focus: accent frame only. Checkbox selection: surface fill. */
   .track-card.selected {
     border-color: var(--accent);
   }
 
-  .track-card.selected:hover,
+  .track-card.checked {
+    background: var(--surface-selected);
+  }
+
+  .track-card.selected.checked {
+    background: var(--surface-selected);
+    border-color: var(--accent);
+  }
+
+  .track-card.selected:hover {
+    background: var(--surface-hover);
+  }
+
   .track-card.checked:hover,
   .track-card.selected.checked:hover {
     background: var(--surface-selected-hover);

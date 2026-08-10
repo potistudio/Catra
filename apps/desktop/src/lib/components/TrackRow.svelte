@@ -143,12 +143,15 @@
     background: var(--surface-hover);
   }
 
-  .table-row.selected,
+  /* Preview focus: accent edge. Checkbox selection: surface fill. */
   .table-row.checked {
     background: var(--surface-selected);
   }
 
-  .table-row.selected:hover,
+  .table-row.selected:hover {
+    background: var(--surface-hover);
+  }
+
   .table-row.checked:hover,
   .table-row.selected.checked:hover {
     background: var(--surface-selected-hover);
@@ -189,6 +192,10 @@
   .table-row.selected .sticky-col,
   .table-row.checked .sticky-col {
     background: inherit;
+  }
+
+  .table-row.selected .sticky-col {
+    box-shadow: inset 3px 0 0 var(--accent);
   }
 
   .artwork-wrap {
