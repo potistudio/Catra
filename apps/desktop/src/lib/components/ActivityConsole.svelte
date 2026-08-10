@@ -138,7 +138,7 @@
     height: 1.25rem;
     padding: 0 0.35rem;
     border-radius: 999px;
-    background: var(--surface-hover);
+    background: var(--surface-overlay);
     color: var(--text-muted);
     font-size: 0.68rem;
     font-weight: 600;
@@ -170,6 +170,7 @@
   .close-btn:hover {
     color: var(--text);
     background: var(--surface-hover);
+    border-color: var(--surface-active);
   }
 
   .console-body {
@@ -189,7 +190,7 @@
 
   .log-entry {
     padding: 0.2rem 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid color-mix(in srgb, var(--ctp-overlay0) 18%, transparent);
   }
 
   .log-line {
@@ -220,7 +221,7 @@
     margin: 0.25rem 0 0 0;
     padding: 0.45rem 0.6rem;
     border-radius: 4px;
-    background: rgba(17, 17, 27, 0.45);
+    background: color-mix(in srgb, var(--ctp-crust) 55%, transparent);
     color: var(--text-muted);
     white-space: pre-wrap;
     word-break: break-word;

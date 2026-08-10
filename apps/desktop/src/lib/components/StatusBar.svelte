@@ -101,7 +101,7 @@
     height: 1rem;
     padding: 0 0.28rem;
     border-radius: 999px;
-    background: var(--surface-hover);
+    background: var(--surface-overlay);
     color: var(--text-muted);
     font-size: 0.62rem;
     font-weight: 600;

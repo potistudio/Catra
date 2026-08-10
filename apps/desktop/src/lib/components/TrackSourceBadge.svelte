@@ -45,18 +45,18 @@
     width: 22px;
     height: 22px;
     border-radius: 4px;
-    background: rgba(0, 0, 0, 0.65);
-    color: #fff;
+    background: var(--overlay);
+    color: var(--text);
     pointer-events: none;
   }
 
   .source-soundcloud {
     color: #ff5500;
-    background: rgba(0, 0, 0, 0.72);
+    background: var(--overlay-strong);
   }
 
   .source-bandcamp {
     color: #629aa9;
-    background: rgba(0, 0, 0, 0.72);
+    background: var(--overlay-strong);
   }
 </style>

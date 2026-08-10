@@ -110,6 +110,9 @@
     outline: none;
     width: 100%;
     min-width: 0;
+    transition:
+      background-color 0.12s ease,
+      border-color 0.12s ease;
   }
 
   .track-card:hover {
@@ -129,6 +132,12 @@
   .track-card.selected.checked {
     background: var(--accent-subtle);
     border-color: var(--accent);
+  }
+
+  .track-card.selected:hover,
+  .track-card.checked:hover,
+  .track-card.selected.checked:hover {
+    background: var(--accent-subtle-hover);
   }
 
   .track-card:focus-visible {
@@ -155,8 +164,8 @@
     right: 0.35rem;
     padding: 0.1rem 0.35rem;
     border-radius: 4px;
-    background: rgba(0, 0, 0, 0.65);
-    color: #fff;
+    background: var(--overlay);
+    color: var(--text);
     font-size: 0.7rem;
     font-variant-numeric: tabular-nums;
     line-height: 1.4;
@@ -176,8 +185,8 @@
     z-index: 1;
     padding: 0.15rem 0.4rem;
     border-radius: 4px;
-    background: rgba(0, 0, 0, 0.7);
-    color: #fff;
+    background: var(--overlay-strong);
+    color: var(--text);
     font-size: 0.68rem;
     font-weight: 600;
     letter-spacing: 0.01em;
@@ -195,7 +204,7 @@
     width: 28px;
     height: 28px;
     border-radius: 6px;
-    background: rgba(0, 0, 0, 0.55);
+    background: var(--overlay);
     opacity: 0;
     transition: opacity 0.15s;
   }
@@ -214,12 +223,15 @@
     height: 24px;
     border: none;
     border-radius: 4px;
-    background: rgba(0, 0, 0, 0.55);
-    color: #fff;
+    background: var(--overlay);
+    color: var(--text);
     cursor: pointer;
     font-size: 0.75rem;
     opacity: 0;
-    transition: opacity 0.15s;
+    transition:
+      opacity 0.15s,
+      background-color 0.12s ease,
+      color 0.12s ease;
   }
 
   .track-card:hover .remove-btn,
@@ -229,6 +241,7 @@
 
   .remove-btn:hover {
     background: var(--danger);
+    color: var(--on-accent);
   }
 
   .title {

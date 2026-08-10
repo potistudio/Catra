@@ -221,7 +221,7 @@
   }
 
   .play-btn:hover {
-    filter: brightness(1.1);
+    background: var(--accent-hover);
   }
 
   .time {

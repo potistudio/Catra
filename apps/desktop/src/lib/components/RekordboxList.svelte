@@ -919,6 +919,10 @@
     background: var(--accent-subtle);
   }
 
+  .mode-btn.active:hover {
+    background: var(--accent-subtle-hover);
+  }
+
   .sidebar-actions {
     display: flex;
     gap: 0.35rem;
@@ -948,6 +952,7 @@
   .refresh-btn:hover:not(:disabled),
   .icon-btn:hover:not(:disabled) {
     background: var(--surface-hover);
+    border-color: var(--surface-active);
   }
 
   .side-btn:disabled,
@@ -961,6 +966,11 @@
     background: var(--accent-subtle);
     color: var(--accent);
     border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  }
+
+  .refresh-btn.primary:hover:not(:disabled) {
+    background: var(--accent-subtle-hover);
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
   }
 
   .playlist-scroll {
@@ -980,11 +990,21 @@
     align-items: center;
     gap: 0.15rem;
     min-width: 0;
+    transition: background-color 0.12s ease;
+  }
+
+  .playlist-row:hover {
+    background: var(--surface-hover);
   }
 
   .playlist-row.active,
   .playlist-row.folder-selected {
     background: var(--accent-subtle);
+  }
+
+  .playlist-row.active:hover,
+  .playlist-row.folder-selected:hover {
+    background: var(--accent-subtle-hover);
   }
 
   .playlist-item {
@@ -1004,7 +1024,7 @@
   }
 
   .playlist-item:hover {
-    background: var(--surface-hover);
+    background: transparent;
   }
 
   .playlist-item.folder {
@@ -1059,7 +1079,7 @@
   .modal-backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.45);
+    background: var(--overlay);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1070,7 +1090,7 @@
     width: min(28rem, calc(100% - 2rem));
     max-height: calc(100% - 2rem);
     overflow: auto;
-    background: var(--surface);
+    background: var(--surface-overlay);
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 1rem 1.1rem;

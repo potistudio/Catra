@@ -522,6 +522,10 @@
     color: var(--accent);
   }
 
+  .tab.active:hover {
+    background: var(--accent-subtle-hover);
+  }
+
   .download-status {
     display: flex;
     align-items: center;
@@ -575,6 +579,7 @@
 
   .btn:hover:not(:disabled) {
     background: var(--surface-hover);
+    border-color: var(--surface-active);
   }
 
   .btn:disabled {
@@ -589,7 +594,8 @@
   }
 
   .btn.primary:hover:not(:disabled) {
-    filter: brightness(1.1);
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
   }
 
   .body {

@@ -107,7 +107,7 @@
     align-items: center;
     justify-content: center;
     padding: 1.5rem;
-    background: rgba(0, 0, 0, 0.65);
+    background: var(--overlay);
     backdrop-filter: blur(4px);
   }
 
@@ -118,9 +118,9 @@
     padding: 0;
     border: 1px solid var(--border);
     border-radius: 12px;
-    background: var(--surface-raised);
+    background: var(--surface-overlay);
     color: var(--text);
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 24px 64px color-mix(in srgb, var(--ctp-crust) 55%, transparent);
     box-sizing: border-box;
     overflow: hidden;
   }

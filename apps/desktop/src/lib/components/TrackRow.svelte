@@ -129,6 +129,7 @@
     border-bottom: 1px solid var(--border-subtle);
     cursor: pointer;
     outline: none;
+    transition: background-color 0.12s ease;
   }
 
   .table-row.no-actions {
@@ -152,6 +153,12 @@
 
   .table-row.selected.checked {
     background: var(--accent-subtle);
+  }
+
+  .table-row.selected:hover,
+  .table-row.checked:hover,
+  .table-row.selected.checked:hover {
+    background: var(--accent-subtle-hover);
   }
 
   .table-row:focus-visible {
@@ -185,10 +192,7 @@
     background: inherit;
   }
 
-  .table-row:hover .sticky-col {
-    background: var(--surface-hover);
-  }
-
+  .table-row:hover .sticky-col,
   .table-row.selected .sticky-col,
   .table-row.checked .sticky-col {
     background: inherit;
@@ -278,7 +282,7 @@
   }
 
   .remove-btn:hover {
-    background: var(--danger-subtle);
-    color: var(--danger);
+    background: var(--danger-subtle-hover);
+    color: var(--danger-hover);
   }
 </style>

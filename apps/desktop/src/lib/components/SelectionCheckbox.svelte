@@ -103,7 +103,7 @@
     height: 18px;
     border: 1.5px solid var(--border);
     border-radius: 4px;
-    background: var(--surface-raised);
+    background: var(--surface-overlay);
     color: var(--on-accent);
     transition:
       background 0.12s ease,
@@ -113,8 +113,8 @@
   }
 
   .selection-checkbox.overlay .box {
-    border-color: rgba(255, 255, 255, 0.55);
-    background: rgba(255, 255, 255, 0.12);
+    border-color: color-mix(in srgb, var(--text) 55%, transparent);
+    background: color-mix(in srgb, var(--text) 12%, transparent);
   }
 
   .selection-checkbox:hover .box {
@@ -123,8 +123,8 @@
   }
 
   .selection-checkbox.overlay:hover .box {
-    border-color: rgba(255, 255, 255, 0.85);
-    background: rgba(255, 255, 255, 0.22);
+    border-color: color-mix(in srgb, var(--text) 85%, transparent);
+    background: color-mix(in srgb, var(--text) 22%, transparent);
   }
 
   .selection-checkbox.checked .box,
@@ -135,7 +135,8 @@
 
   .selection-checkbox.checked:hover .box,
   .selection-checkbox.indeterminate:hover .box {
-    filter: brightness(1.08);
+    border-color: var(--accent-hover);
+    background: var(--accent-hover);
   }
 
   .native:focus-visible + .box {

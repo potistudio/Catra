@@ -699,6 +699,10 @@
     color: var(--accent);
   }
 
+  .filter-btn.active:hover {
+    background: var(--accent-subtle-hover);
+  }
+
   .filter-btn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: -2px;
@@ -769,6 +773,7 @@
 
   .command-btn:hover:not(:disabled) {
     background: var(--surface-hover);
+    border-color: var(--surface-active);
   }
 
   .command-btn:disabled {
@@ -783,7 +788,8 @@
   }
 
   .command-btn.primary:hover:not(:disabled) {
-    filter: brightness(1.08);
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
   }
 
   .command-btn.danger {
@@ -793,7 +799,8 @@
   }
 
   .command-btn.danger:hover:not(:disabled) {
-    background: var(--danger-subtle);
+    background: var(--danger-subtle-hover);
+    color: var(--danger-hover);
   }
 
   .command-btn:focus-visible {
@@ -815,6 +822,7 @@
 
   .bulk-btn:hover:not(:disabled) {
     background: var(--surface-hover);
+    border-color: var(--surface-active);
   }
 
   .bulk-btn.danger {
@@ -823,7 +831,8 @@
   }
 
   .bulk-btn.danger:hover:not(:disabled) {
-    background: var(--danger-subtle);
+    background: var(--danger-subtle-hover);
+    color: var(--danger-hover);
   }
 
   .bulk-btn:focus-visible {
@@ -898,6 +907,7 @@
 
   .sort-direction:hover {
     background: var(--surface-hover);
+    border-color: var(--surface-active);
   }
 
   .sort-direction:focus-visible {
@@ -937,6 +947,10 @@
   .view-btn.active {
     background: var(--accent-subtle);
     color: var(--accent);
+  }
+
+  .view-btn.active:hover {
+    background: var(--accent-subtle-hover);
   }
 
   .view-btn:focus-visible {
