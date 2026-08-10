@@ -679,12 +679,12 @@
   }
 
   .filter-btn.active {
-    background: var(--accent-subtle);
+    background: var(--surface-selected);
     color: var(--accent);
   }
 
   .filter-btn.active:hover {
-    background: var(--accent-subtle-hover);
+    background: var(--surface-selected-hover);
   }
 
   .filter-btn:focus-visible {
@@ -931,12 +931,12 @@
   }
 
   .view-btn.active {
-    background: var(--accent-subtle);
+    background: var(--surface-selected);
     color: var(--accent);
   }
 
   .view-btn.active:hover {
-    background: var(--accent-subtle-hover);
+    background: var(--surface-selected-hover);
   }
 
   .view-btn:focus-visible {

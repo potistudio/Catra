@@ -518,12 +518,12 @@
   }
 
   .tab.active {
-    background: var(--accent-subtle);
+    background: var(--surface-selected);
     color: var(--accent);
   }
 
   .tab.active:hover {
-    background: var(--accent-subtle-hover);
+    background: var(--surface-selected-hover);
   }
 
   .download-status {

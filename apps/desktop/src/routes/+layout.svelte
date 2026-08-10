@@ -38,11 +38,13 @@
     --surface-overlay: var(--ctp-surface0);
     --surface-hover: var(--ctp-surface0);
     --surface-active: var(--ctp-surface1);
+    --surface-selected: var(--ctp-surface1);
+    --surface-selected-hover: var(--ctp-surface2);
     --surface-crust: var(--ctp-crust);
     --border: var(--ctp-surface0);
     --border-subtle: color-mix(in srgb, var(--ctp-surface0) 55%, var(--ctp-base));
     --accent: var(--ctp-mauve);
-    --accent-hover: var(--ctp-lavender);
+    --accent-hover: color-mix(in srgb, var(--ctp-mauve) 82%, var(--ctp-text));
     --accent-subtle: color-mix(in srgb, var(--ctp-mauve) 18%, transparent);
     --accent-subtle-hover: color-mix(in srgb, var(--ctp-mauve) 28%, transparent);
     --danger: var(--ctp-red);

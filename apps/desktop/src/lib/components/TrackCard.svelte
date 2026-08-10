@@ -119,25 +119,20 @@
     background: var(--surface-hover);
   }
 
-  .track-card.selected {
-    background: var(--accent-subtle);
-    border-color: var(--accent);
-  }
-
+  .track-card.selected,
   .track-card.checked {
-    background: color-mix(in srgb, var(--accent-subtle) 60%, transparent);
-    border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+    background: var(--surface-selected);
+    border-color: var(--border);
   }
 
-  .track-card.selected.checked {
-    background: var(--accent-subtle);
+  .track-card.selected {
     border-color: var(--accent);
   }
 
   .track-card.selected:hover,
   .track-card.checked:hover,
   .track-card.selected.checked:hover {
-    background: var(--accent-subtle-hover);
+    background: var(--surface-selected-hover);
   }
 
   .track-card:focus-visible {

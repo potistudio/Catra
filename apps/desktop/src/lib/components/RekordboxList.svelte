@@ -916,11 +916,11 @@
 
   .mode-btn.active {
     color: var(--accent);
-    background: var(--accent-subtle);
+    background: var(--surface-selected);
   }
 
   .mode-btn.active:hover {
-    background: var(--accent-subtle-hover);
+    background: var(--surface-selected-hover);
   }
 
   .sidebar-actions {
@@ -999,12 +999,12 @@
 
   .playlist-row.active,
   .playlist-row.folder-selected {
-    background: var(--accent-subtle);
+    background: var(--surface-selected);
   }
 
   .playlist-row.active:hover,
   .playlist-row.folder-selected:hover {
-    background: var(--accent-subtle-hover);
+    background: var(--surface-selected-hover);
   }
 
   .playlist-item {

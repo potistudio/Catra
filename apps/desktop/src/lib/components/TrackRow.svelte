@@ -143,22 +143,15 @@
     background: var(--surface-hover);
   }
 
-  .table-row.selected {
-    background: var(--accent-subtle);
-  }
-
+  .table-row.selected,
   .table-row.checked {
-    background: color-mix(in srgb, var(--accent-subtle) 60%, transparent);
-  }
-
-  .table-row.selected.checked {
-    background: var(--accent-subtle);
+    background: var(--surface-selected);
   }
 
   .table-row.selected:hover,
   .table-row.checked:hover,
   .table-row.selected.checked:hover {
-    background: var(--accent-subtle-hover);
+    background: var(--surface-selected-hover);
   }
 
   .table-row:focus-visible {
