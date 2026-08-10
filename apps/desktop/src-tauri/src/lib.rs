@@ -8,6 +8,7 @@ mod rekordbox;
 use commands::{
     library_list_tracks, library_remove_track, library_remove_tracks, library_resolve_duplicate,
     library_scan_folder, rekordbox_check, rekordbox_db_status, rekordbox_get_content,
+    rekordbox_get_playlist_content, rekordbox_list_playlists,
 };
 use extension_server::start as start_extension_server;
 use library::init_library;
@@ -31,6 +32,8 @@ pub fn run() {
             rekordbox_check,
             rekordbox_db_status,
             rekordbox_get_content,
+            rekordbox_list_playlists,
+            rekordbox_get_playlist_content,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

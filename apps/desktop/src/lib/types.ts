@@ -104,6 +104,15 @@ export interface RekordboxDbStatus {
   playlistCount: number;
 }
 
+export interface RekordboxPlaylist {
+  id: string;
+  name: string;
+  /** 0: playlist, 1: folder, 4: smart playlist */
+  attribute: number;
+  parentId: string | null;
+  seq: number;
+}
+
 export interface RekordboxContent {
   id: string;
   folderPath: string;

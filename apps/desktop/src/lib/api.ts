@@ -4,10 +4,16 @@ import type {
   RekordboxCheck,
   RekordboxContent,
   RekordboxDbStatus,
+  RekordboxPlaylist,
   Track,
 } from "./types";
 
-export type { RekordboxCheck, RekordboxContent, RekordboxDbStatus };
+export type {
+  RekordboxCheck,
+  RekordboxContent,
+  RekordboxDbStatus,
+  RekordboxPlaylist,
+};
 
 export async function listTracks(): Promise<Track[]> {
   return invoke<Track[]>("library_list_tracks");
@@ -41,4 +47,16 @@ export async function rekordboxGetContent(
   id?: string,
 ): Promise<RekordboxContent[]> {
   return invoke<RekordboxContent[]>("rekordbox_get_content", { id });
+}
+
+export async function rekordboxListPlaylists(): Promise<RekordboxPlaylist[]> {
+  return invoke<RekordboxPlaylist[]>("rekordbox_list_playlists");
+}
+
+export async function rekordboxGetPlaylistContent(
+  playlistId: string,
+): Promise<RekordboxContent[]> {
+  return invoke<RekordboxContent[]>("rekordbox_get_playlist_content", {
+    playlistId,
+  });
 }

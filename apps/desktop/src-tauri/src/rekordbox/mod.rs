@@ -2,8 +2,10 @@ mod config;
 mod content;
 mod db;
 mod key;
+mod playlist;
 
 pub use content::RekordboxContent;
+pub use playlist::RekordboxPlaylist;
 
 use config::{is_rekordbox_running, load_config, RekordboxConfig};
 use db::MasterDatabase;
@@ -41,6 +43,21 @@ pub fn db_status() -> Result<RekordboxDbStatus, String> {
 }
 
 pub fn get_content(id: Option<String>) -> Result<Vec<RekordboxContent>, String> {
+    let (db, db_dir) = open_db()?;
+    db.get_content(id.as_deref(), &db_dir)
+}
+
+pub fn list_playlists() -> Result<Vec<RekordboxPlaylist>, String> {
+    let db = MasterDatabase::open()?;
+    db.list_playlists()
+}
+
+pub fn get_playlist_content(playlist_id: String) -> Result<Vec<RekordboxContent>, String> {
+    let (db, db_dir) = open_db()?;
+    db.get_playlist_content(&playlist_id, &db_dir)
+}
+
+fn open_db() -> Result<(MasterDatabase, std::path::PathBuf), String> {
     let config = load_config()?;
     let db_path = config
         .db_path
@@ -48,8 +65,7 @@ pub fn get_content(id: Option<String>) -> Result<Vec<RekordboxContent>, String> 
     let db_dir = config
         .db_dir
         .ok_or_else(|| "Rekordbox database directory was not found".to_string())?;
-    let db = MasterDatabase::open_path(&db_path)?;
-    db.get_content(id.as_deref(), &db_dir)
+    Ok((MasterDatabase::open_path(&db_path)?, db_dir))
 }
 
 fn to_check(config: RekordboxConfig) -> RekordboxCheck {
