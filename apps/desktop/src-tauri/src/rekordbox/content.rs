@@ -31,7 +31,7 @@ pub struct RekordboxContent {
     pub artwork_path: Option<String>,
 }
 
-const CONTENT_QUERY: &str = "
+pub(crate) const CONTENT_QUERY: &str = "
 SELECT
     c.ID,
     c.FolderPath,
@@ -101,7 +101,7 @@ impl MasterDatabase {
     }
 }
 
-fn map_content_row(row: &Row<'_>) -> rusqlite::Result<RekordboxContent> {
+pub(crate) fn map_content_row(row: &Row<'_>) -> rusqlite::Result<RekordboxContent> {
     let bpm_raw: Option<i32> = row.get(7)?;
     Ok(RekordboxContent {
         id: row.get(0)?,
@@ -118,7 +118,7 @@ fn map_content_row(row: &Row<'_>) -> rusqlite::Result<RekordboxContent> {
         bit_depth: row.get(11)?,
         comment: row.get(12)?,
         file_type: row.get(13)?,
-        rating: row.get(14)?,
+        rating: normalize_rating(row.get(14)?),
         release_year: row.get(15)?,
         key: row.get(16)?,
         remixer: row.get(17)?,
@@ -129,6 +129,17 @@ fn map_content_row(row: &Row<'_>) -> rusqlite::Result<RekordboxContent> {
         // Temporary: relative ImagePath; resolved in get_content.
         artwork_path: row.get(22)?,
     })
+}
+
+/// Map `djmdContent.Rating` onto the 0-255 scale used by the UI and ID3 POPM.
+///
+/// `master.db` stores star counts 0-5. Rekordbox XML uses 0/51/102/153/204/255.
+fn normalize_rating(rating: Option<i32>) -> Option<i32> {
+    match rating {
+        None => None,
+        Some(stars) if (0..=5).contains(&stars) => Some(stars * 51),
+        Some(value) => Some(value.clamp(0, 255)),
+    }
 }
 
 /// Resolve Rekordbox `ImagePath` to an absolute file path under the DB directory.
@@ -182,9 +193,28 @@ fn prefer_medium_artwork(path: &Path) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::{prefer_medium_artwork, resolve_artwork_path};
+    use super::{normalize_rating, prefer_medium_artwork, resolve_artwork_path};
     use std::fs;
     use std::path::PathBuf;
+
+    #[test]
+    fn normalizes_star_count_rating_to_255_scale() {
+        assert_eq!(normalize_rating(None), None);
+        assert_eq!(normalize_rating(Some(0)), Some(0));
+        assert_eq!(normalize_rating(Some(1)), Some(51));
+        assert_eq!(normalize_rating(Some(2)), Some(102));
+        assert_eq!(normalize_rating(Some(3)), Some(153));
+        assert_eq!(normalize_rating(Some(4)), Some(204));
+        assert_eq!(normalize_rating(Some(5)), Some(255));
+    }
+
+    #[test]
+    fn preserves_xml_style_255_scale_rating() {
+        assert_eq!(normalize_rating(Some(51)), Some(51));
+        assert_eq!(normalize_rating(Some(255)), Some(255));
+        assert_eq!(normalize_rating(Some(300)), Some(255));
+        assert_eq!(normalize_rating(Some(-1)), Some(0));
+    }
 
     #[test]
     fn resolves_leading_slash_share_relative_path() {
@@ -256,3 +286,4 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 }
+

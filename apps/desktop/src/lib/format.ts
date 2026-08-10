@@ -32,7 +32,11 @@ export function formatBpm(bpm: number | null): string {
 export function formatRating(rating: number | null): string {
   if (rating === null || rating === 0) return "—";
 
-  const stars = Math.max(1, Math.min(5, Math.round((rating / 255) * 5)));
+  // 1-5: star count (Rekordbox master.db). Otherwise: 0-255 (ID3 POPM / XML).
+  const stars = Math.max(
+    1,
+    Math.min(5, rating <= 5 ? Math.round(rating) : Math.round((rating / 255) * 5)),
+  );
   return `${"★".repeat(stars)}${"☆".repeat(5 - stars)}`;
 }
 
