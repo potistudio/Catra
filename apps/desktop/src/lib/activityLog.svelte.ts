@@ -2,9 +2,18 @@ import type { ActivityLogEntry, ActivityLogLevel, ActivityLogPayload } from "./t
 
 let nextId = 1;
 export const activityLogs = $state<ActivityLogEntry[]>([]);
+export const consolePanel = $state({ open: false });
 
 function isActivityLogLevel(value: string): value is ActivityLogLevel {
   return value === "info" || value === "success" || value === "warning" || value === "error";
+}
+
+export function setConsoleOpen(open: boolean) {
+  consolePanel.open = open;
+}
+
+export function toggleConsole() {
+  consolePanel.open = !consolePanel.open;
 }
 
 export function pushActivityLog(

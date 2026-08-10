@@ -8,6 +8,7 @@
   import DuplicateTrackDialog from "$lib/components/DuplicateTrackDialog.svelte";
   import PreviewPlayer from "$lib/components/PreviewPlayer.svelte";
   import RekordboxList from "$lib/components/RekordboxList.svelte";
+  import StatusBar from "$lib/components/StatusBar.svelte";
   import TrackList from "$lib/components/TrackList.svelte";
   import { rekordboxContentToPreview } from "$lib/rekordboxListView";
   import type {
@@ -298,28 +299,31 @@
     </button>
   </header>
 
-  <main class="content">
-    {#if activeTab === "library"}
-      <TrackList
-        {tracks}
-        selectedId={selectedTrack?.id ?? null}
-        onselect={handleSelect}
-        onremove={handleRemove}
-        onbulkremove={handleBulkRemove}
-      />
-    {:else}
-      <RekordboxList
-        tracks={rekordboxTracks}
-        selectedId={selectedRekordboxId}
-        loading={rekordboxLoading}
-        status={rekordboxStatus}
-        onselect={handleSelectRekordbox}
-        onrefresh={() => loadRekordbox(false)}
-      />
-    {/if}
-  </main>
+  <div class="body">
+    <main class="content">
+      {#if activeTab === "library"}
+        <TrackList
+          {tracks}
+          selectedId={selectedTrack?.id ?? null}
+          onselect={handleSelect}
+          onremove={handleRemove}
+          onbulkremove={handleBulkRemove}
+        />
+      {:else}
+        <RekordboxList
+          tracks={rekordboxTracks}
+          selectedId={selectedRekordboxId}
+          loading={rekordboxLoading}
+          status={rekordboxStatus}
+          onselect={handleSelectRekordbox}
+          onrefresh={() => loadRekordbox(false)}
+        />
+      {/if}
+    </main>
+    <ActivityConsole />
+  </div>
 
-  <ActivityConsole />
+  <StatusBar />
   <PreviewPlayer track={previewTrack} />
 </div>
 
@@ -450,9 +454,17 @@
     filter: brightness(1.1);
   }
 
+  .body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
   .content {
     display: flex;
     flex: 1;
+    min-width: 0;
     min-height: 0;
     overflow: hidden;
   }

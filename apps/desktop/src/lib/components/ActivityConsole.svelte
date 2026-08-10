@@ -2,19 +2,19 @@
   import {
     activityLogs,
     clearActivityLogs,
+    consolePanel,
     pushActivityLog,
+    setConsoleOpen,
   } from "$lib/activityLog.svelte";
   import type { ActivityLogLevel } from "$lib/types";
 
-  let isExpanded = $state(true);
   let logContainer: HTMLDivElement | undefined = $state();
 
   const logs = $derived(activityLogs);
-
   const errorCount = $derived(logs.filter((entry) => entry.level === "error").length);
 
   $effect(() => {
-    if (!logContainer || !isExpanded) return;
+    if (!logContainer || !consolePanel.open) return;
     logContainer.scrollTop = logContainer.scrollHeight;
   });
 
@@ -45,30 +45,31 @@
   }
 </script>
 
-<section class="console" class:collapsed={!isExpanded}>
-  <header class="console-header">
-    <button
-      class="toggle"
-      type="button"
-      onclick={() => (isExpanded = !isExpanded)}
-      aria-expanded={isExpanded}
-    >
-      <span class="chevron" class:open={isExpanded}>▸</span>
-      コンソール
-      {#if logs.length > 0}
-        <span class="badge">{logs.length}</span>
-      {/if}
-      {#if errorCount > 0}
-        <span class="badge error">{errorCount}</span>
-      {/if}
-    </button>
+{#if consolePanel.open}
+  <aside class="console" aria-label="コンソール">
+    <header class="console-header">
+      <div class="title">
+        コンソール
+        {#if logs.length > 0}
+          <span class="badge">{logs.length}</span>
+        {/if}
+        {#if errorCount > 0}
+          <span class="badge error">{errorCount}</span>
+        {/if}
+      </div>
+      <div class="actions">
+        <button class="clear-btn" type="button" onclick={handleClear}>クリア</button>
+        <button
+          class="close-btn"
+          type="button"
+          onclick={() => setConsoleOpen(false)}
+          aria-label="コンソールを閉じる"
+        >
+          ×
+        </button>
+      </div>
+    </header>
 
-    {#if isExpanded}
-      <button class="clear-btn" type="button" onclick={handleClear}>クリア</button>
-    {/if}
-  </header>
-
-  {#if isExpanded}
     <div class="console-body" bind:this={logContainer}>
       {#if logs.length === 0}
         <p class="empty">ログはまだありません</p>
@@ -89,28 +90,18 @@
         {/each}
       {/if}
     </div>
-  {:else if logs.length > 0}
-    <p class="preview">
-      {logs[logs.length - 1]?.message}
-    </p>
-  {/if}
-</section>
+  </aside>
+{/if}
 
 <style>
   .console {
     display: flex;
     flex-direction: column;
-    border-top: 1px solid var(--border);
-    background: #141418;
+    width: 360px;
+    flex-shrink: 0;
     min-height: 0;
-  }
-
-  .console.collapsed {
-    flex: 0 0 auto;
-  }
-
-  .console:not(.collapsed) {
-    flex: 0 0 220px;
+    border-left: 1px solid var(--border);
+    background: #141418;
   }
 
   .console-header {
@@ -121,29 +112,22 @@
     padding: 0.35rem 0.75rem;
     border-bottom: 1px solid var(--border);
     background: var(--surface-raised);
+    flex-shrink: 0;
   }
 
-  .toggle {
+  .title {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    border: none;
-    background: transparent;
     color: var(--text);
     font-size: 0.8rem;
     font-weight: 600;
-    cursor: pointer;
-    padding: 0.15rem 0;
   }
 
-  .chevron {
-    display: inline-block;
-    transition: transform 0.15s ease;
-    color: var(--text-muted);
-  }
-
-  .chevron.open {
-    transform: rotate(90deg);
+  .actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
   }
 
   .badge {
@@ -165,7 +149,8 @@
     color: var(--danger);
   }
 
-  .clear-btn {
+  .clear-btn,
+  .close-btn {
     border: 1px solid var(--border);
     border-radius: 4px;
     background: transparent;
@@ -175,7 +160,14 @@
     cursor: pointer;
   }
 
-  .clear-btn:hover {
+  .close-btn {
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0.15rem 0.45rem;
+  }
+
+  .clear-btn:hover,
+  .close-btn:hover {
     color: var(--text);
     background: var(--surface-hover);
   }
@@ -189,15 +181,10 @@
     line-height: 1.45;
   }
 
-  .empty,
-  .preview {
+  .empty {
     margin: 0;
-    padding: 0.35rem 0.75rem 0.5rem;
     color: var(--text-muted);
     font-size: 0.75rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .log-entry {
@@ -230,7 +217,7 @@
   }
 
   .detail {
-    margin: 0.25rem 0 0 7.35rem;
+    margin: 0.25rem 0 0 0;
     padding: 0.45rem 0.6rem;
     border-radius: 4px;
     background: rgba(0, 0, 0, 0.25);
