@@ -1,6 +1,7 @@
 use super::db::MasterDatabase;
 use rusqlite::{params, Row};
 use serde::Serialize;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,6 +28,7 @@ pub struct RekordboxContent {
     pub composer: Option<String>,
     pub file_size: Option<i32>,
     pub disc_no: Option<i32>,
+    pub artwork_path: Option<String>,
 }
 
 const CONTENT_QUERY: &str = "
@@ -52,7 +54,8 @@ SELECT
     label.Name,
     composer.Name,
     c.FileSize,
-    c.DiscNo
+    c.DiscNo,
+    c.ImagePath
 FROM djmdContent c
 LEFT JOIN djmdArtist artist ON c.ArtistID = artist.ID
 LEFT JOIN djmdAlbum album ON c.AlbumID = album.ID
@@ -64,7 +67,11 @@ LEFT JOIN djmdArtist composer ON c.ComposerID = composer.ID
 ";
 
 impl MasterDatabase {
-    pub fn get_content(&self, id: Option<&str>) -> Result<Vec<RekordboxContent>, String> {
+    pub fn get_content(
+        &self,
+        id: Option<&str>,
+        db_dir: &Path,
+    ) -> Result<Vec<RekordboxContent>, String> {
         let sql = match id {
             Some(_) => format!("{CONTENT_QUERY} WHERE c.ID = ?1"),
             None => CONTENT_QUERY.to_string(),
@@ -81,8 +88,16 @@ impl MasterDatabase {
         }
         .map_err(|error| error.to_string())?;
 
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|error| error.to_string())
+        let mut contents = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())?;
+
+        for content in &mut contents {
+            content.artwork_path =
+                resolve_artwork_path(db_dir, content.artwork_path.as_deref());
+        }
+
+        Ok(contents)
     }
 }
 
@@ -111,5 +126,133 @@ fn map_content_row(row: &Row<'_>) -> rusqlite::Result<RekordboxContent> {
         composer: row.get(19)?,
         file_size: row.get(20)?,
         disc_no: row.get(21)?,
+        // Temporary: relative ImagePath; resolved in get_content.
+        artwork_path: row.get(22)?,
     })
+}
+
+/// Resolve Rekordbox `ImagePath` to an absolute file path under the DB directory.
+pub(crate) fn resolve_artwork_path(db_dir: &Path, image_path: Option<&str>) -> Option<String> {
+    let relative = normalize_image_path(image_path?)?;
+    let path = Path::new(relative);
+
+    let candidates: Vec<PathBuf> = if path.is_absolute() {
+        vec![path.to_path_buf()]
+    } else {
+        // ImagePath is stored like `/PIONEER/Artwork/.../artwork.jpg` (share-relative).
+        vec![
+            db_dir.join("share").join(path),
+            db_dir.join(path),
+        ]
+    };
+
+    for candidate in candidates {
+        if let Some(resolved) = prefer_medium_artwork(&candidate) {
+            return Some(resolved.to_string_lossy().into_owned());
+        }
+    }
+
+    None
+}
+
+fn normalize_image_path(image_path: &str) -> Option<&str> {
+    let trimmed = image_path.trim().trim_start_matches(['/', '\\']);
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
+fn prefer_medium_artwork(path: &Path) -> Option<PathBuf> {
+    if let (Some(stem), Some(ext)) = (
+        path.file_stem().and_then(|value| value.to_str()),
+        path.extension().and_then(|value| value.to_str()),
+    ) {
+        if !stem.ends_with("_m") && !stem.ends_with("_s") {
+            let medium = path.with_file_name(format!("{stem}_m.{ext}"));
+            if medium.is_file() {
+                return Some(medium);
+            }
+        }
+    }
+
+    path.is_file().then(|| path.to_path_buf())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{prefer_medium_artwork, resolve_artwork_path};
+    use std::fs;
+    use std::path::PathBuf;
+
+    #[test]
+    fn resolves_leading_slash_share_relative_path() {
+        let root = std::env::temp_dir().join(format!(
+            "catra-rb-art-slash-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let art_dir = root.join("share/PIONEER/Artwork/000/abc");
+        fs::create_dir_all(&art_dir).unwrap();
+        let jpg = art_dir.join("artwork.jpg");
+        let medium = art_dir.join("artwork_m.jpg");
+        fs::write(&jpg, b"full").unwrap();
+        fs::write(&medium, b"med").unwrap();
+
+        let resolved = resolve_artwork_path(
+            &root,
+            Some("/PIONEER/Artwork/000/abc/artwork.jpg"),
+        )
+        .expect("resolved");
+        assert_eq!(PathBuf::from(resolved), medium);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn resolves_relative_image_path_under_share() {
+        let root = std::env::temp_dir().join(format!(
+            "catra-rb-art-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let art_dir = root.join("share/PIONEER/Artwork/000/abc");
+        fs::create_dir_all(&art_dir).unwrap();
+        let jpg = art_dir.join("artwork.jpg");
+        let medium = art_dir.join("artwork_m.jpg");
+        fs::write(&jpg, b"full").unwrap();
+        fs::write(&medium, b"med").unwrap();
+
+        let resolved = resolve_artwork_path(
+            &root,
+            Some("share/PIONEER/Artwork/000/abc/artwork.jpg"),
+        )
+        .expect("resolved");
+        assert_eq!(PathBuf::from(resolved), medium);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn prefers_medium_when_present() {
+        let root = std::env::temp_dir().join(format!(
+            "catra-rb-art-med-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let jpg = root.join("artwork.jpg");
+        let medium = root.join("artwork_m.jpg");
+        fs::write(&jpg, b"full").unwrap();
+        fs::write(&medium, b"med").unwrap();
+        assert_eq!(prefer_medium_artwork(&jpg), Some(medium));
+        let _ = fs::remove_dir_all(root);
+    }
 }

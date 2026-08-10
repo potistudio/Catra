@@ -9,12 +9,21 @@
     track: Track;
     selected: boolean;
     checked: boolean;
+    readonly?: boolean;
     onselect: (track: Track) => void;
-    onremove: (track: Track) => void;
-    ontogglecheck: (track: Track) => void;
+    onremove?: (track: Track) => void;
+    ontogglecheck?: (track: Track) => void;
   }
 
-  let { track, selected, checked, onselect, onremove, ontogglecheck }: Props = $props();
+  let {
+    track,
+    selected,
+    checked,
+    readonly = false,
+    onselect,
+    onremove,
+    ontogglecheck,
+  }: Props = $props();
 
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === "Enter" || event.key === " ") {
@@ -48,31 +57,35 @@
         <TrackSourceBadge source={track.source} />
       </span>
     {/if}
-    <label class="checkbox-wrap" title="選択">
-      <input
-        type="checkbox"
-        class="checkbox"
-        {checked}
-        aria-label={`${displayTitle(track)} を選択`}
+    {#if !readonly && ontogglecheck}
+      <label class="checkbox-wrap" title="選択">
+        <input
+          type="checkbox"
+          class="checkbox"
+          {checked}
+          aria-label={`${displayTitle(track)} を選択`}
+          onclick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            ontogglecheck(track);
+          }}
+        />
+      </label>
+    {/if}
+    {#if !readonly && onremove}
+      <button
+        type="button"
+        class="remove-btn"
         onclick={(e) => {
-          e.preventDefault();
           e.stopPropagation();
-          ontogglecheck(track);
+          onremove(track);
         }}
-      />
-    </label>
-    <button
-      type="button"
-      class="remove-btn"
-      onclick={(e) => {
-        e.stopPropagation();
-        onremove(track);
-      }}
-      aria-label="Remove from library"
-      title="ライブラリから削除"
-    >
-      ✕
-    </button>
+        aria-label="Remove from library"
+        title="ライブラリから削除"
+      >
+        ✕
+      </button>
+    {/if}
   </div>
   <span class="title">{displayTitle(track)}</span>
   <span class="artist">{displayArtist(track)}</span>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import TrackGrid from "$lib/components/TrackGrid.svelte";
   import TrackRow from "$lib/components/TrackRow.svelte";
   import type { Track } from "$lib/types";
@@ -27,12 +28,28 @@
   interface Props {
     tracks: Track[];
     selectedId: number | null;
+    readonly?: boolean;
+    searchPlaceholder?: string;
+    emptyTitle?: string;
+    emptyHint?: string;
+    headerExtra?: Snippet;
     onselect: (track: Track) => void;
-    onremove: (track: Track) => void;
-    onbulkremove: (ids: number[]) => void | Promise<void>;
+    onremove?: (track: Track) => void;
+    onbulkremove?: (ids: number[]) => void | Promise<void>;
   }
 
-  let { tracks, selectedId, onselect, onremove, onbulkremove }: Props = $props();
+  let {
+    tracks,
+    selectedId,
+    readonly = false,
+    searchPlaceholder = "トラックを検索...",
+    emptyTitle = "ライブラリにトラックがありません",
+    emptyHint = "フォルダを追加して音楽をスキャンしてください",
+    headerExtra,
+    onselect,
+    onremove,
+    onbulkremove,
+  }: Props = $props();
 
   let checkedIds = $state<Set<number>>(new Set());
   let selectAllCheckbox = $state<HTMLInputElement | null>(null);
@@ -135,6 +152,7 @@
   }
 
   async function handleBulkRemove() {
+    if (!onbulkremove) return;
     const ids = [...checkedIds];
     if (ids.length === 0) return;
     if (!confirm(`${ids.length} 曲をライブラリから削除しますか？`)) return;
@@ -168,24 +186,26 @@
     <input
       class="search"
       type="search"
-      placeholder="トラックを検索..."
+      placeholder={searchPlaceholder}
       bind:value={queryInput}
     />
     {#if viewMode === "grid"}
-      <label class="select-all-grid">
-        <input
-          type="checkbox"
-          class="checkbox"
-          bind:this={selectAllCheckbox}
-          checked={allVisibleSelected}
-          aria-label="表示中のトラックをすべて選択"
-          onclick={(e) => {
-            e.preventDefault();
-            toggleSelectAll();
-          }}
-        />
-        全選択
-      </label>
+      {#if !readonly}
+        <label class="select-all-grid">
+          <input
+            type="checkbox"
+            class="checkbox"
+            bind:this={selectAllCheckbox}
+            checked={allVisibleSelected}
+            aria-label="表示中のトラックをすべて選択"
+            onclick={(e) => {
+              e.preventDefault();
+              toggleSelectAll();
+            }}
+          />
+          全選択
+        </label>
+      {/if}
       <div class="grid-sort">
         <label class="sort-label" for="grid-sort-column">並び替え</label>
         <select
@@ -208,7 +228,7 @@
       </div>
     {/if}
     <span class="count">{sorted.length} tracks</span>
-    {#if checkedCount > 0}
+    {#if !readonly && checkedCount > 0}
       <span class="selection-count">{checkedCount} 曲を選択中</span>
       <button type="button" class="bulk-btn danger" onclick={handleBulkRemove}>
         削除
@@ -216,6 +236,9 @@
       <button type="button" class="bulk-btn" onclick={clearSelection}>
         選択解除
       </button>
+    {/if}
+    {#if headerExtra}
+      {@render headerExtra()}
     {/if}
     <div class="view-toggle" role="group" aria-label="表示切替">
       <button
@@ -253,8 +276,8 @@
   {#if sorted.length === 0}
     <div class="empty">
       {#if tracks.length === 0}
-        <p>ライブラリにトラックがありません</p>
-        <p class="hint">フォルダを追加して音楽をスキャンしてください</p>
+        <p>{emptyTitle}</p>
+        <p class="hint">{emptyHint}</p>
       {:else}
         <p>検索に一致するトラックがありません</p>
       {/if}
@@ -264,9 +287,10 @@
       tracks={sorted}
       selectedId={selectedId}
       {checkedIds}
+      {readonly}
       {onselect}
       {onremove}
-      ontogglecheck={toggleCheck}
+      ontogglecheck={readonly ? undefined : toggleCheck}
     />
   {:else}
     <div
@@ -279,17 +303,19 @@
       <div class="table-inner">
         <div class="table-header" role="row">
           <span class="checkbox-cell sticky-col" role="columnheader">
-            <input
-              type="checkbox"
-              class="checkbox"
-              bind:this={selectAllCheckbox}
-              checked={allVisibleSelected}
-              aria-label="表示中のトラックをすべて選択"
-              onclick={(e) => {
-                e.preventDefault();
-                toggleSelectAll();
-              }}
-            />
+            {#if !readonly}
+              <input
+                type="checkbox"
+                class="checkbox"
+                bind:this={selectAllCheckbox}
+                checked={allVisibleSelected}
+                aria-label="表示中のトラックをすべて選択"
+                onclick={(e) => {
+                  e.preventDefault();
+                  toggleSelectAll();
+                }}
+              />
+            {/if}
           </span>
           <span role="columnheader">ジャケット</span>
           <button
@@ -392,9 +418,10 @@
                 {track}
                 selected={selectedId === track.id}
                 checked={checkedIds.has(track.id)}
+                {readonly}
                 {onselect}
                 {onremove}
-                ontogglecheck={toggleCheck}
+                ontogglecheck={readonly ? undefined : toggleCheck}
               />
             {/each}
           </div>

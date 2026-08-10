@@ -127,4 +127,5 @@ export interface RekordboxContent {
   composer: string | null;
   fileSize: number | null;
   discNo: number | null;
+  artworkPath: string | null;
 }

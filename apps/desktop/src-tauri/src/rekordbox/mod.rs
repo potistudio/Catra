@@ -41,8 +41,15 @@ pub fn db_status() -> Result<RekordboxDbStatus, String> {
 }
 
 pub fn get_content(id: Option<String>) -> Result<Vec<RekordboxContent>, String> {
-    let db = MasterDatabase::open()?;
-    db.get_content(id.as_deref())
+    let config = load_config()?;
+    let db_path = config
+        .db_path
+        .ok_or_else(|| "Rekordbox master.db was not found".to_string())?;
+    let db_dir = config
+        .db_dir
+        .ok_or_else(|| "Rekordbox database directory was not found".to_string())?;
+    let db = MasterDatabase::open_path(&db_path)?;
+    db.get_content(id.as_deref(), &db_dir)
 }
 
 fn to_check(config: RekordboxConfig) -> RekordboxCheck {

@@ -17,12 +17,21 @@
     track: Track;
     selected: boolean;
     checked: boolean;
+    readonly?: boolean;
     onselect: (track: Track) => void;
-    onremove: (track: Track) => void;
-    ontogglecheck: (track: Track) => void;
+    onremove?: (track: Track) => void;
+    ontogglecheck?: (track: Track) => void;
   }
 
-  let { track, selected, checked, onselect, onremove, ontogglecheck }: Props = $props();
+  let {
+    track,
+    selected,
+    checked,
+    readonly = false,
+    onselect,
+    onremove,
+    ontogglecheck,
+  }: Props = $props();
 
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === "Enter" || event.key === " ") {
@@ -43,17 +52,19 @@
   ondblclick={() => onselect(track)}
 >
   <span class="cell checkbox-cell sticky-col" role="gridcell">
-    <input
-      type="checkbox"
-      class="checkbox"
-      {checked}
-      aria-label={`${displayTitle(track)} を選択`}
-      onclick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        ontogglecheck(track);
-      }}
-    />
+    {#if !readonly && ontogglecheck}
+      <input
+        type="checkbox"
+        class="checkbox"
+        {checked}
+        aria-label={`${displayTitle(track)} を選択`}
+        onclick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          ontogglecheck(track);
+        }}
+      />
+    {/if}
   </span>
   <span class="cell artwork-cell" role="gridcell">
     <div class="artwork-wrap">
@@ -77,17 +88,19 @@
   </span>
   <span class="cell mono" role="gridcell">{formatDuration(track.durationMs)}</span>
   <span class="cell actions" role="gridcell">
-    <button
-      class="remove-btn"
-      onclick={(e) => {
-        e.stopPropagation();
-        onremove(track);
-      }}
-      aria-label="Remove from library"
-      title="ライブラリから削除"
-    >
-      ✕
-    </button>
+    {#if !readonly && onremove}
+      <button
+        class="remove-btn"
+        onclick={(e) => {
+          e.stopPropagation();
+          onremove(track);
+        }}
+        aria-label="Remove from library"
+        title="ライブラリから削除"
+      >
+        ✕
+      </button>
+    {/if}
   </span>
 </div>
 

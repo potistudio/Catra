@@ -12,12 +12,21 @@
     tracks: Track[];
     selectedId: number | null;
     checkedIds: Set<number>;
+    readonly?: boolean;
     onselect: (track: Track) => void;
-    onremove: (track: Track) => void;
-    ontogglecheck: (track: Track) => void;
+    onremove?: (track: Track) => void;
+    ontogglecheck?: (track: Track) => void;
   }
 
-  let { tracks, selectedId, checkedIds, onselect, onremove, ontogglecheck }: Props = $props();
+  let {
+    tracks,
+    selectedId,
+    checkedIds,
+    readonly = false,
+    onselect,
+    onremove,
+    ontogglecheck,
+  }: Props = $props();
 
   let scrollTop = $state(0);
   let viewportHeight = $state(0);
@@ -74,6 +83,7 @@
           {track}
           selected={selectedId === track.id}
           checked={checkedIds.has(track.id)}
+          {readonly}
           {onselect}
           {onremove}
           {ontogglecheck}
