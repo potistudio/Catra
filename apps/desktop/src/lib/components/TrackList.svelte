@@ -353,6 +353,9 @@
       </div>
     {/if}
     <span class="count">{sorted.length} tracks</span>
+    {#if commandBarMode && !rekordboxWritable && rekordboxLockedHint}
+      <span class="rb-hint">{rekordboxLockedHint}</span>
+    {/if}
     {#if !commandBarMode && !readonly && checkedCount > 0}
       <span class="selection-count">{checkedCount} 曲を選択中</span>
       <button type="button" class="bulk-btn danger" onclick={handleBulkRemove}>
@@ -397,65 +400,6 @@
       </button>
     </div>
   </div>
-
-  {#if showCommandBar}
-    <div class="command-bar" aria-label="トラック操作">
-      <span class="command-summary">{targetSummary}</span>
-      <button type="button" class="bulk-btn" onclick={clearSelection}>
-        選択解除
-      </button>
-      <div class="command-rekordbox">
-        {#if !rekordboxWritable && rekordboxLockedHint}
-          <span class="rb-hint">{rekordboxLockedHint}</span>
-        {/if}
-        {#if onAddToRekordbox}
-          <button
-            type="button"
-            class="command-btn primary"
-            disabled={!rekordboxWritable ||
-              rekordboxBusy ||
-              targetNotInRekordbox.length === 0}
-            onclick={handleAddToRekordbox}
-          >
-            Rekordboxに追加
-            {#if targetNotInRekordbox.length > 0}
-              ({targetNotInRekordbox.length})
-            {/if}
-          </button>
-        {/if}
-        {#if onRemoveFromRekordbox}
-          <button
-            type="button"
-            class="command-btn"
-            disabled={!rekordboxWritable ||
-              rekordboxBusy ||
-              targetInRekordbox.length === 0}
-            onclick={handleRemoveFromRekordbox}
-          >
-            Rekordboxから削除
-            {#if targetInRekordbox.length > 0}
-              ({targetInRekordbox.length})
-            {/if}
-          </button>
-        {/if}
-      </div>
-      <div class="command-spacer"></div>
-      {#if onbulkremove || onremove}
-        <button
-          type="button"
-          class="command-btn danger"
-          disabled={rekordboxBusy}
-          onclick={handleLibraryRemove}
-        >
-          ライブラリから削除
-        </button>
-      {/if}
-    </div>
-  {:else if commandBarMode && !rekordboxWritable && rekordboxLockedHint}
-    <div class="command-bar idle">
-      <span class="rb-hint">{rekordboxLockedHint}</span>
-    </div>
-  {/if}
 
   {#if sorted.length === 0}
     <div class="empty">
@@ -619,10 +563,63 @@
       </div>
     </div>
   {/if}
+
+  {#if showCommandBar}
+    <div class="command-bar" aria-label="トラック操作">
+      <span class="command-summary">{targetSummary}</span>
+      <button type="button" class="bulk-btn" onclick={clearSelection}>
+        選択解除
+      </button>
+      <div class="command-rekordbox">
+        {#if onAddToRekordbox}
+          <button
+            type="button"
+            class="command-btn primary"
+            disabled={!rekordboxWritable ||
+              rekordboxBusy ||
+              targetNotInRekordbox.length === 0}
+            onclick={handleAddToRekordbox}
+          >
+            Rekordboxに追加
+            {#if targetNotInRekordbox.length > 0}
+              ({targetNotInRekordbox.length})
+            {/if}
+          </button>
+        {/if}
+        {#if onRemoveFromRekordbox}
+          <button
+            type="button"
+            class="command-btn"
+            disabled={!rekordboxWritable ||
+              rekordboxBusy ||
+              targetInRekordbox.length === 0}
+            onclick={handleRemoveFromRekordbox}
+          >
+            Rekordboxから削除
+            {#if targetInRekordbox.length > 0}
+              ({targetInRekordbox.length})
+            {/if}
+          </button>
+        {/if}
+      </div>
+      <div class="command-spacer"></div>
+      {#if onbulkremove || onremove}
+        <button
+          type="button"
+          class="command-btn danger"
+          disabled={rekordboxBusy}
+          onclick={handleLibraryRemove}
+        >
+          ライブラリから削除
+        </button>
+      {/if}
+    </div>
+  {/if}
 </div>
 
 <style>
   .track-list {
+    position: relative;
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -708,17 +705,19 @@
   }
 
   .command-bar {
+    position: absolute;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    z-index: 5;
     display: flex;
     align-items: center;
     gap: 0.65rem;
-    padding: 0.65rem 1.25rem;
-    border-bottom: 1px solid var(--border);
+    padding: 0.65rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
     background: var(--surface-raised);
     flex-wrap: wrap;
-  }
-
-  .command-bar.idle {
-    justify-content: flex-start;
   }
 
   .command-summary {
