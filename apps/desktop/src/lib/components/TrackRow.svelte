@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SelectionCheckbox from "$lib/components/SelectionCheckbox.svelte";
   import TrackArtwork from "$lib/components/TrackArtwork.svelte";
   import TrackSourceBadge from "$lib/components/TrackSourceBadge.svelte";
   import type { Track } from "$lib/types";
@@ -60,16 +61,10 @@
 >
   <span class="cell checkbox-cell sticky-col" role="gridcell">
     {#if !readonly && ontogglecheck}
-      <input
-        type="checkbox"
-        class="checkbox"
+      <SelectionCheckbox
         {checked}
-        aria-label={`${displayTitle(track)} を選択`}
-        onclick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          ontogglecheck(track);
-        }}
+        label={`${displayTitle(track)} を選択`}
+        onToggle={() => ontogglecheck(track)}
       />
     {/if}
   </span>
@@ -197,15 +192,6 @@
   .table-row.selected .sticky-col,
   .table-row.checked .sticky-col {
     background: inherit;
-  }
-
-  .checkbox {
-    width: 18px;
-    height: 18px;
-    margin: 0;
-    cursor: pointer;
-    accent-color: var(--accent);
-    flex-shrink: 0;
   }
 
   .artwork-wrap {

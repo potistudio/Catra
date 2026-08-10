@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { ask } from "@tauri-apps/plugin-dialog";
+  import SelectionCheckbox from "$lib/components/SelectionCheckbox.svelte";
   import TrackGrid from "$lib/components/TrackGrid.svelte";
   import TrackRow from "$lib/components/TrackRow.svelte";
   import type { Track } from "$lib/types";
@@ -78,7 +79,6 @@
   let showRowRemove = $derived(!commandBarMode && !readonly && !!onremove);
 
   let checkedIds = $state<Set<number>>(new Set());
-  let selectAllCheckbox = $state<HTMLInputElement | null>(null);
   let membershipFilter = $state<MembershipFilter>("all");
 
   let queryInput = $state("");
@@ -180,12 +180,6 @@
   });
 
   let showCommandBar = $derived(commandBarMode && targetTracks.length > 0);
-
-  $effect(() => {
-    if (selectAllCheckbox) {
-      selectAllCheckbox.indeterminate = someVisibleSelected;
-    }
-  });
 
   $effect(() => {
     const validIds = new Set(tracks.map((track) => track.id));
@@ -336,20 +330,17 @@
     {/if}
     {#if viewMode === "grid"}
       {#if !readonly}
-        <label class="select-all-grid">
-          <input
-            type="checkbox"
-            class="checkbox"
-            bind:this={selectAllCheckbox}
+        <div class="select-all-grid">
+          <SelectionCheckbox
             checked={allVisibleSelected}
-            aria-label="表示中のトラックをすべて選択"
-            onclick={(e) => {
-              e.preventDefault();
-              toggleSelectAll();
-            }}
+            indeterminate={someVisibleSelected}
+            label="表示中のトラックをすべて選択"
+            onToggle={toggleSelectAll}
           />
-          全選択
-        </label>
+          <button type="button" class="select-all-label" onclick={toggleSelectAll}>
+            全選択
+          </button>
+        </div>
       {/if}
       <div class="grid-sort">
         <label class="sort-label" for="grid-sort-column">並び替え</label>
@@ -514,16 +505,11 @@
         <div class="table-header" role="row">
           <span class="checkbox-cell sticky-col" role="columnheader">
             {#if !readonly}
-              <input
-                type="checkbox"
-                class="checkbox"
-                bind:this={selectAllCheckbox}
+              <SelectionCheckbox
                 checked={allVisibleSelected}
-                aria-label="表示中のトラックをすべて選択"
-                onclick={(e) => {
-                  e.preventDefault();
-                  toggleSelectAll();
-                }}
+                indeterminate={someVisibleSelected}
+                label="表示中のトラックをすべて選択"
+                onToggle={toggleSelectAll}
               />
             {/if}
           </span>
@@ -848,12 +834,28 @@
   .select-all-grid {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.4rem;
+    white-space: nowrap;
+  }
+
+  .select-all-label {
+    padding: 0;
+    border: none;
+    background: transparent;
     font-size: 0.8rem;
     color: var(--text-muted);
-    white-space: nowrap;
     cursor: pointer;
     user-select: none;
+  }
+
+  .select-all-label:hover {
+    color: var(--text);
+  }
+
+  .select-all-label:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 
   .grid-sort {
@@ -1043,15 +1045,6 @@
     left: 0;
     z-index: 2;
     background: var(--surface);
-  }
-
-  .checkbox {
-    width: 18px;
-    height: 18px;
-    margin: 0;
-    cursor: pointer;
-    accent-color: var(--accent);
-    flex-shrink: 0;
   }
 
   .virtual-body {

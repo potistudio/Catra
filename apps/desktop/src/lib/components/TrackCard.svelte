@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SelectionCheckbox from "$lib/components/SelectionCheckbox.svelte";
   import TrackArtwork from "$lib/components/TrackArtwork.svelte";
   import TrackSourceBadge from "$lib/components/TrackSourceBadge.svelte";
   import type { Track } from "$lib/types";
@@ -65,19 +66,15 @@
       <span class="rb-badge" title="Rekordbox に登録済み">Rekordbox</span>
     {/if}
     {#if !readonly && ontogglecheck}
-      <label class="checkbox-wrap" title="選択">
-        <input
-          type="checkbox"
-          class="checkbox"
+      <div class="checkbox-wrap" class:visible={checked}>
+        <SelectionCheckbox
           {checked}
-          aria-label={`${displayTitle(track)} を選択`}
-          onclick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            ontogglecheck(track);
-          }}
+          variant="overlay"
+          label={`${displayTitle(track)} を選択`}
+          title="選択"
+          onToggle={() => ontogglecheck(track)}
         />
-      </label>
+      </div>
     {/if}
     {#if showRowRemove && !readonly && onremove}
       <button
@@ -199,15 +196,14 @@
     height: 28px;
     border-radius: 6px;
     background: rgba(0, 0, 0, 0.55);
-    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
   }
 
-  .checkbox {
-    width: 18px;
-    height: 18px;
-    margin: 0;
-    cursor: pointer;
-    accent-color: var(--accent);
+  .track-card:hover .checkbox-wrap,
+  .track-card:focus-within .checkbox-wrap,
+  .checkbox-wrap.visible {
+    opacity: 1;
   }
 
   .remove-btn {
