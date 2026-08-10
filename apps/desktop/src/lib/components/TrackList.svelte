@@ -189,7 +189,7 @@
   }
 
   function toggleSelectAll() {
-    if (allVisibleSelected) {
+    if (allVisibleSelected || someVisibleSelected) {
       const next = new Set(checkedIds);
       for (const track of sorted) {
         next.delete(track.id);
@@ -203,10 +203,6 @@
       next.add(track.id);
     }
     checkedIds = next;
-  }
-
-  function clearSelection() {
-    checkedIds = new Set();
   }
 
   async function handleLibraryRemove() {
@@ -360,9 +356,6 @@
       <span class="selection-count">{checkedCount} 曲を選択中</span>
       <button type="button" class="bulk-btn danger" onclick={handleBulkRemove}>
         削除
-      </button>
-      <button type="button" class="bulk-btn" onclick={clearSelection}>
-        選択解除
       </button>
     {/if}
     {#if headerExtra}
@@ -567,9 +560,6 @@
   {#if showCommandBar}
     <div class="command-bar" aria-label="トラック操作">
       <span class="command-summary">{targetSummary}</span>
-      <button type="button" class="bulk-btn" onclick={clearSelection}>
-        選択解除
-      </button>
       <div class="command-rekordbox">
         {#if onAddToRekordbox}
           <button
