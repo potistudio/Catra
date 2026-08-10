@@ -154,8 +154,10 @@
     display: flex;
     flex-direction: column;
     gap: 0.1rem;
-    min-width: 180px;
-    max-width: 320px;
+    flex: 0 0 280px;
+    width: 280px;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .preview-title {
