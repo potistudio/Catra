@@ -88,6 +88,23 @@
   color: inherit;
 }
 
+.catra-sc-classic-download.catra-sc-download-btn {
+  position: relative;
+}
+
+.catra-sc-classic-download.is-loading {
+  color: transparent !important;
+}
+
+.catra-sc-classic-download.is-loading::before {
+  visibility: hidden;
+}
+
+.catra-sc-classic-download .catra-sc-progress-label {
+  color: #333;
+  font-size: 0.55rem;
+}
+
 @keyframes catra-sc-spin {
   to {
     transform: rotate(360deg);

@@ -33,8 +33,9 @@ flowchart TB
 | Step | Behavior |
 |------|----------|
 | Frame gate | Skip top frame when it embeds an `/n/` track iframe and has no local `mui-16ytee5` |
-| Container | `.mui-16ytee5` with the most visible `MuiIconButton-root` children |
-| Position | Insert before `button[aria-label="More menu"]` |
+| Container (new UI) | `.mui-16ytee5` with the most visible `MuiIconButton-root` children |
+| Container (classic list) | `.playableTile__actionWrapper` |
+| Position | Insert before More (`button[aria-label="More menu"]` or `.sc-button-more`) |
 | URL | Strip `/n/` prefix and query params for download (`soundcloud.com/{user}/{track}`) |
 
 ### Playlist pages

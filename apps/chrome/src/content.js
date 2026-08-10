@@ -2,7 +2,10 @@ const INLINE_BUTTON_ID = "catra-sc-inline-download";
 const PLAYLIST_BUTTON_ID = "catra-sc-playlist-download";
 const LIST_BUTTON_CLASS = "catra-sc-list-download";
 const TRACK_ACTION_CONTAINER_CLASS = "mui-16ytee5";
+const PLAYABLE_TILE_ACTION_WRAPPER = ".playableTile__actionWrapper";
 const MORE_MENU_SELECTOR = 'button[aria-label="More menu"]';
+const CLASSIC_MORE_SELECTOR =
+  '.sc-button-more, button[title="More"], button[aria-label="More"]';
 const SUCCESS_RESET_MS = 2000;
 const POLL_INTERVAL_MS = 500;
 const PROGRESS_POLL_MS = 400;
@@ -762,6 +765,140 @@ function createListDownloadButton(trackUrl, templateButton) {
   return button;
 }
 
+function getClassicButtonClassName(templateButton) {
+  if (templateButton?.className) {
+    return `${templateButton.className
+      .replace(/\bsc-button-more\b/g, "sc-button-download")
+      .replace(/\bsc-button-selected\b/g, "")
+      .replace(/\s+/g, " ")
+      .trim()} ${LIST_BUTTON_CLASS} catra-sc-download-btn catra-sc-classic-download`;
+  }
+
+  return [
+    "sc-button-small",
+    "sc-button-icon",
+    "sc-button-responsive",
+    "sc-button",
+    "sc-button-download",
+    LIST_BUTTON_CLASS,
+    "catra-sc-download-btn",
+    "catra-sc-classic-download",
+  ].join(" ");
+}
+
+function createClassicListDownloadButton(trackUrl, templateButton) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.tabIndex = 0;
+  button.className = getClassicButtonClassName(templateButton);
+  button.title = "Download";
+  button.setAttribute("aria-label", "ダウンロード");
+  button.textContent = "Download";
+  button.dataset.trackUrl = trackUrl;
+
+  const progressLabel = document.createElement("span");
+  progressLabel.className = "catra-sc-progress-label";
+  progressLabel.hidden = true;
+  button.appendChild(progressLabel);
+
+  button.addEventListener("click", async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    await downloadTrack(trackUrl, button);
+  });
+
+  return button;
+}
+
+function findPlayableTileMoreButton(wrapper) {
+  return (
+    wrapper.querySelector(CLASSIC_MORE_SELECTOR) ??
+    [...wrapper.querySelectorAll("button")].find((button) => {
+      const label = `${button.getAttribute("aria-label") ?? ""} ${button.title ?? ""} ${button.textContent ?? ""}`;
+      return /\bmore\b/i.test(label);
+    }) ??
+    null
+  );
+}
+
+function extractTrackUrlFromPlayableTile(wrapper) {
+  const tile =
+    wrapper.closest(".playableTile, .soundBadge, .soundList__item, li, article") ??
+    wrapper.parentElement;
+  if (!tile) {
+    return null;
+  }
+
+  const preferredLinks = tile.querySelectorAll(
+    "a.playableTile__mainHeading, a.playableTile__heading, a.playableTile__artworkLink, a.soundTitle__title, a[href]",
+  );
+
+  for (const link of preferredLinks) {
+    const href = link.getAttribute("href");
+    if (!href || href.startsWith("#") || href.startsWith("javascript:")) {
+      continue;
+    }
+
+    const url = getCurrentPageUrlFromHref(href);
+    if (!url) {
+      continue;
+    }
+
+    const segments = getPathSegmentsFromUrl(url);
+    if (segments.length < 2 || segments.length > 3) {
+      continue;
+    }
+
+    if (segments.some((segment) => NON_TRACK_SEGMENTS.has(segment.toLowerCase()))) {
+      continue;
+    }
+
+    if (segments[1].toLowerCase() === "sets") {
+      continue;
+    }
+
+    return url;
+  }
+
+  return extractTrackUrlFromItem(tile);
+}
+
+function findPlayableTileActionTarget(wrapper) {
+  const moreButton = findPlayableTileMoreButton(wrapper);
+  return {
+    container: wrapper,
+    insertBefore: moreButton,
+    templateButton: moreButton ?? wrapper.querySelector("button"),
+  };
+}
+
+function ensurePlayableTileDownloadButtons() {
+  for (const wrapper of collectElementsDeep(
+    document.documentElement,
+    PLAYABLE_TILE_ACTION_WRAPPER,
+  )) {
+    if (wrapper.querySelector(`.${LIST_BUTTON_CLASS}`)) {
+      continue;
+    }
+
+    const trackUrl = extractTrackUrlFromPlayableTile(wrapper);
+    if (!trackUrl) {
+      continue;
+    }
+
+    if (trackUrl === getCurrentPageUrl() && shouldHandleInlineButton()) {
+      continue;
+    }
+
+    const actionTarget = findPlayableTileActionTarget(wrapper);
+    const button = createClassicListDownloadButton(
+      trackUrl,
+      actionTarget.templateButton,
+    );
+    insertDownloadButton(actionTarget, button);
+  }
+}
+
 function getPlaylistButtonClassName(templateButton) {
   const classes = ["catra-sc-download-btn", "catra-sc-playlist-download-btn"];
 
@@ -881,6 +1018,7 @@ function ensureListDownloadButtons() {
 function refreshButtons() {
   ensureInlineDownloadButton();
   ensureListDownloadButtons();
+  ensurePlayableTileDownloadButtons();
   ensurePlaylistDownloadButton();
 }
 
@@ -937,9 +1075,13 @@ function shouldScheduleRefreshFromMutation(mutation) {
       element.id === INLINE_BUTTON_ID ||
       element.id === PLAYLIST_BUTTON_ID ||
       element.classList?.contains(TRACK_ACTION_CONTAINER_CLASS) ||
+      element.classList?.contains("playableTile__actionWrapper") ||
       element.matches?.(MORE_MENU_SELECTOR) ||
+      element.matches?.(CLASSIC_MORE_SELECTOR) ||
       element.querySelector?.(`.${TRACK_ACTION_CONTAINER_CLASS}`) ||
-      element.querySelector?.(MORE_MENU_SELECTOR)
+      element.querySelector?.(PLAYABLE_TILE_ACTION_WRAPPER) ||
+      element.querySelector?.(MORE_MENU_SELECTOR) ||
+      element.querySelector?.(CLASSIC_MORE_SELECTOR)
     ) {
       return true;
     }
