@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import { ask } from "@tauri-apps/plugin-dialog";
   import TrackGrid from "$lib/components/TrackGrid.svelte";
   import TrackRow from "$lib/components/TrackRow.svelte";
   import type { Track } from "$lib/types";
@@ -159,7 +160,11 @@
     if (!onbulkremove) return;
     const ids = [...checkedIds];
     if (ids.length === 0) return;
-    if (!confirm(`${ids.length} ${bulkRemoveConfirmMessage}`)) return;
+    const confirmed = await ask(`${ids.length} ${bulkRemoveConfirmMessage}`, {
+      title: "削除の確認",
+      kind: "warning",
+    });
+    if (!confirmed) return;
 
     await onbulkremove(ids);
     checkedIds = new Set();

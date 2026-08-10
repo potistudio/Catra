@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { open } from "@tauri-apps/plugin-dialog";
+  import { ask, open } from "@tauri-apps/plugin-dialog";
   import {
     rekordboxAddContent,
     rekordboxAddToPlaylist,
@@ -29,6 +29,11 @@
   } from "$lib/types";
 
   type BrowseMode = "all" | "playlist";
+  type TextPromptKind = "playlist" | "folder" | "rename";
+
+  async function confirmDanger(message: string, title = "確認"): Promise<boolean> {
+    return ask(message, { title, kind: "warning" });
+  }
 
   interface Props {
     tracks: RekordboxContent[];
@@ -69,6 +74,15 @@
     key: "",
     rating: "",
   });
+
+  let textPromptOpen = $state(false);
+  let textPromptKind = $state<TextPromptKind>("playlist");
+  let textPromptTitle = $state("");
+  let textPromptValue = $state("");
+  let textPromptTarget = $state<RekordboxPlaylist | null>(null);
+
+  let addToPlaylistOpen = $state(false);
+  let addToPlaylistTarget = $state<RekordboxContent | null>(null);
 
   let playlistRows = $derived(playlistTreeRows(playlists));
   let activeTracks = $derived(browseMode === "all" ? tracks : playlistTracks);
@@ -195,50 +209,74 @@
     return selectedFolderId;
   }
 
-  async function handleCreatePlaylist() {
-    const name = prompt("プレイリスト名");
-    if (!name?.trim()) return;
-    await runAction(async () => {
-      const created = await rekordboxCreatePlaylist(
-        name.trim(),
-        parentForCreate(),
-      );
-      await loadPlaylists();
-      selectPlaylist(created);
-    });
+  function openCreatePlaylistPrompt() {
+    textPromptKind = "playlist";
+    textPromptTitle = "プレイリスト名";
+    textPromptValue = "";
+    textPromptTarget = null;
+    textPromptOpen = true;
   }
 
-  async function handleCreateFolder() {
-    const name = prompt("フォルダ名");
-    if (!name?.trim()) return;
-    await runAction(async () => {
-      const created = await rekordboxCreatePlaylistFolder(
-        name.trim(),
-        parentForCreate(),
-      );
-      await loadPlaylists();
-      selectedFolderId = created.id;
-    });
+  function openCreateFolderPrompt() {
+    textPromptKind = "folder";
+    textPromptTitle = "フォルダ名";
+    textPromptValue = "";
+    textPromptTarget = null;
+    textPromptOpen = true;
   }
 
-  async function handleRenamePlaylist(playlist: RekordboxPlaylist) {
-    const name = prompt("新しい名前", playlist.name);
-    if (!name?.trim() || name.trim() === playlist.name) return;
-    await runAction(async () => {
-      await rekordboxRenamePlaylist(playlist.id, name.trim());
-      await loadPlaylists();
-    });
+  function openRenamePlaylistPrompt(playlist: RekordboxPlaylist) {
+    textPromptKind = "rename";
+    textPromptTitle = "新しい名前";
+    textPromptValue = playlist.name;
+    textPromptTarget = playlist;
+    textPromptOpen = true;
+  }
+
+  async function submitTextPrompt() {
+    const name = textPromptValue.trim();
+    if (!name) return;
+    textPromptOpen = false;
+
+    if (textPromptKind === "playlist") {
+      await runAction(async () => {
+        const created = await rekordboxCreatePlaylist(name, parentForCreate());
+        await loadPlaylists();
+        selectPlaylist(created);
+      });
+      return;
+    }
+
+    if (textPromptKind === "folder") {
+      await runAction(async () => {
+        const created = await rekordboxCreatePlaylistFolder(
+          name,
+          parentForCreate(),
+        );
+        await loadPlaylists();
+        selectedFolderId = created.id;
+      });
+      return;
+    }
+
+    if (textPromptKind === "rename" && textPromptTarget) {
+      if (name === textPromptTarget.name) return;
+      const targetId = textPromptTarget.id;
+      await runAction(async () => {
+        await rekordboxRenamePlaylist(targetId, name);
+        await loadPlaylists();
+      });
+    }
   }
 
   async function handleDeletePlaylist(playlist: RekordboxPlaylist) {
     const label = isPlaylistFolder(playlist) ? "フォルダ" : "プレイリスト";
-    if (
-      !confirm(
-        `${label}「${playlist.name}」を削除しますか？子要素もすべて削除されます。`,
-      )
-    ) {
-      return;
-    }
+    const confirmed = await confirmDanger(
+      `${label}「${playlist.name}」を削除しますか？子要素もすべて削除されます。`,
+      `${label}の削除`,
+    );
+    if (!confirmed) return;
+
     await runAction(async () => {
       await rekordboxDeletePlaylist(playlist.id);
       if (selectedPlaylistId === playlist.id) {
@@ -283,7 +321,11 @@
         actionError = "プレイリスト会員IDが見つかりません";
         return;
       }
-      if (!confirm("このプレイリストから除外しますか？")) return;
+      const confirmed = await confirmDanger(
+        "このプレイリストから除外しますか？",
+        "プレイリストから除外",
+      );
+      if (!confirmed) return;
       await runAction(async () => {
         await rekordboxRemoveFromPlaylist(selectedPlaylistId!, songId);
         await loadPlaylistTracks(selectedPlaylistId!);
@@ -291,9 +333,12 @@
       return;
     }
 
-    if (!confirm(`「${content.title ?? content.fileName ?? content.id}」をコレクションから削除しますか？`)) {
-      return;
-    }
+    const label = content.title ?? content.fileName ?? content.id;
+    const confirmed = await confirmDanger(
+      `「${label}」をコレクションから削除しますか？`,
+      "トラックの削除",
+    );
+    if (!confirmed) return;
     await runAction(async () => {
       await rekordboxDeleteContent(content.id);
       await handleRefresh();
@@ -324,26 +369,24 @@
     });
   }
 
-  async function handleAddSelectedToPlaylist(content: RekordboxContent) {
+  function openAddToPlaylist(content: RekordboxContent) {
     if (normalPlaylists.length === 0) {
       actionError = "追加先のプレイリストがありません";
       return;
     }
-    const choices = normalPlaylists
-      .map((playlist, index) => `${index + 1}. ${playlist.name}`)
-      .join("\n");
-    const answer = prompt(`追加先の番号を入力してください\n${choices}`);
-    if (!answer) return;
-    const index = Number.parseInt(answer, 10) - 1;
-    const target = normalPlaylists[index];
-    if (!target) {
-      actionError = "無効な番号です";
-      return;
-    }
+    addToPlaylistTarget = content;
+    addToPlaylistOpen = true;
+  }
+
+  async function confirmAddToPlaylist(playlist: RekordboxPlaylist) {
+    const content = addToPlaylistTarget;
+    addToPlaylistOpen = false;
+    addToPlaylistTarget = null;
+    if (!content) return;
     await runAction(async () => {
-      await rekordboxAddToPlaylist(target.id, content.id);
-      if (selectedPlaylistId === target.id) {
-        await loadPlaylistTracks(target.id);
+      await rekordboxAddToPlaylist(playlist.id, content.id);
+      if (selectedPlaylistId === playlist.id) {
+        await loadPlaylistTracks(playlist.id);
       }
     });
   }
@@ -463,7 +506,7 @@
           type="button"
           class="side-btn"
           disabled={!writable || busy}
-          onclick={() => handleCreatePlaylist()}
+          onclick={() => openCreatePlaylistPrompt()}
         >
           ＋ リスト
         </button>
@@ -471,7 +514,7 @@
           type="button"
           class="side-btn"
           disabled={!writable || busy}
-          onclick={() => handleCreateFolder()}
+          onclick={() => openCreateFolderPrompt()}
         >
           ＋ フォルダ
         </button>
@@ -516,7 +559,7 @@
                       class="icon-btn"
                       title="改名"
                       disabled={!writable || busy}
-                      onclick={() => handleRenamePlaylist(playlist)}
+                      onclick={() => openRenamePlaylistPrompt(playlist)}
                     >
                       ✎
                     </button>
@@ -604,7 +647,7 @@
                   type="button"
                   class="refresh-btn"
                   disabled={busy}
-                  onclick={() => handleAddSelectedToPlaylist(selectedContent()!)}
+                  onclick={() => openAddToPlaylist(selectedContent()!)}
                 >
                   リストへ追加
                 </button>
@@ -691,6 +734,97 @@
           onclick={() => saveEdit()}
         >
           保存
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if textPromptOpen}
+  <div
+    class="modal-backdrop"
+    role="presentation"
+    onclick={() => (textPromptOpen = false)}
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label={textPromptTitle}
+      onclick={(event) => event.stopPropagation()}
+    >
+      <h3>{textPromptTitle}</h3>
+      <label>
+        名前
+        <input
+          bind:value={textPromptValue}
+          onkeydown={(event) => {
+            if (event.key === "Enter") void submitTextPrompt();
+          }}
+        />
+      </label>
+      <div class="modal-actions">
+        <button
+          type="button"
+          class="refresh-btn"
+          onclick={() => (textPromptOpen = false)}
+        >
+          キャンセル
+        </button>
+        <button
+          type="button"
+          class="refresh-btn primary"
+          disabled={!textPromptValue.trim() || busy}
+          onclick={() => submitTextPrompt()}
+        >
+          OK
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if addToPlaylistOpen && addToPlaylistTarget}
+  <div
+    class="modal-backdrop"
+    role="presentation"
+    onclick={() => {
+      addToPlaylistOpen = false;
+      addToPlaylistTarget = null;
+    }}
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="プレイリストへ追加"
+      onclick={(event) => event.stopPropagation()}
+    >
+      <h3>プレイリストへ追加</h3>
+      <ul class="picker-list">
+        {#each normalPlaylists as playlist (playlist.id)}
+          <li>
+            <button
+              type="button"
+              class="picker-item"
+              disabled={busy}
+              onclick={() => confirmAddToPlaylist(playlist)}
+            >
+              {playlist.name}
+            </button>
+          </li>
+        {/each}
+      </ul>
+      <div class="modal-actions">
+        <button
+          type="button"
+          class="refresh-btn"
+          onclick={() => {
+            addToPlaylistOpen = false;
+            addToPlaylistTarget = null;
+          }}
+        >
+          キャンセル
         </button>
       </div>
     </div>
@@ -972,5 +1106,41 @@
     justify-content: flex-end;
     gap: 0.45rem;
     margin-top: 0.35rem;
+  }
+
+  .picker-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 16rem;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  .picker-item {
+    display: block;
+    width: 100%;
+    padding: 0.55rem 0.7rem;
+    border: none;
+    border-bottom: 1px solid var(--border-subtle);
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+
+  .picker-item:last-child {
+    border-bottom: none;
+  }
+
+  .picker-item:hover:not(:disabled) {
+    background: var(--surface-hover);
+  }
+
+  .picker-item:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 </style>
