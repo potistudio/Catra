@@ -15,13 +15,10 @@
     checkedIds: Set<number>;
     readonly?: boolean;
     rekordboxPathIndex?: Map<string, string>;
-    rekordboxWritable?: boolean;
-    rekordboxBusy?: boolean;
+    showRowRemove?: boolean;
     onselect: (track: Track) => void;
     onremove?: (track: Track) => void;
     ontogglecheck?: (track: Track) => void;
-    onAddToRekordbox?: (track: Track) => void | Promise<void>;
-    onRemoveFromRekordbox?: (track: Track) => void | Promise<void>;
   }
 
   let {
@@ -30,13 +27,10 @@
     checkedIds,
     readonly = false,
     rekordboxPathIndex,
-    rekordboxWritable = false,
-    rekordboxBusy = false,
+    showRowRemove = true,
     onselect,
     onremove,
     ontogglecheck,
-    onAddToRekordbox,
-    onRemoveFromRekordbox,
   }: Props = $props();
 
   let scrollTop = $state(0);
@@ -98,13 +92,10 @@
           inRekordbox={rekordboxPathIndex
             ? isInRekordbox(track.path, rekordboxPathIndex)
             : false}
-          {rekordboxWritable}
-          {rekordboxBusy}
+          {showRowRemove}
           {onselect}
           {onremove}
           {ontogglecheck}
-          {onAddToRekordbox}
-          {onRemoveFromRekordbox}
         />
       {/each}
     </div>

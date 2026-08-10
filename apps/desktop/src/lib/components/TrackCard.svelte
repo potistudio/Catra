@@ -11,13 +11,10 @@
     checked: boolean;
     readonly?: boolean;
     inRekordbox?: boolean;
-    rekordboxWritable?: boolean;
-    rekordboxBusy?: boolean;
+    showRowRemove?: boolean;
     onselect: (track: Track) => void;
     onremove?: (track: Track) => void;
     ontogglecheck?: (track: Track) => void;
-    onAddToRekordbox?: (track: Track) => void | Promise<void>;
-    onRemoveFromRekordbox?: (track: Track) => void | Promise<void>;
   }
 
   let {
@@ -26,20 +23,11 @@
     checked,
     readonly = false,
     inRekordbox = false,
-    rekordboxWritable = false,
-    rekordboxBusy = false,
+    showRowRemove = true,
     onselect,
     onremove,
     ontogglecheck,
-    onAddToRekordbox,
-    onRemoveFromRekordbox,
   }: Props = $props();
-
-  let showRekordboxToggle = $derived(
-    !readonly &&
-      rekordboxWritable &&
-      (inRekordbox ? !!onRemoveFromRekordbox : !!onAddToRekordbox),
-  );
 
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === "Enter" || event.key === " ") {
@@ -74,7 +62,7 @@
       </span>
     {/if}
     {#if inRekordbox}
-      <span class="rb-badge" title="Rekordbox に登録済み">RB</span>
+      <span class="rb-badge" title="Rekordbox に登録済み">Rekordbox</span>
     {/if}
     {#if !readonly && ontogglecheck}
       <label class="checkbox-wrap" title="選択">
@@ -91,38 +79,7 @@
         />
       </label>
     {/if}
-    {#if showRekordboxToggle}
-      {#if inRekordbox}
-        <button
-          type="button"
-          class="rb-btn remove"
-          disabled={rekordboxBusy}
-          onclick={(e) => {
-            e.stopPropagation();
-            void onRemoveFromRekordbox?.(track);
-          }}
-          aria-label="Rekordbox から削除"
-          title="Rekordbox から削除"
-        >
-          −RB
-        </button>
-      {:else}
-        <button
-          type="button"
-          class="rb-btn add"
-          disabled={rekordboxBusy}
-          onclick={(e) => {
-            e.stopPropagation();
-            void onAddToRekordbox?.(track);
-          }}
-          aria-label="Rekordbox に追加"
-          title="Rekordbox に追加"
-        >
-          +RB
-        </button>
-      {/if}
-    {/if}
-    {#if !readonly && onremove}
+    {#if showRowRemove && !readonly && onremove}
       <button
         type="button"
         class="remove-btn"
@@ -218,16 +175,15 @@
   .rb-badge {
     position: absolute;
     bottom: 0.35rem;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0.35rem;
     z-index: 1;
-    padding: 0.1rem 0.35rem;
-    border-radius: 3px;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
     background: rgba(0, 0, 0, 0.7);
     color: #fff;
-    font-size: 0.65rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
     line-height: 1.3;
   }
 
@@ -254,25 +210,6 @@
     accent-color: var(--accent);
   }
 
-  .rb-btn {
-    position: absolute;
-    bottom: 0.35rem;
-    left: 2.1rem;
-    z-index: 2;
-    height: 24px;
-    padding: 0 0.35rem;
-    border: none;
-    border-radius: 4px;
-    background: rgba(0, 0, 0, 0.55);
-    color: #fff;
-    cursor: pointer;
-    font-size: 0.65rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    opacity: 0;
-    transition: opacity 0.15s;
-  }
-
   .remove-btn {
     position: absolute;
     bottom: 0.35rem;
@@ -289,28 +226,9 @@
     transition: opacity 0.15s;
   }
 
-  .track-card:hover .rb-btn,
-  .track-card:focus-within .rb-btn,
   .track-card:hover .remove-btn,
   .track-card:focus-within .remove-btn {
     opacity: 1;
-  }
-
-  .track-card:hover .rb-btn:disabled,
-  .track-card:focus-within .rb-btn:disabled {
-    opacity: 0.35;
-  }
-
-  .rb-btn.add:hover:not(:disabled) {
-    background: var(--accent);
-  }
-
-  .rb-btn.remove:hover:not(:disabled) {
-    background: var(--danger);
-  }
-
-  .rb-btn:disabled {
-    cursor: not-allowed;
   }
 
   .remove-btn:hover {

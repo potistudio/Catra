@@ -27,6 +27,8 @@
     durationMs: "時間",
   };
 
+  type MembershipFilter = "all" | "missing" | "present";
+
   interface Props {
     tracks: Track[];
     selectedId: number | null;
@@ -69,8 +71,15 @@
     onRemoveFromRekordbox,
   }: Props = $props();
 
+  /** Library bridge mode: actions live in the command bar, not on rows. */
+  let commandBarMode = $derived(
+    !!rekordboxPathIndex && (!!onAddToRekordbox || !!onRemoveFromRekordbox),
+  );
+  let showRowRemove = $derived(!commandBarMode && !readonly && !!onremove);
+
   let checkedIds = $state<Set<number>>(new Set());
   let selectAllCheckbox = $state<HTMLInputElement | null>(null);
+  let membershipFilter = $state<MembershipFilter>("all");
 
   let queryInput = $state("");
   let query = $state("");
@@ -105,8 +114,15 @@
     return () => observer.disconnect();
   });
 
-  let filtered = $derived(filterTracks(tracks, query));
-  let sorted = $derived(sortTracks(filtered, sortColumn, sortDirection));
+  let searched = $derived(filterTracks(tracks, query));
+  let membershipFiltered = $derived.by(() => {
+    if (!rekordboxPathIndex || membershipFilter === "all") return searched;
+    if (membershipFilter === "missing") {
+      return searched.filter((track) => !isInRekordbox(track.path, rekordboxPathIndex));
+    }
+    return searched.filter((track) => isInRekordbox(track.path, rekordboxPathIndex));
+  });
+  let sorted = $derived(sortTracks(membershipFiltered, sortColumn, sortDirection));
 
   let visibleRange = $derived(
     getVisibleTrackRange(scrollTop, viewportHeight, sorted.length),
@@ -124,20 +140,46 @@
     sorted.some((track) => checkedIds.has(track.id)) && !allVisibleSelected,
   );
 
-  let selectedTracks = $derived(tracks.filter((track) => checkedIds.has(track.id)));
-  let selectedNotInRekordbox = $derived(
+  let targetTracks = $derived.by((): Track[] => {
+    if (checkedIds.size > 0) {
+      return tracks.filter((track) => checkedIds.has(track.id));
+    }
+    if (selectedId != null) {
+      const focused = tracks.find((track) => track.id === selectedId);
+      return focused ? [focused] : [];
+    }
+    return [];
+  });
+
+  let targetNotInRekordbox = $derived(
     rekordboxPathIndex
-      ? selectedTracks.filter((track) => !isInRekordbox(track.path, rekordboxPathIndex))
+      ? targetTracks.filter((track) => !isInRekordbox(track.path, rekordboxPathIndex))
       : [],
   );
-  let selectedInRekordbox = $derived(
+  let targetInRekordbox = $derived(
     rekordboxPathIndex
-      ? selectedTracks.filter((track) => isInRekordbox(track.path, rekordboxPathIndex))
+      ? targetTracks.filter((track) => isInRekordbox(track.path, rekordboxPathIndex))
       : [],
   );
-  let showRekordboxBulk = $derived(
-    !readonly && !!rekordboxPathIndex && (!!onAddToRekordbox || !!onRemoveFromRekordbox),
-  );
+
+  let targetSummary = $derived.by(() => {
+    if (targetTracks.length === 0) return "";
+    if (checkedIds.size > 0) {
+      const parts = [`${targetTracks.length} 曲を選択中`];
+      if (rekordboxPathIndex) {
+        parts.push(`未登録 ${targetNotInRekordbox.length}`);
+        parts.push(`登録済 ${targetInRekordbox.length}`);
+      }
+      return parts.join(" · ");
+    }
+    const title = targetTracks[0]?.title ?? "1 曲";
+    if (!rekordboxPathIndex) return title;
+    return targetInRekordbox.length > 0
+      ? `${title} · Rekordbox 登録済`
+      : `${title} · 未登録`;
+  });
+
+  let showCommandBar = $derived(commandBarMode && targetTracks.length > 0);
 
   $effect(() => {
     if (selectAllCheckbox) {
@@ -184,6 +226,26 @@
     checkedIds = new Set();
   }
 
+  async function handleLibraryRemove() {
+    if (targetTracks.length === 0) return;
+    const ids = targetTracks.map((track) => track.id);
+    const confirmed = await ask(`${ids.length} ${bulkRemoveConfirmMessage}`, {
+      title: "削除の確認",
+      kind: "warning",
+    });
+    if (!confirmed) return;
+
+    if (onbulkremove) {
+      await onbulkremove(ids);
+    } else if (onremove) {
+      for (const track of targetTracks) {
+        await onremove(track);
+      }
+    }
+    checkedIds = new Set();
+  }
+
+  /** Legacy bulk remove for non-command-bar mode (Rekordbox tab). */
   async function handleBulkRemove() {
     if (!onbulkremove) return;
     const ids = [...checkedIds];
@@ -198,34 +260,19 @@
     checkedIds = new Set();
   }
 
-  async function handleBulkAddToRekordbox() {
-    if (!onAddToRekordbox || selectedNotInRekordbox.length === 0) return;
-    await onAddToRekordbox(selectedNotInRekordbox);
+  async function handleAddToRekordbox() {
+    if (!onAddToRekordbox || targetNotInRekordbox.length === 0) return;
+    await onAddToRekordbox(targetNotInRekordbox);
   }
 
-  async function handleBulkRemoveFromRekordbox() {
-    if (!onRemoveFromRekordbox || selectedInRekordbox.length === 0) return;
+  async function handleRemoveFromRekordbox() {
+    if (!onRemoveFromRekordbox || targetInRekordbox.length === 0) return;
     const confirmed = await ask(
-      `選択中の ${selectedInRekordbox.length} 曲を Rekordbox から削除しますか？`,
+      `${targetInRekordbox.length} 曲を Rekordbox から削除しますか？`,
       { title: "Rekordbox から削除", kind: "warning" },
     );
     if (!confirmed) return;
-    await onRemoveFromRekordbox(selectedInRekordbox);
-  }
-
-  function handleRowAddToRekordbox(track: Track) {
-    void onAddToRekordbox?.([track]);
-  }
-
-  async function handleRowRemoveFromRekordbox(track: Track) {
-    if (!onRemoveFromRekordbox) return;
-    const label = track.title ?? track.path;
-    const confirmed = await ask(`「${label}」を Rekordbox から削除しますか？`, {
-      title: "Rekordbox から削除",
-      kind: "warning",
-    });
-    if (!confirmed) return;
-    await onRemoveFromRekordbox([track]);
+    await onRemoveFromRekordbox(targetInRekordbox);
   }
 
   function handleScroll(event: Event) {
@@ -256,6 +303,37 @@
       placeholder={searchPlaceholder}
       bind:value={queryInput}
     />
+    {#if commandBarMode}
+      <div class="membership-filter" role="group" aria-label="Rekordbox 所属フィルタ">
+        <button
+          type="button"
+          class="filter-btn"
+          class:active={membershipFilter === "all"}
+          aria-pressed={membershipFilter === "all"}
+          onclick={() => (membershipFilter = "all")}
+        >
+          すべて
+        </button>
+        <button
+          type="button"
+          class="filter-btn"
+          class:active={membershipFilter === "missing"}
+          aria-pressed={membershipFilter === "missing"}
+          onclick={() => (membershipFilter = "missing")}
+        >
+          未登録
+        </button>
+        <button
+          type="button"
+          class="filter-btn"
+          class:active={membershipFilter === "present"}
+          aria-pressed={membershipFilter === "present"}
+          onclick={() => (membershipFilter = "present")}
+        >
+          登録済
+        </button>
+      </div>
+    {/if}
     {#if viewMode === "grid"}
       {#if !readonly}
         <label class="select-all-grid">
@@ -295,50 +373,14 @@
       </div>
     {/if}
     <span class="count">{sorted.length} tracks</span>
-    {#if !readonly && checkedCount > 0}
+    {#if !commandBarMode && !readonly && checkedCount > 0}
       <span class="selection-count">{checkedCount} 曲を選択中</span>
-      {#if showRekordboxBulk}
-        {#if onAddToRekordbox}
-          <button
-            type="button"
-            class="bulk-btn accent"
-            disabled={!rekordboxWritable || rekordboxBusy || selectedNotInRekordbox.length === 0}
-            onclick={handleBulkAddToRekordbox}
-            title={rekordboxWritable
-              ? "選択曲を Rekordbox に追加"
-              : (rekordboxLockedHint ?? "Rekordbox を編集できません")}
-          >
-            Rekordboxに追加
-            {#if selectedNotInRekordbox.length > 0}
-              ({selectedNotInRekordbox.length})
-            {/if}
-          </button>
-        {/if}
-        {#if onRemoveFromRekordbox}
-          <button
-            type="button"
-            class="bulk-btn"
-            disabled={!rekordboxWritable || rekordboxBusy || selectedInRekordbox.length === 0}
-            onclick={handleBulkRemoveFromRekordbox}
-            title={rekordboxWritable
-              ? "選択曲を Rekordbox から削除"
-              : (rekordboxLockedHint ?? "Rekordbox を編集できません")}
-          >
-            Rekordboxから削除
-            {#if selectedInRekordbox.length > 0}
-              ({selectedInRekordbox.length})
-            {/if}
-          </button>
-        {/if}
-      {/if}
       <button type="button" class="bulk-btn danger" onclick={handleBulkRemove}>
         削除
       </button>
       <button type="button" class="bulk-btn" onclick={clearSelection}>
         選択解除
       </button>
-    {:else if showRekordboxBulk && !rekordboxWritable && rekordboxLockedHint}
-      <span class="rb-hint">{rekordboxLockedHint}</span>
     {/if}
     {#if headerExtra}
       {@render headerExtra()}
@@ -376,11 +418,74 @@
     </div>
   </div>
 
+  {#if showCommandBar}
+    <div class="command-bar" aria-label="トラック操作">
+      <span class="command-summary">{targetSummary}</span>
+      {#if checkedCount > 0}
+        <button type="button" class="bulk-btn" onclick={clearSelection}>
+          選択解除
+        </button>
+      {/if}
+      <div class="command-rekordbox">
+        {#if !rekordboxWritable && rekordboxLockedHint}
+          <span class="rb-hint">{rekordboxLockedHint}</span>
+        {/if}
+        {#if onAddToRekordbox}
+          <button
+            type="button"
+            class="command-btn primary"
+            disabled={!rekordboxWritable ||
+              rekordboxBusy ||
+              targetNotInRekordbox.length === 0}
+            onclick={handleAddToRekordbox}
+          >
+            Rekordboxに追加
+            {#if targetNotInRekordbox.length > 0}
+              ({targetNotInRekordbox.length})
+            {/if}
+          </button>
+        {/if}
+        {#if onRemoveFromRekordbox}
+          <button
+            type="button"
+            class="command-btn"
+            disabled={!rekordboxWritable ||
+              rekordboxBusy ||
+              targetInRekordbox.length === 0}
+            onclick={handleRemoveFromRekordbox}
+          >
+            Rekordboxから削除
+            {#if targetInRekordbox.length > 0}
+              ({targetInRekordbox.length})
+            {/if}
+          </button>
+        {/if}
+      </div>
+      <div class="command-spacer"></div>
+      {#if onbulkremove || onremove}
+        <button
+          type="button"
+          class="command-btn danger"
+          disabled={rekordboxBusy}
+          onclick={handleLibraryRemove}
+        >
+          ライブラリから削除
+        </button>
+      {/if}
+    </div>
+  {:else if commandBarMode && !rekordboxWritable && rekordboxLockedHint}
+    <div class="command-bar idle">
+      <span class="rb-hint">{rekordboxLockedHint}</span>
+    </div>
+  {/if}
+
   {#if sorted.length === 0}
     <div class="empty">
       {#if tracks.length === 0}
         <p>{emptyTitle}</p>
         <p class="hint">{emptyHint}</p>
+      {:else if membershipFilter !== "all"}
+        <p>このフィルタに一致するトラックがありません</p>
       {:else}
         <p>検索に一致するトラックがありません</p>
       {/if}
@@ -392,15 +497,10 @@
       {checkedIds}
       {readonly}
       {rekordboxPathIndex}
-      {rekordboxWritable}
-      {rekordboxBusy}
+      {showRowRemove}
       {onselect}
-      {onremove}
+      onremove={showRowRemove ? onremove : undefined}
       ontogglecheck={readonly ? undefined : toggleCheck}
-      onAddToRekordbox={onAddToRekordbox ? handleRowAddToRekordbox : undefined}
-      onRemoveFromRekordbox={onRemoveFromRekordbox
-        ? handleRowRemoveFromRekordbox
-        : undefined}
     />
   {:else}
     <div
@@ -410,7 +510,7 @@
       bind:this={tableWrap}
       onscroll={handleScroll}
     >
-      <div class="table-inner">
+      <div class="table-inner" class:no-actions={!showRowRemove}>
         <div class="table-header" role="row">
           <span class="checkbox-cell sticky-col" role="columnheader">
             {#if !readonly}
@@ -518,7 +618,9 @@
           >
             時間{sortIndicator("durationMs")}
           </button>
-          <span role="columnheader"></span>
+          {#if showRowRemove}
+            <span role="columnheader"></span>
+          {/if}
         </div>
 
         <div class="virtual-body" style:height="{totalBodyHeight}px">
@@ -533,17 +635,10 @@
                 inRekordbox={rekordboxPathIndex
                   ? isInRekordbox(track.path, rekordboxPathIndex)
                   : false}
-                {rekordboxWritable}
-                {rekordboxBusy}
+                showActions={showRowRemove}
                 {onselect}
-                {onremove}
+                onremove={showRowRemove ? onremove : undefined}
                 ontogglecheck={readonly ? undefined : toggleCheck}
-                onAddToRekordbox={onAddToRekordbox
-                  ? handleRowAddToRekordbox
-                  : undefined}
-                onRemoveFromRekordbox={onRemoveFromRekordbox
-                  ? handleRowRemoveFromRekordbox
-                  : undefined}
               />
             {/each}
           </div>
@@ -564,13 +659,15 @@
   .track-list-header {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.75rem;
     padding: 0.75rem 1.25rem;
     border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
   }
 
   .search {
     flex: 1;
+    min-width: 10rem;
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -582,6 +679,43 @@
   .search:focus {
     outline: 2px solid var(--accent);
     outline-offset: -1px;
+  }
+
+  .membership-filter {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .filter-btn {
+    padding: 0.35rem 0.7rem;
+    border: none;
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .filter-btn:not(:last-child) {
+    border-right: 1px solid var(--border);
+  }
+
+  .filter-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+  }
+
+  .filter-btn.active {
+    background: var(--accent-subtle);
+    color: var(--accent);
+  }
+
+  .filter-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
   }
 
   .count {
@@ -596,10 +730,89 @@
     white-space: nowrap;
   }
 
+  .command-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.65rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-raised);
+    flex-wrap: wrap;
+  }
+
+  .command-bar.idle {
+    justify-content: flex-start;
+  }
+
+  .command-summary {
+    font-size: 0.82rem;
+    color: var(--text);
+    font-weight: 500;
+    min-width: 0;
+  }
+
+  .command-rekordbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .command-spacer {
+    flex: 1;
+    min-width: 0.5rem;
+  }
+
   .rb-hint {
     font-size: 0.75rem;
     color: var(--text-muted);
     white-space: nowrap;
+  }
+
+  .command-btn {
+    padding: 0.45rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .command-btn:hover:not(:disabled) {
+    background: var(--surface-hover);
+  }
+
+  .command-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .command-btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .command-btn.primary:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+
+  .command-btn.danger {
+    border-color: var(--danger);
+    color: var(--danger);
+    background: transparent;
+  }
+
+  .command-btn.danger:hover:not(:disabled) {
+    background: var(--danger-subtle);
+  }
+
+  .command-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 
   .bulk-btn {
@@ -616,20 +829,6 @@
 
   .bulk-btn:hover:not(:disabled) {
     background: var(--surface-hover);
-  }
-
-  .bulk-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .bulk-btn.accent {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-
-  .bulk-btn.accent:hover:not(:disabled) {
-    background: var(--accent-subtle);
   }
 
   .bulk-btn.danger {
@@ -772,11 +971,15 @@
     min-width: 72rem;
   }
 
+  .table-inner.no-actions {
+    min-width: 70rem;
+  }
+
   .table-header {
     display: grid;
     grid-template-columns:
       2.5rem 3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
-      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 5.5rem;
+      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 2rem;
     gap: 0.6rem;
     align-items: center;
     padding: 0 1rem;
@@ -792,6 +995,12 @@
     color: var(--text-muted);
     background: var(--surface);
     border-bottom: 1px solid var(--border);
+  }
+
+  .table-inner.no-actions .table-header {
+    grid-template-columns:
+      2.5rem 3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
+      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem;
   }
 
   .column-header {
