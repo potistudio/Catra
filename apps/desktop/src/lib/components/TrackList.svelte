@@ -140,16 +140,12 @@
     sorted.some((track) => checkedIds.has(track.id)) && !allVisibleSelected,
   );
 
-  let targetTracks = $derived.by((): Track[] => {
-    if (checkedIds.size > 0) {
-      return tracks.filter((track) => checkedIds.has(track.id));
-    }
-    if (selectedId != null) {
-      const focused = tracks.find((track) => track.id === selectedId);
-      return focused ? [focused] : [];
-    }
-    return [];
-  });
+  /** Action targets come only from checkboxes; card/row click is preview focus. */
+  let targetTracks = $derived(
+    checkedIds.size > 0
+      ? tracks.filter((track) => checkedIds.has(track.id))
+      : [],
+  );
 
   let targetNotInRekordbox = $derived(
     rekordboxPathIndex
@@ -164,22 +160,15 @@
 
   let targetSummary = $derived.by(() => {
     if (targetTracks.length === 0) return "";
-    if (checkedIds.size > 0) {
-      const parts = [`${targetTracks.length} 曲を選択中`];
-      if (rekordboxPathIndex) {
-        parts.push(`未登録 ${targetNotInRekordbox.length}`);
-        parts.push(`登録済 ${targetInRekordbox.length}`);
-      }
-      return parts.join(" · ");
+    const parts = [`${targetTracks.length} 曲を選択中`];
+    if (rekordboxPathIndex) {
+      parts.push(`未登録 ${targetNotInRekordbox.length}`);
+      parts.push(`登録済 ${targetInRekordbox.length}`);
     }
-    const title = targetTracks[0]?.title ?? "1 曲";
-    if (!rekordboxPathIndex) return title;
-    return targetInRekordbox.length > 0
-      ? `${title} · Rekordbox 登録済`
-      : `${title} · 未登録`;
+    return parts.join(" · ");
   });
 
-  let showCommandBar = $derived(commandBarMode && targetTracks.length > 0);
+  let showCommandBar = $derived(commandBarMode && checkedCount > 0);
 
   $effect(() => {
     const validIds = new Set(tracks.map((track) => track.id));
@@ -412,11 +401,9 @@
   {#if showCommandBar}
     <div class="command-bar" aria-label="トラック操作">
       <span class="command-summary">{targetSummary}</span>
-      {#if checkedCount > 0}
-        <button type="button" class="bulk-btn" onclick={clearSelection}>
-          選択解除
-        </button>
-      {/if}
+      <button type="button" class="bulk-btn" onclick={clearSelection}>
+        選択解除
+      </button>
       <div class="command-rekordbox">
         {#if !rekordboxWritable && rekordboxLockedHint}
           <span class="rb-hint">{rekordboxLockedHint}</span>
