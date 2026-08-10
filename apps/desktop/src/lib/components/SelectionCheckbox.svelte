@@ -104,7 +104,7 @@
     border: 1.5px solid var(--border);
     border-radius: 4px;
     background: var(--surface-raised);
-    color: #fff;
+    color: var(--on-accent);
     transition:
       background 0.12s ease,
       border-color 0.12s ease,

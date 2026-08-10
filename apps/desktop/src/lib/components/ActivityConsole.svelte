@@ -101,7 +101,7 @@
     flex-shrink: 0;
     min-height: 0;
     border-left: 1px solid var(--border);
-    background: #141418;
+    background: var(--surface-crust);
   }
 
   .console-header {
@@ -199,7 +199,7 @@
   }
 
   .time {
-    color: #6b6b78;
+    color: var(--text-subtle);
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
   }
@@ -220,23 +220,23 @@
     margin: 0.25rem 0 0 0;
     padding: 0.45rem 0.6rem;
     border-radius: 4px;
-    background: rgba(0, 0, 0, 0.25);
-    color: #b8b8c4;
+    background: rgba(17, 17, 27, 0.45);
+    color: var(--text-muted);
     white-space: pre-wrap;
     word-break: break-word;
     font-size: 0.72rem;
   }
 
   .level-info .level {
-    color: #7aa2f7;
+    color: var(--info);
   }
 
   .level-success .level {
-    color: #9ece6a;
+    color: var(--success);
   }
 
   .level-warning .level {
-    color: #e0af68;
+    color: var(--warning);
   }
 
   .level-error .level {
@@ -244,6 +244,6 @@
   }
 
   .level-error .message {
-    color: #ffb4b4;
+    color: var(--danger-soft);
   }
 </style>

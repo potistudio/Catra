@@ -854,13 +854,13 @@
   }
 
   .status-bar.warning {
-    color: #f0c040;
-    background: rgba(240, 192, 64, 0.08);
+    color: var(--warning);
+    background: var(--warning-subtle);
   }
 
   .error-bar {
-    color: #f08080;
-    background: rgba(240, 80, 80, 0.08);
+    color: var(--danger);
+    background: var(--danger-subtle);
   }
 
   .status-bar span:first-child {

@@ -211,7 +211,7 @@
     border-radius: 50%;
     border: none;
     background: var(--accent);
-    color: #fff;
+    color: var(--on-accent);
     font-size: 1rem;
     cursor: pointer;
     display: flex;

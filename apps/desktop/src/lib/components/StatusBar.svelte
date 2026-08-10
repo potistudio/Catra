@@ -132,15 +132,15 @@
   }
 
   .level-info .level {
-    color: #7aa2f7;
+    color: var(--info);
   }
 
   .level-success .level {
-    color: #9ece6a;
+    color: var(--success);
   }
 
   .level-warning .level {
-    color: #e0af68;
+    color: var(--warning);
   }
 
   .level-error .level {
@@ -148,6 +148,6 @@
   }
 
   .level-error .text {
-    color: #ffb4b4;
+    color: var(--danger-soft);
   }
 </style>

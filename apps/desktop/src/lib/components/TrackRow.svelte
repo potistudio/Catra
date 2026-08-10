@@ -250,7 +250,7 @@
 
   .rating {
     font-size: 0.75rem;
-    color: #f0c040;
+    color: var(--warning);
     letter-spacing: -0.05em;
   }
 

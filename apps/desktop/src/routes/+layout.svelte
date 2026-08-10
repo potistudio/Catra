@@ -1,23 +1,32 @@
 <slot />
 
 <style>
+  /* Catppuccin Mocha */
   :global(:root) {
-    --text: #e8e8ec;
-    --text-muted: #8b8b96;
-    --surface: #1a1a1f;
-    --surface-raised: #222228;
-    --surface-hover: #2a2a32;
-    --border: #33333d;
-    --border-subtle: #2a2a32;
-    --accent: #6c5ce7;
-    --accent-subtle: rgba(108, 92, 231, 0.15);
-    --danger: #ff6b6b;
-    --danger-subtle: rgba(255, 107, 107, 0.15);
+    --text: #cdd6f4;
+    --text-muted: #a6adc8;
+    --text-subtle: #6c7086;
+    --surface: #1e1e2e;
+    --surface-raised: #313244;
+    --surface-hover: #45475a;
+    --surface-crust: #11111b;
+    --border: #45475a;
+    --border-subtle: #313244;
+    --accent: #cba6f7;
+    --accent-subtle: rgba(203, 166, 247, 0.15);
+    --danger: #f38ba8;
+    --danger-subtle: rgba(243, 139, 168, 0.15);
+    --danger-soft: #eba0ac;
+    --info: #89b4fa;
+    --success: #a6e3a1;
+    --warning: #f9e2af;
+    --warning-subtle: rgba(249, 226, 175, 0.08);
+    --on-accent: #1e1e2e;
     --scrollbar-size: 10px;
     --scrollbar-track: transparent;
-    --scrollbar-thumb: #3a3a46;
-    --scrollbar-thumb-hover: #52525e;
-    --scrollbar-thumb-active: #6c5ce7;
+    --scrollbar-thumb: #45475a;
+    --scrollbar-thumb-hover: #585b70;
+    --scrollbar-thumb-active: #cba6f7;
   }
 
   :global(*, *::before, *::after) {

@@ -779,7 +779,7 @@
   .command-btn.primary {
     background: var(--accent);
     border-color: var(--accent);
-    color: #fff;
+    color: var(--on-accent);
   }
 
   .command-btn.primary:hover:not(:disabled) {
