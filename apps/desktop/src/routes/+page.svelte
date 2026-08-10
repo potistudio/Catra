@@ -301,7 +301,12 @@
 
   <div class="body">
     <main class="content">
-      {#if activeTab === "library"}
+      <div
+        class="tab-panel"
+        hidden={activeTab !== "library"}
+        inert={activeTab !== "library" ? true : undefined}
+        aria-hidden={activeTab !== "library"}
+      >
         <TrackList
           {tracks}
           selectedId={selectedTrack?.id ?? null}
@@ -309,7 +314,13 @@
           onremove={handleRemove}
           onbulkremove={handleBulkRemove}
         />
-      {:else}
+      </div>
+      <div
+        class="tab-panel"
+        hidden={activeTab !== "rekordbox"}
+        inert={activeTab !== "rekordbox" ? true : undefined}
+        aria-hidden={activeTab !== "rekordbox"}
+      >
         <RekordboxList
           tracks={rekordboxTracks}
           selectedId={selectedRekordboxId}
@@ -318,7 +329,7 @@
           onselect={handleSelectRekordbox}
           onrefresh={() => loadRekordbox(false)}
         />
-      {/if}
+      </div>
     </main>
     <ActivityConsole />
   </div>
@@ -467,5 +478,17 @@
     min-width: 0;
     min-height: 0;
     overflow: hidden;
+  }
+
+  .tab-panel {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .tab-panel[hidden] {
+    display: none;
   }
 </style>
