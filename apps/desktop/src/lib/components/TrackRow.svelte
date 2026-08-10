@@ -179,6 +179,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
+    align-self: stretch;
     overflow: visible;
   }
 
@@ -200,7 +201,7 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 0;
+    left: -1rem;
     width: 12px;
     background: var(--accent);
   }
