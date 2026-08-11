@@ -190,7 +190,7 @@
 
   .log-entry {
     padding: 0.2rem 0;
-    border-bottom: 1px solid color-mix(in srgb, var(--ctp-overlay0) 18%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--text-subtle) 18%, transparent);
   }
 
   .log-line {
@@ -221,7 +221,7 @@
     margin: 0.25rem 0 0 0;
     padding: 0.45rem 0.6rem;
     border-radius: 4px;
-    background: color-mix(in srgb, var(--ctp-crust) 55%, transparent);
+    background: color-mix(in srgb, var(--surface-crust) 55%, transparent);
     color: var(--text-muted);
     white-space: pre-wrap;
     word-break: break-word;

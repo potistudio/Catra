@@ -1,69 +1,59 @@
 <slot />
 
 <style>
-  /* Catppuccin Mocha */
+  /* Nord — https://www.nordtheme.com */
   :global(:root) {
-    --ctp-rosewater: #f5e0dc;
-    --ctp-flamingo: #f2cdcd;
-    --ctp-pink: #f5c2e7;
-    --ctp-mauve: #cba6f7;
-    --ctp-red: #f38ba8;
-    --ctp-maroon: #eba0ac;
-    --ctp-peach: #fab387;
-    --ctp-yellow: #f9e2af;
-    --ctp-green: #a6e3a1;
-    --ctp-teal: #94e2d5;
-    --ctp-sky: #89dceb;
-    --ctp-sapphire: #74c7ec;
-    --ctp-blue: #89b4fa;
-    --ctp-lavender: #b4befe;
-    --ctp-text: #cdd6f4;
-    --ctp-subtext1: #bac2de;
-    --ctp-subtext0: #a6adc8;
-    --ctp-overlay2: #9399b2;
-    --ctp-overlay1: #7f849c;
-    --ctp-overlay0: #6c7086;
-    --ctp-surface2: #585b70;
-    --ctp-surface1: #45475a;
-    --ctp-surface0: #313244;
-    --ctp-base: #1e1e2e;
-    --ctp-mantle: #181825;
-    --ctp-crust: #11111b;
+    --nord0: #2e3440;
+    --nord1: #3b4252;
+    --nord2: #434c5e;
+    --nord3: #4c566a;
+    --nord4: #d8dee9;
+    --nord5: #e5e9f0;
+    --nord6: #eceff4;
+    --nord7: #8fbcbb;
+    --nord8: #88c0d0;
+    --nord9: #81a1c1;
+    --nord10: #5e81ac;
+    --nord11: #bf616a;
+    --nord12: #d08770;
+    --nord13: #ebcb8b;
+    --nord14: #a3be8c;
+    --nord15: #b48ead;
 
-    --text: var(--ctp-text);
-    --text-muted: var(--ctp-subtext0);
-    --text-subtle: var(--ctp-overlay0);
-    --surface: var(--ctp-base);
-    --surface-raised: var(--ctp-mantle);
-    --surface-overlay: var(--ctp-surface0);
-    --surface-hover: var(--ctp-surface0);
-    --surface-active: var(--ctp-surface1);
-    --surface-selected: var(--ctp-surface1);
-    --surface-selected-hover: var(--ctp-surface2);
-    --surface-crust: var(--ctp-crust);
-    --border: var(--ctp-surface0);
-    --border-subtle: color-mix(in srgb, var(--ctp-surface0) 55%, var(--ctp-base));
-    --accent: var(--ctp-mauve);
-    --accent-hover: color-mix(in srgb, var(--ctp-mauve) 82%, var(--ctp-text));
-    --accent-subtle: color-mix(in srgb, var(--ctp-mauve) 18%, transparent);
-    --accent-subtle-hover: color-mix(in srgb, var(--ctp-mauve) 28%, transparent);
-    --danger: var(--ctp-red);
-    --danger-hover: var(--ctp-maroon);
-    --danger-subtle: color-mix(in srgb, var(--ctp-red) 16%, transparent);
-    --danger-subtle-hover: color-mix(in srgb, var(--ctp-red) 26%, transparent);
-    --danger-soft: var(--ctp-maroon);
-    --info: var(--ctp-blue);
-    --success: var(--ctp-green);
-    --warning: var(--ctp-yellow);
-    --warning-subtle: color-mix(in srgb, var(--ctp-yellow) 12%, transparent);
-    --on-accent: var(--ctp-base);
-    --overlay: color-mix(in srgb, var(--ctp-crust) 72%, transparent);
-    --overlay-strong: color-mix(in srgb, var(--ctp-crust) 82%, transparent);
+    --text: var(--nord4);
+    --text-muted: color-mix(in srgb, var(--nord4) 72%, var(--nord3));
+    --text-subtle: var(--nord3);
+    --surface: var(--nord0);
+    --surface-raised: var(--nord1);
+    --surface-overlay: var(--nord2);
+    --surface-hover: var(--nord2);
+    --surface-active: var(--nord3);
+    --surface-selected: var(--nord3);
+    --surface-selected-hover: color-mix(in srgb, var(--nord3) 70%, var(--nord4));
+    --surface-crust: var(--nord0);
+    --border: var(--nord2);
+    --border-subtle: color-mix(in srgb, var(--nord2) 55%, var(--nord0));
+    --accent: var(--nord8);
+    --accent-hover: var(--nord7);
+    --accent-subtle: color-mix(in srgb, var(--nord8) 18%, transparent);
+    --accent-subtle-hover: color-mix(in srgb, var(--nord8) 28%, transparent);
+    --danger: var(--nord11);
+    --danger-hover: var(--nord12);
+    --danger-subtle: color-mix(in srgb, var(--nord11) 16%, transparent);
+    --danger-subtle-hover: color-mix(in srgb, var(--nord11) 26%, transparent);
+    --danger-soft: var(--nord12);
+    --info: var(--nord9);
+    --success: var(--nord14);
+    --warning: var(--nord13);
+    --warning-subtle: color-mix(in srgb, var(--nord13) 12%, transparent);
+    --on-accent: var(--nord0);
+    --overlay: color-mix(in srgb, var(--nord0) 72%, transparent);
+    --overlay-strong: color-mix(in srgb, var(--nord0) 82%, transparent);
     --scrollbar-size: 10px;
     --scrollbar-track: transparent;
-    --scrollbar-thumb: var(--ctp-surface1);
-    --scrollbar-thumb-hover: var(--ctp-surface2);
-    --scrollbar-thumb-active: var(--ctp-mauve);
+    --scrollbar-thumb: var(--nord3);
+    --scrollbar-thumb-hover: color-mix(in srgb, var(--nord3) 70%, var(--nord4));
+    --scrollbar-thumb-active: var(--nord8);
   }
 
   :global(*, *::before, *::after) {

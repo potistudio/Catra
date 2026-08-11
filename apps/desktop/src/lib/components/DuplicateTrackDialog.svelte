@@ -120,7 +120,7 @@
     border-radius: 12px;
     background: var(--surface-overlay);
     color: var(--text);
-    box-shadow: 0 24px 64px color-mix(in srgb, var(--ctp-crust) 55%, transparent);
+    box-shadow: 0 24px 64px color-mix(in srgb, var(--surface-crust) 55%, transparent);
     box-sizing: border-box;
     overflow: hidden;
   }
