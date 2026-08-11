@@ -8,6 +8,7 @@
     displayArtist,
     displayTitle,
     displayValue,
+    formatAddedAt,
     formatBitrate,
     formatBpm,
     formatDuration,
@@ -94,6 +95,7 @@
     {formatRating(track.rating)}
   </span>
   <span class="cell mono" role="gridcell">{formatDuration(track.durationMs)}</span>
+  <span class="cell mono" role="gridcell">{formatAddedAt(track.addedAt)}</span>
   {#if showActions}
     <span class="cell actions" role="gridcell">
       {#if !readonly && onremove}
@@ -118,13 +120,13 @@
     display: grid;
     grid-template-columns:
       2.5rem 3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
-      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 2rem;
+      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 8.5rem 2rem;
     gap: 0.6rem;
     align-items: center;
     height: 48px;
     box-sizing: border-box;
     padding: 0 1rem;
-    min-width: 72rem;
+    min-width: 81rem;
     font-size: 0.85rem;
     border-bottom: 1px solid var(--border-subtle);
     cursor: pointer;
@@ -135,8 +137,8 @@
   .table-row.no-actions {
     grid-template-columns:
       2.5rem 3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
-      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem;
-    min-width: 70rem;
+      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 8.5rem;
+    min-width: 79rem;
   }
 
   .table-row:hover {

@@ -43,3 +43,16 @@ export function formatRating(rating: number | null): string {
 export function displayValue(value: string | null): string {
   return value && value.trim() ? value : "—";
 }
+
+/** Formats library `added_at` (Unix seconds). */
+export function formatAddedAt(unixSeconds: number): string {
+  if (!unixSeconds || unixSeconds <= 0) return "—";
+
+  return new Date(unixSeconds * 1000).toLocaleString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}

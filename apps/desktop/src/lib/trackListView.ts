@@ -18,7 +18,8 @@ export type SortColumn =
   | "key"
   | "genre"
   | "rating"
-  | "durationMs";
+  | "durationMs"
+  | "addedAt";
 
 export type SortDirection = "asc" | "desc";
 
@@ -62,6 +63,8 @@ function sortKeyFor(track: Track, column: SortColumn): SortKey {
       return track.rating ?? -1;
     case "durationMs":
       return track.durationMs ?? Number.POSITIVE_INFINITY;
+    case "addedAt":
+      return track.addedAt > 0 ? track.addedAt : Number.POSITIVE_INFINITY;
   }
 }
 

@@ -26,6 +26,7 @@
     genre: "ジャンル",
     rating: "レート",
     durationMs: "時間",
+    addedAt: "追加時刻",
   };
 
   type MembershipFilter = "all" | "missing" | "present";
@@ -528,6 +529,16 @@
           >
             時間{sortIndicator("durationMs")}
           </button>
+          <button
+            type="button"
+            class="column-header"
+            class:active={sortColumn === "addedAt"}
+            role="columnheader"
+            aria-sort={sortColumn === "addedAt" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+            onclick={() => toggleSort("addedAt")}
+          >
+            追加時刻{sortIndicator("addedAt")}
+          </button>
           {#if showRowRemove}
             <span role="columnheader"></span>
           {/if}
@@ -960,18 +971,18 @@
   }
 
   .table-inner {
-    min-width: 72rem;
+    min-width: 81rem;
   }
 
   .table-inner.no-actions {
-    min-width: 70rem;
+    min-width: 79rem;
   }
 
   .table-header {
     display: grid;
     grid-template-columns:
       2.5rem 3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
-      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 2rem;
+      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 8.5rem 2rem;
     gap: 0.6rem;
     align-items: center;
     padding: 0 1rem;
@@ -992,7 +1003,7 @@
   .table-inner.no-actions .table-header {
     grid-template-columns:
       2.5rem 3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
-      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem;
+      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 8.5rem;
   }
 
   .column-header {
