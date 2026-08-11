@@ -84,6 +84,20 @@
   let addToPlaylistOpen = $state(false);
   let addToPlaylistTarget = $state<RekordboxContent | null>(null);
 
+  /** Only dismiss when pointer down and up both land on the backdrop (not drag-out from modal). */
+  let backdropDismissArmed = false;
+
+  function onBackdropPointerDown(event: PointerEvent) {
+    backdropDismissArmed = event.target === event.currentTarget;
+  }
+
+  function onBackdropPointerUp(event: PointerEvent, close: () => void) {
+    if (backdropDismissArmed && event.target === event.currentTarget) {
+      close();
+    }
+    backdropDismissArmed = false;
+  }
+
   let playlistRows = $derived(playlistTreeRows(playlists));
   let activeTracks = $derived(browseMode === "all" ? tracks : playlistTracks);
   let displayTracks = $derived(activeTracks.map(rekordboxContentToTrack));
@@ -682,13 +696,17 @@
 </div>
 
 {#if editOpen && editTarget}
-  <div class="modal-backdrop" role="presentation" onclick={() => (editOpen = false)}>
+  <div
+    class="modal-backdrop"
+    role="presentation"
+    onpointerdown={onBackdropPointerDown}
+    onpointerup={(event) => onBackdropPointerUp(event, () => (editOpen = false))}
+  >
     <div
       class="modal"
       role="dialog"
       aria-modal="true"
       aria-label="トラック編集"
-      onclick={(event) => event.stopPropagation()}
     >
       <h3>トラック編集</h3>
       <label>
@@ -744,14 +762,14 @@
   <div
     class="modal-backdrop"
     role="presentation"
-    onclick={() => (textPromptOpen = false)}
+    onpointerdown={onBackdropPointerDown}
+    onpointerup={(event) => onBackdropPointerUp(event, () => (textPromptOpen = false))}
   >
     <div
       class="modal"
       role="dialog"
       aria-modal="true"
       aria-label={textPromptTitle}
-      onclick={(event) => event.stopPropagation()}
     >
       <h3>{textPromptTitle}</h3>
       <label>
@@ -788,17 +806,18 @@
   <div
     class="modal-backdrop"
     role="presentation"
-    onclick={() => {
-      addToPlaylistOpen = false;
-      addToPlaylistTarget = null;
-    }}
+    onpointerdown={onBackdropPointerDown}
+    onpointerup={(event) =>
+      onBackdropPointerUp(event, () => {
+        addToPlaylistOpen = false;
+        addToPlaylistTarget = null;
+      })}
   >
     <div
       class="modal"
       role="dialog"
       aria-modal="true"
       aria-label="プレイリストへ追加"
-      onclick={(event) => event.stopPropagation()}
     >
       <h3>プレイリストへ追加</h3>
       <ul class="picker-list">
