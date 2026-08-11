@@ -4,6 +4,7 @@
   import { onMount } from "svelte";
   import { pushActivityLog, pushActivityLogPayload } from "$lib/activityLog.svelte";
   import {
+    importFromRekordbox,
     listTracks,
     rekordboxAddContent,
     rekordboxCheck,
@@ -240,6 +241,23 @@
     }
   }
 
+  async function handleImportFromRekordbox() {
+    if (!rekordboxStatus?.dbPath) {
+      pushActivityLog("error", "Rekordbox ライブラリが見つかりません");
+      return;
+    }
+
+    scanning = true;
+    pushActivityLog("info", "Rekordbox からライブラリへインポート中...");
+
+    try {
+      await importFromRekordbox();
+    } catch (e) {
+      scanning = false;
+      pushActivityLog("error", "Rekordbox からのインポートに失敗しました", String(e));
+    }
+  }
+
   function handleSelect(track: Track) {
     selectedTrack = track;
   }
@@ -320,7 +338,7 @@
 
     void listen<string>("library-scan-error", (event) => {
       scanning = false;
-      pushActivityLog("error", "スキャンに失敗しました", event.payload);
+      pushActivityLog("error", "ライブラリの取り込みに失敗しました", event.payload);
     }).then((unlisten) => {
       unlistenScanError = unlisten;
     });
@@ -417,6 +435,13 @@
       disabled={loading || scanning || activeTab !== "library"}
     >
       Add Folder
+    </button>
+    <button
+      class="btn primary"
+      onclick={handleImportFromRekordbox}
+      disabled={loading || scanning || activeTab !== "rekordbox" || !rekordboxStatus?.dbPath}
+    >
+      ライブラリにインポート
     </button>
   </header>
 

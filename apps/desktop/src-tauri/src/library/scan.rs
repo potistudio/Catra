@@ -18,7 +18,7 @@ const SCAN_PROGRESS_INTERVAL: u32 = 10;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ScanProgress {
+pub(crate) struct ScanProgress {
     pub processed: u32,
     pub added: u32,
     pub skipped: u32,
@@ -147,12 +147,12 @@ pub fn import_file(
     }
 }
 
-enum InsertOutcome {
+pub(crate) enum InsertOutcome {
     Added,
     Skipped,
 }
 
-fn add_track(
+pub(crate) fn add_track(
     app: &AppHandle,
     library: &LibraryState,
     resolver: &DuplicateResolver,
@@ -232,18 +232,18 @@ fn is_audio_file(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-struct FileMetadata {
-    title: Option<String>,
-    artist: Option<String>,
-    album: Option<String>,
-    duration_ms: Option<u64>,
-    bpm: Option<f32>,
-    bitrate_kbps: Option<u32>,
-    genre: Option<String>,
-    key: Option<String>,
-    rating: Option<u8>,
-    artwork: Option<(Vec<u8>, String)>,
-    source: Option<String>,
+pub(crate) struct FileMetadata {
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub duration_ms: Option<u64>,
+    pub bpm: Option<f32>,
+    pub bitrate_kbps: Option<u32>,
+    pub genre: Option<String>,
+    pub key: Option<String>,
+    pub rating: Option<u8>,
+    pub artwork: Option<(Vec<u8>, String)>,
+    pub source: Option<String>,
 }
 
 fn read_metadata(path: &Path) -> FileMetadata {

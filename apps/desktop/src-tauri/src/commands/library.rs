@@ -1,4 +1,7 @@
-use crate::library::{start_scan_folder, DuplicateChoice, DuplicateResolver, LibraryState, Track};
+use crate::library::{
+    start_import_from_rekordbox, start_scan_folder, DuplicateChoice, DuplicateResolver,
+    LibraryState, Track,
+};
 use std::path::Path;
 use tauri::{AppHandle, State};
 
@@ -14,6 +17,12 @@ pub fn library_scan_folder(app: AppHandle, folder: String) -> Result<(), String>
     }
 
     start_scan_folder(app, folder);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn library_import_from_rekordbox(app: AppHandle) -> Result<(), String> {
+    start_import_from_rekordbox(app);
     Ok(())
 }
 
