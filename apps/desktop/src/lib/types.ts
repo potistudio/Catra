@@ -48,6 +48,7 @@ export interface ScanProgress {
   added: number;
   skipped: number;
   currentPath: string;
+  total?: number | null;
 }
 
 export type ActivityLogLevel = "info" | "success" | "warning" | "error";

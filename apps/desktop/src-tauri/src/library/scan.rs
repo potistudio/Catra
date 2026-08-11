@@ -23,6 +23,9 @@ pub(crate) struct ScanProgress {
     pub added: u32,
     pub skipped: u32,
     pub current_path: String,
+    /// Known upfront for Rekordbox import; absent during folder walks.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total: Option<u32>,
 }
 
 pub fn start_scan_folder(app: AppHandle, folder: String) {
@@ -93,6 +96,7 @@ pub fn scan_folder(
                 added,
                 skipped,
                 current_path: path_str.clone(),
+                total: None,
             };
             let _ = app.emit("library-scan-progress", progress);
         }
@@ -160,7 +164,7 @@ pub(crate) fn add_track(
     metadata: &FileMetadata,
     added_at: i64,
 ) -> Result<InsertOutcome, rusqlite::Error> {
-    let path_str = path.to_string_lossy().to_string();
+    let path_str = normalize_fs_path(&path.to_string_lossy());
 
     if library.track_exists(&path_str)? {
         return Ok(InsertOutcome::Skipped);
@@ -230,6 +234,15 @@ fn is_audio_file(path: &Path) -> bool {
         .and_then(|ext| ext.to_str())
         .map(|ext| AUDIO_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
         .unwrap_or(false)
+}
+
+/// Normalize path separators for stable library storage and membership checks.
+pub(crate) fn normalize_fs_path(path: &str) -> String {
+    let mut normalized = path.replace('/', "\\");
+    while normalized.ends_with('\\') && normalized.len() > 3 {
+        normalized.pop();
+    }
+    normalized
 }
 
 pub(crate) struct FileMetadata {

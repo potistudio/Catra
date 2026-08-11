@@ -50,8 +50,31 @@
   let rekordboxBusy = $state(false);
   let loading = $state(false);
   let scanning = $state(false);
+  let scanKind = $state<"folder" | "rekordbox" | null>(null);
+  let scanProgress = $state<ScanProgress | null>(null);
   let duplicatePayload = $state<DuplicateFoundPayload | null>(null);
   let downloadProgress = $state<DownloadProgress | null>(null);
+
+  let scanStatusLabel = $derived.by((): string => {
+    if (duplicatePayload) return "重複の確認待ち";
+    if (!scanning) return "";
+    if (scanKind === "rekordbox") return "Rekordbox からインポート中";
+    if (scanKind === "folder") return "フォルダをスキャン中";
+    return "ライブラリ取り込み中";
+  });
+
+  let scanStatusCount = $derived.by((): string | null => {
+    if (!scanProgress) return null;
+    if (scanProgress.total != null && scanProgress.total > 0) {
+      return `${scanProgress.processed}/${scanProgress.total}`;
+    }
+    return `${scanProgress.processed}`;
+  });
+
+  let scanStatusDetail = $derived.by((): string | null => {
+    if (!scanProgress) return null;
+    return `追加 ${scanProgress.added} · スキップ ${scanProgress.skipped}`;
+  });
 
   let rekordboxPathIndex = $derived(buildRekordboxPathIndex(rekordboxTracks));
   let rekordboxWritable = $derived(
@@ -231,12 +254,16 @@
     if (!selected || typeof selected !== "string") return;
 
     scanning = true;
+    scanKind = "folder";
+    scanProgress = null;
     pushActivityLog("info", "フォルダをスキャン中...", selected);
 
     try {
       await scanFolder(selected);
     } catch (e) {
       scanning = false;
+      scanKind = null;
+      scanProgress = null;
       pushActivityLog("error", "スキャンに失敗しました", String(e));
     }
   }
@@ -248,12 +275,22 @@
     }
 
     scanning = true;
+    scanKind = "rekordbox";
+    scanProgress = {
+      processed: 0,
+      added: 0,
+      skipped: 0,
+      currentPath: "",
+      total: rekordboxTracks.length > 0 ? rekordboxTracks.length : null,
+    };
     pushActivityLog("info", "Rekordbox からライブラリへインポート中...");
 
     try {
       await importFromRekordbox();
     } catch (e) {
       scanning = false;
+      scanKind = null;
+      scanProgress = null;
       pushActivityLog("error", "Rekordbox からのインポートに失敗しました", String(e));
     }
   }
@@ -330,21 +367,28 @@
       unlistenActivity = unlisten;
     });
 
-    void listen<ScanResult>("library-scan-complete", () => {
+    void listen<ScanResult>("library-scan-complete", (event) => {
       scanning = false;
+      scanKind = null;
+      scanProgress = null;
+      if (event.payload.added > 0) {
+        activeTab = "library";
+      }
     }).then((unlisten) => {
       unlistenScanComplete = unlisten;
     });
 
     void listen<string>("library-scan-error", (event) => {
       scanning = false;
+      scanKind = null;
+      scanProgress = null;
       pushActivityLog("error", "ライブラリの取り込みに失敗しました", event.payload);
     }).then((unlisten) => {
       unlistenScanError = unlisten;
     });
 
-    void listen<ScanProgress>("library-scan-progress", () => {
-      // Progress events are available for future UI; avoid flooding the activity log.
+    void listen<ScanProgress>("library-scan-progress", (event) => {
+      scanProgress = event.payload;
     }).then((unlisten) => {
       unlistenScanProgress = unlisten;
     });
@@ -408,7 +452,29 @@
         Rekordbox
       </button>
     </div>
-    {#if downloadProgress}
+    {#if scanning || duplicatePayload}
+      <div class="download-status" aria-live="polite">
+        <span class="download-message">
+          {scanStatusLabel}
+          {#if !duplicatePayload && scanProgress?.currentPath}
+            — {scanProgress.currentPath}
+          {/if}
+        </span>
+        {#if scanStatusDetail}
+          <span class="download-percent">{scanStatusDetail}</span>
+        {/if}
+        {#if scanStatusCount}
+          <span class="download-percent">{scanStatusCount}</span>
+        {/if}
+        {#if scanProgress?.total != null && scanProgress.total > 0}
+          <progress
+            class="download-bar"
+            max={scanProgress.total}
+            value={scanProgress.processed}
+          ></progress>
+        {/if}
+      </div>
+    {:else if downloadProgress}
       <div class="download-status" aria-live="polite">
         <span class="download-message">
           {downloadProgress.message ?? "ダウンロード中"}
@@ -434,14 +500,14 @@
       onclick={handleAddFolder}
       disabled={loading || scanning || activeTab !== "library"}
     >
-      Add Folder
+      {scanning && scanKind === "folder" ? "スキャン中..." : "Add Folder"}
     </button>
     <button
       class="btn primary"
       onclick={handleImportFromRekordbox}
       disabled={loading || scanning || activeTab !== "rekordbox" || !rekordboxStatus?.dbPath}
     >
-      ライブラリにインポート
+      {scanning && scanKind === "rekordbox" ? "インポート中..." : "ライブラリにインポート"}
     </button>
   </header>
 
