@@ -1,6 +1,5 @@
 # OS
 .DS_Store
-Thumbs.db
 
 # Dependencies
 node_modules/
@@ -22,3 +21,7 @@ vite.config.ts.timestamp-*
 
 # Personal references
 refs/
+
+# Claude plugins
+.omc/
+.serena/
