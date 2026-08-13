@@ -30,6 +30,10 @@ export async function importFromRekordbox(): Promise<void> {
   return invoke("library_import_from_rekordbox");
 }
 
+export async function importPaths(paths: string[]): Promise<void> {
+  return invoke("library_import_paths", { paths });
+}
+
 export async function removeTrack(id: number): Promise<void> {
   return invoke("library_remove_track", { id });
 }

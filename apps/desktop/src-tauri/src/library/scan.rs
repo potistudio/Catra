@@ -9,7 +9,7 @@ use lofty::probe::Probe;
 use lofty::tag::Accessor;
 use lofty::tag::ItemKey;
 use serde::Serialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager};
 use walkdir::WalkDir;
 
@@ -23,7 +23,7 @@ pub(crate) struct ScanProgress {
     pub added: u32,
     pub skipped: u32,
     pub current_path: String,
-    /// Known upfront for Rekordbox import; absent during folder walks.
+    /// Set when the file list is known before processing; absent during folder walks.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total: Option<u32>,
 }
@@ -55,6 +55,106 @@ pub fn start_scan_folder(app: AppHandle, folder: String) {
             }
         }
     });
+}
+
+/// Registers dropped files and folders in library.db. Files stay on disk.
+pub fn start_import_paths(app: AppHandle, paths: Vec<String>) {
+    std::thread::spawn(move || {
+        let state = app.state::<LibraryState>();
+        let resolver = app.state::<DuplicateResolver>();
+        let result = import_paths(&app, &state, &resolver, &paths);
+
+        match result {
+            Ok(scan_result) => {
+                emit_activity_log(
+                    &app,
+                    "success",
+                    format!(
+                        "取り込み完了: {} 曲を追加 ({} 曲は既存)",
+                        scan_result.added, scan_result.skipped
+                    ),
+                    None,
+                );
+                let _ = app.emit("library-scan-complete", scan_result);
+                let _ = app.emit("library-updated", ());
+            }
+            Err(error) => {
+                emit_activity_log(
+                    &app,
+                    "error",
+                    "取り込みに失敗しました",
+                    Some(error.clone()),
+                );
+                let _ = app.emit("library-scan-error", error);
+            }
+        }
+    });
+}
+
+fn import_paths(
+    app: &AppHandle,
+    library: &LibraryState,
+    resolver: &DuplicateResolver,
+    paths: &[String],
+) -> Result<ScanResult, String> {
+    if paths.is_empty() {
+        return Err("インポートするパスがありません".to_string());
+    }
+
+    let files = collect_audio_files(paths);
+    if files.is_empty() {
+        emit_activity_log(
+            app,
+            "warning",
+            "ドロップされた項目に音声ファイルがありません",
+            None,
+        );
+        return Ok(ScanResult {
+            added: 0,
+            skipped: 0,
+        });
+    }
+
+    let total = files.len() as u32;
+    let added_at = chrono::Utc::now().timestamp();
+    let mut added = 0u32;
+    let mut skipped = 0u32;
+    let mut processed = 0u32;
+
+    for path in files {
+        processed += 1;
+        let path_str = path.to_string_lossy().to_string();
+
+        if processed == 1 || processed % SCAN_PROGRESS_INTERVAL == 0 || processed == total {
+            let progress = ScanProgress {
+                processed,
+                added,
+                skipped,
+                current_path: path_str.clone(),
+                total: Some(total),
+            };
+            let _ = app.emit("library-scan-progress", progress);
+        }
+
+        let metadata = read_metadata(&path);
+        match add_track(app, library, resolver, &path, &metadata, added_at) {
+            Ok(InsertOutcome::Added) => added += 1,
+            Ok(InsertOutcome::Skipped) => skipped += 1,
+            Err(error) => {
+                emit_activity_log(
+                    app,
+                    "warning",
+                    format!(
+                        "スキップ: {}",
+                        path.file_name().unwrap_or_default().to_string_lossy()
+                    ),
+                    Some(error.to_string()),
+                );
+            }
+        }
+    }
+
+    Ok(ScanResult { added, skipped })
 }
 
 pub fn scan_folder(
@@ -237,6 +337,34 @@ fn is_audio_file(path: &Path) -> bool {
         .and_then(|ext| ext.to_str())
         .map(|ext| AUDIO_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
         .unwrap_or(false)
+}
+
+/// Expands dropped files and directories into audio paths. Directories are walked recursively.
+pub(crate) fn collect_audio_files(paths: &[String]) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    for raw in paths {
+        let path = PathBuf::from(raw);
+        if path.is_file() {
+            if is_audio_file(&path) {
+                files.push(path);
+            }
+            continue;
+        }
+        if !path.is_dir() {
+            continue;
+        }
+        for entry in WalkDir::new(&path)
+            .follow_links(false)
+            .into_iter()
+            .filter_map(|entry| entry.ok())
+        {
+            let file = entry.into_path();
+            if file.is_file() && is_audio_file(&file) {
+                files.push(file);
+            }
+        }
+    }
+    files
 }
 
 /// Normalize path separators for stable library storage and membership checks.
@@ -451,4 +579,68 @@ fn load_artwork_file(path: Option<&str>) -> Option<(Vec<u8>, String)> {
         _ => "image/jpeg".to_string(),
     };
     Some((data, mime))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn temp_dir() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("catra-drop-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn collect_skips_non_audio_files() {
+        let dir = temp_dir();
+        let txt = dir.join("notes.txt");
+        fs::write(&txt, b"nope").unwrap();
+        let files = collect_audio_files(&[txt.to_string_lossy().into_owned()]);
+        assert!(files.is_empty());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn collect_includes_audio_file() {
+        let dir = temp_dir();
+        let mp3 = dir.join("song.mp3");
+        fs::write(&mp3, b"id3").unwrap();
+        let files = collect_audio_files(&[mp3.to_string_lossy().into_owned()]);
+        assert_eq!(files, vec![mp3]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn collect_walks_directory() {
+        let dir = temp_dir();
+        let nested = dir.join("set");
+        fs::create_dir_all(&nested).unwrap();
+        let wav = nested.join("track.wav");
+        fs::write(&wav, b"riff").unwrap();
+        fs::write(nested.join("cover.jpg"), b"img").unwrap();
+        let files = collect_audio_files(&[dir.to_string_lossy().into_owned()]);
+        assert_eq!(files, vec![wav]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn collect_mixes_file_and_directory() {
+        let dir = temp_dir();
+        let nested = dir.join("set");
+        fs::create_dir_all(&nested).unwrap();
+        let nested_wav = nested.join("nested.wav");
+        let loose_mp3 = dir.join("loose.mp3");
+        fs::write(&nested_wav, b"riff").unwrap();
+        fs::write(&loose_mp3, b"id3").unwrap();
+        let files = collect_audio_files(&[
+            nested.to_string_lossy().into_owned(),
+            loose_mp3.to_string_lossy().into_owned(),
+        ]);
+        assert_eq!(files.len(), 2);
+        assert!(files.contains(&nested_wav));
+        assert!(files.contains(&loose_mp3));
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

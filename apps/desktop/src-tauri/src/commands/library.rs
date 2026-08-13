@@ -1,6 +1,6 @@
 use crate::library::{
-    start_convert_tracks, start_import_from_rekordbox, start_scan_folder, ConvertOptions,
-    DuplicateChoice, DuplicateResolver, LibraryState, Track,
+    start_convert_tracks, start_import_from_rekordbox, start_import_paths, start_scan_folder,
+    ConvertOptions, DuplicateChoice, DuplicateResolver, LibraryState, Track,
 };
 use std::path::Path;
 use tauri::{AppHandle, State};
@@ -17,6 +17,16 @@ pub fn library_scan_folder(app: AppHandle, folder: String) -> Result<(), String>
     }
 
     start_scan_folder(app, folder);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn library_import_paths(app: AppHandle, paths: Vec<String>) -> Result<(), String> {
+    if paths.is_empty() {
+        return Err("インポートするパスがありません".to_string());
+    }
+
+    start_import_paths(app, paths);
     Ok(())
 }
 

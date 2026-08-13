@@ -63,7 +63,7 @@
     readonly = false,
     searchPlaceholder = "トラックを検索...",
     emptyTitle = "ライブラリにトラックがありません",
-    emptyHint = "フォルダを追加して音楽をスキャンしてください",
+    emptyHint = "フォルダを追加するか、ファイルをドロップしてください",
     bulkRemoveConfirmMessage = "曲をライブラリから削除しますか？",
     removeTitle = "ライブラリから削除",
     headerExtra,

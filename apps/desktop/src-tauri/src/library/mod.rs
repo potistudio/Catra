@@ -8,4 +8,4 @@ pub use convert::{start_convert_tracks, ConvertOptions};
 pub use db::{init_library, LibraryState, ScanResult, Track};
 pub use duplicate::{DuplicateChoice, DuplicateResolver, TrackCandidate};
 pub use import_rekordbox::start_import_from_rekordbox;
-pub use scan::{import_file, start_scan_folder};
+pub use scan::{import_file, start_import_paths, start_scan_folder};

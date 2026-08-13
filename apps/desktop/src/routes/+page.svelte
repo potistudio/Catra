@@ -1,11 +1,13 @@
 <script lang="ts">
   import { listen } from "@tauri-apps/api/event";
+  import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { open } from "@tauri-apps/plugin-dialog";
   import { onMount } from "svelte";
   import { consolePanel, pushActivityLog, pushActivityLogPayload } from "$lib/activityLog.svelte";
   import {
     convertTracks,
     importFromRekordbox,
+    importPaths,
     listTracks,
     rekordboxAddContent,
     rekordboxCheck,
@@ -61,7 +63,8 @@
   let rekordboxBusy = $state(false);
   let loading = $state(false);
   let scanning = $state(false);
-  let scanKind = $state<"folder" | "rekordbox" | null>(null);
+  let scanKind = $state<"folder" | "rekordbox" | "drop" | null>(null);
+  let fileDropActive = $state(false);
   let scanProgress = $state<ScanProgress | null>(null);
   let duplicatePayload = $state<DuplicateFoundPayload | null>(null);
   let downloadProgress = $state<DownloadProgress | null>(null);
@@ -75,6 +78,7 @@
     if (!scanning) return "";
     if (scanKind === "rekordbox") return "Rekordbox からインポート中";
     if (scanKind === "folder") return "フォルダをスキャン中";
+    if (scanKind === "drop") return "ドロップしたファイルを取り込み中";
     return "ライブラリ取り込み中";
   });
 
@@ -378,6 +382,38 @@
     }
   }
 
+  function isFileDrag(event: DragEvent): boolean {
+    return Array.from(event.dataTransfer?.types ?? []).includes("Files");
+  }
+
+  function dropImportBlocked(): boolean {
+    return scanning || converting || duplicatePayload != null || convertDialogOpen;
+  }
+
+  async function handleDroppedPaths(paths: string[]) {
+    fileDropActive = false;
+    if (paths.length === 0) return;
+    if (dropImportBlocked()) {
+      pushActivityLog("warning", "取り込み中はドロップできません");
+      return;
+    }
+
+    activeTab = "library";
+    scanning = true;
+    scanKind = "drop";
+    scanProgress = null;
+    pushActivityLog("info", "ドロップされたファイルを取り込み中...");
+
+    try {
+      await importPaths(paths);
+    } catch (e) {
+      scanning = false;
+      scanKind = null;
+      scanProgress = null;
+      pushActivityLog("error", "取り込みに失敗しました", String(e));
+    }
+  }
+
   function handleSelect(track: Track) {
     selectedTrack = track;
     appSession.selectedTrackId = track.id;
@@ -460,6 +496,38 @@
     let unlistenConvertProgress: (() => void) | undefined;
     let unlistenConvertComplete: (() => void) | undefined;
     let unlistenConvertError: (() => void) | undefined;
+    let unlistenDragDrop: (() => void) | undefined;
+
+    const onWindowDragOver = (event: DragEvent) => {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+    };
+    const onWindowDrop = (event: DragEvent) => {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+    };
+    window.addEventListener("dragover", onWindowDragOver);
+    window.addEventListener("drop", onWindowDrop);
+
+    void getCurrentWebview()
+      .onDragDropEvent((event) => {
+        const payload = event.payload;
+        if (payload.type === "enter" || payload.type === "over") {
+          fileDropActive = true;
+          return;
+        }
+        if (payload.type === "drop") {
+          void handleDroppedPaths(payload.paths);
+          return;
+        }
+        fileDropActive = false;
+      })
+      .then((unlisten) => {
+        unlistenDragDrop = unlisten;
+      })
+      .catch(() => {
+        // getCurrentWebview throws outside the Tauri webview.
+      });
 
     void listen("library-updated", () => {
       void loadTracks();
@@ -568,6 +636,9 @@
       unlistenConvertProgress?.();
       unlistenConvertComplete?.();
       unlistenConvertError?.();
+      unlistenDragDrop?.();
+      window.removeEventListener("dragover", onWindowDragOver);
+      window.removeEventListener("drop", onWindowDrop);
     };
   });
 </script>
@@ -746,10 +817,21 @@
 
   <StatusBar />
   <PreviewPlayer track={previewTrack} />
+
+  {#if fileDropActive}
+    <div class="drop-overlay" aria-live="polite">
+      <p>
+        {dropImportBlocked()
+          ? "取り込みが終わるまでドロップできません"
+          : "楽曲ファイルまたはフォルダをドロップしてライブラリに追加"}
+      </p>
+    </div>
+  {/if}
 </div>
 
 <style>
   .app {
+    position: relative;
     display: flex;
     flex-direction: column;
     height: 100vh;
@@ -906,5 +988,27 @@
 
   .tab-panel[hidden] {
     display: none;
+  }
+
+  .drop-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    background: var(--overlay-strong);
+    border: 2px dashed color-mix(in srgb, var(--accent) 70%, var(--border));
+  }
+
+  .drop-overlay p {
+    margin: 0;
+    padding: 0.85rem 1.25rem;
+    border-radius: 8px;
+    background: var(--surface-raised);
+    color: var(--text);
+    font-size: 0.95rem;
+    font-weight: 600;
   }
 </style>
