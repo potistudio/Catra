@@ -114,13 +114,13 @@ Rekordbox 側の画面は残す。見ているのはリンク先の索引であ�
 |---|---|---|
 | 取り込み（D&D / フォルダ / ダウンロード） | コピーして登録 | 何もしない |
 | Rekordbox から取り込む | コピーして登録 | 同じ Content の `FolderPath` を Catra 側へ更新する |
-| Rekordbox に追加 | Content ID を保存 | 同じ Content が残っていれば復活させる。なければ Catra の絶対パスで Content を作る |
-| Rekordbox から外す | Content ID は残す | Content とプレイリスト所属を `rb_local_deleted` にする。Cue・解析ファイル・UUID は残す |
+| Rekordbox に追加 | Content ID を保存 | スナップショットがあれば同じ Content / Cue を戻す。なければ Catra の絶対パスで Content を作る |
+| Rekordbox から外す | Content ID と解析スナップショットは残す | Content 行を削除する。Cue・UUID・`AnalysisDataPath` は Catra に保存する。解析ファイルはディスクに残す |
 | ゴミ箱へ | `library/` → `trash/` | `FolderPath` をゴミ箱側へ更新する（リンクと Cue を維持する） |
 | ゴミ箱から戻す | `trash/` → `library/` | `FolderPath` を戻す |
 | ゴミ箱から削除 | 実体と行を消す | Content も消す（パス切れを残さない） |
 
-`rekordbox_add_content(track.path)` は、`path` が管轄内ならリンク追加として正しい。同じ `FolderPath` の Content が `rb_local_deleted` なら復活させる。`rekordbox_delete_content` はアンリンク専用とし、Cue と解析は消さない。Catra のゴミ箱処理と混ぜない。永久削除だけ Content 行を消す。
+`rekordbox_add_content(track.path)` は、`path` が管轄内ならリンク追加として正しい。外した Content のスナップショットがあれば同じ ID / UUID で戻す。`rekordbox_delete_content` はコレクションから Content 行を消す。Cue と解析は Catra 側に残し、永久削除のときだけ捨てる。Catra のゴミ箱処理と混ぜない。
 
 ## 既存データ
 

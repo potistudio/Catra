@@ -126,8 +126,6 @@ LEFT JOIN djmdLabel label ON c.LabelID = label.ID
 LEFT JOIN djmdArtist composer ON c.ComposerID = composer.ID
 ";
 
-pub(crate) const CONTENT_VISIBLE: &str = "IFNULL(c.rb_local_deleted, 0) = 0";
-
 impl MasterDatabase {
     pub fn get_content(
         &self,
@@ -136,7 +134,7 @@ impl MasterDatabase {
     ) -> Result<Vec<RekordboxContent>, String> {
         let sql = match id {
             Some(_) => format!("{CONTENT_QUERY} WHERE c.ID = ?1"),
-            None => format!("{CONTENT_QUERY} WHERE {CONTENT_VISIBLE}"),
+            None => CONTENT_QUERY.to_string(),
         };
 
         let mut stmt = self
@@ -475,27 +473,6 @@ pub fn update_content_folder_path(id: &str, path: &str) -> Result<RekordboxConte
         .ok_or_else(|| "updated content could not be reloaded".to_string())
 }
 
-/// Set `rb_local_deleted = 1` on Content and its `djmdSongPlaylist` rows.
-/// Do not delete Cue, analysis files, UUID, or the Content row.
-pub fn hide_content(id: String) -> Result<(), String> {
-    let mut session = WriteSession::open()?;
-    if !content_row_exists(session.conn(), &id)? {
-        return Err(format!("content {id} was not found"));
-    }
-    let ts = timestamp_sql(now_local());
-    set_playlist_songs_deleted(&mut session, &id, 1, &ts)?;
-    session
-        .conn()
-        .execute(
-            "UPDATE djmdContent SET rb_local_deleted = 1, updated_at = ?1 WHERE ID = ?2",
-            params![ts.as_str(), id.as_str()],
-        )
-        .map_err(|error| error.to_string())?;
-    session.usn.track("djmdContent", id);
-    session.commit()?;
-    Ok(())
-}
-
 /// Set `rb_local_deleted = 0` on Content and its `djmdSongPlaylist` rows.
 /// When `path` is set, `FolderPath` and `FileNameL` are updated in the same write.
 pub fn restore_content(id: &str, path: Option<&str>) -> Result<RekordboxContent, String> {
@@ -551,35 +528,32 @@ pub fn restore_content(id: &str, path: Option<&str>) -> Result<RekordboxContent,
 
 pub fn delete_content(id: String) -> Result<(), String> {
     let mut session = WriteSession::open()?;
-    let exists: bool = session
-        .conn()
-        .prepare("SELECT 1 FROM djmdContent WHERE ID = ?1 LIMIT 1")
-        .map_err(|error| error.to_string())?
-        .exists(params![id.as_str()])
-        .map_err(|error| error.to_string())?;
-    if !exists {
+    if !content_row_exists(session.conn(), &id)? {
         return Err(format!("content {id} was not found"));
     }
+    purge_content_rows(&mut session, &id)?;
+    session.commit()?;
+    Ok(())
+}
 
+pub(crate) fn purge_content_rows(session: &mut WriteSession, id: &str) -> Result<(), String> {
     let song_ids: Vec<String> = {
         let mut stmt = session
             .conn()
             .prepare("SELECT ID FROM djmdSongPlaylist WHERE ContentID = ?1")
             .map_err(|error| error.to_string())?;
         let rows = stmt
-            .query_map(params![id.as_str()], |row| row.get(0))
+            .query_map(params![id], |row| row.get(0))
             .map_err(|error| error.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())?
     };
-    session
-        .usn
-        .track_many("djmdSongPlaylist", song_ids);
+    session.usn.track_many("djmdSongPlaylist", song_ids);
     session
         .conn()
         .execute(
             "DELETE FROM djmdSongPlaylist WHERE ContentID = ?1",
-            params![id.as_str()],
+            params![id],
         )
         .map_err(|error| error.to_string())?;
 
@@ -591,17 +565,15 @@ pub fn delete_content(id: String) -> Result<(), String> {
     ] {
         let _ = session.conn().execute(
             &format!("DELETE FROM {table} WHERE ContentID = ?1"),
-            params![id.as_str()],
+            params![id],
         );
     }
 
     session
         .conn()
-        .execute("DELETE FROM djmdContent WHERE ID = ?1", params![id.as_str()])
+        .execute("DELETE FROM djmdContent WHERE ID = ?1", params![id])
         .map_err(|error| error.to_string())?;
-    session.usn.track("djmdContent", id);
-
-    session.commit()?;
+    session.usn.track("djmdContent", id.to_string());
     Ok(())
 }
 

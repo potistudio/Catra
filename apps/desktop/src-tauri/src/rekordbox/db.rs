@@ -29,7 +29,7 @@ impl MasterDatabase {
     }
 
     pub fn track_count(&self) -> Result<usize, String> {
-        self.count("SELECT COUNT(*) FROM djmdContent WHERE IFNULL(rb_local_deleted, 0) = 0")
+        self.count("SELECT COUNT(*) FROM djmdContent")
     }
 
     pub fn playlist_count(&self) -> Result<usize, String> {

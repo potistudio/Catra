@@ -1,9 +1,11 @@
+use crate::library::{remove_rekordbox_content_id, LibraryState};
 use crate::rekordbox::{
     add_content, add_to_playlist, check, create_playlist, create_playlist_folder, db_status,
-    delete_playlist, get_content, get_playlist_content, hide_content, list_playlists,
-    move_song_in_playlist, remove_from_playlist, rename_playlist, update_content, RekordboxCheck,
-    RekordboxContent, RekordboxContentUpdate, RekordboxDbStatus, RekordboxPlaylist,
+    delete_playlist, get_content, get_playlist_content, list_playlists, move_song_in_playlist,
+    remove_from_playlist, rename_playlist, update_content, RekordboxCheck, RekordboxContent,
+    RekordboxContentUpdate, RekordboxDbStatus, RekordboxPlaylist,
 };
+use tauri::State;
 
 // Blocking I/O (SQLCipher, filesystem, process list). `async` runs the handler off the
 // UI main thread; non-async Tauri commands execute on the main thread.
@@ -102,8 +104,11 @@ pub fn rekordbox_update_content(
     update_content(id, fields)
 }
 
-/// Hide Content with `rb_local_deleted`. Cue, analysis files, and UUID stay.
+/// Delete Content from the collection. Catra keeps Cue and analysis for re-add.
 #[tauri::command(async)]
-pub fn rekordbox_delete_content(id: String) -> Result<(), String> {
-    hide_content(id)
+pub fn rekordbox_delete_content(
+    state: State<'_, LibraryState>,
+    id: String,
+) -> Result<(), String> {
+    remove_rekordbox_content_id(&state, &id)
 }

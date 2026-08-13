@@ -2,7 +2,7 @@ use super::duplicate::is_same_track;
 use super::paths::{
     clear_incoming, ensure_library_layout, resolve_library_root, to_absolute, to_relative,
 };
-use rusqlite::{params, Connection, Row};
+use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
@@ -128,7 +128,8 @@ impl LibraryState {
                 trashed_at INTEGER,
                 parent_track_id INTEGER,
                 format_group_id TEXT,
-                rekordbox_content_id TEXT
+                rekordbox_content_id TEXT,
+                rekordbox_snapshot TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
             CREATE INDEX IF NOT EXISTS idx_tracks_title ON tracks(title);
@@ -366,6 +367,44 @@ impl LibraryState {
         Ok(())
     }
 
+    pub fn rekordbox_snapshot(&self, id: i64) -> Result<Option<String>, rusqlite::Error> {
+        let conn = lock_conn(&self.conn)?;
+        let value = conn
+            .query_row(
+                "SELECT rekordbox_snapshot FROM tracks WHERE id = ?1",
+                params![id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()?;
+        Ok(value.flatten())
+    }
+
+    pub fn set_rekordbox_snapshot(
+        &self,
+        id: i64,
+        snapshot: Option<&str>,
+    ) -> Result<(), rusqlite::Error> {
+        let conn = lock_conn(&self.conn)?;
+        conn.execute(
+            "UPDATE tracks SET rekordbox_snapshot = ?1 WHERE id = ?2",
+            params![snapshot, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn find_id_by_rekordbox_content_id(
+        &self,
+        content_id: &str,
+    ) -> Result<Option<i64>, rusqlite::Error> {
+        let conn = lock_conn(&self.conn)?;
+        conn.query_row(
+            "SELECT id FROM tracks WHERE rekordbox_content_id = ?1 LIMIT 1",
+            params![content_id],
+            |row| row.get(0),
+        )
+        .optional()
+    }
+
     pub fn set_format_group_id(
         &self,
         id: i64,
@@ -465,6 +504,7 @@ fn migrate(conn: &Connection) -> Result<(), rusqlite::Error> {
         "ALTER TABLE tracks ADD COLUMN parent_track_id INTEGER",
         "ALTER TABLE tracks ADD COLUMN format_group_id TEXT",
         "ALTER TABLE tracks ADD COLUMN rekordbox_content_id TEXT",
+        "ALTER TABLE tracks ADD COLUMN rekordbox_snapshot TEXT",
     ];
 
     for sql in migrations {
@@ -483,6 +523,11 @@ fn migrate(conn: &Connection) -> Result<(), rusqlite::Error> {
     .ok();
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_tracks_parent ON tracks(parent_track_id)",
+        [],
+    )
+    .ok();
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tracks_rekordbox_content_id ON tracks(rekordbox_content_id)",
         [],
     )
     .ok();
