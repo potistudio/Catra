@@ -42,6 +42,7 @@
     status: RekordboxCheck | null;
     onselect: (track: RekordboxContent) => void;
     onrefresh: () => void | Promise<void>;
+    onensurewritable?: () => Promise<boolean>;
   }
 
   let {
@@ -51,6 +52,7 @@
     status,
     onselect,
     onrefresh,
+    onensurewritable,
   }: Props = $props();
 
   let browseMode = $state<BrowseMode>("all");
@@ -207,7 +209,13 @@
   }
 
   async function runAction(action: () => Promise<void>) {
-    if (!writable || busy) return;
+    if (busy) return;
+    if (onensurewritable) {
+      if (!(await onensurewritable())) return;
+    } else if (!writable) {
+      return;
+    }
+    if (busy) return;
     busy = true;
     actionError = null;
     try {

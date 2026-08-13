@@ -40,6 +40,9 @@
 
   type AppTab = "library" | "rekordbox";
 
+  /** Rekordbox may start or quit after the initial check; keep the write lock aligned. */
+  const REKORDBOX_RUNNING_POLL_MS = 2000;
+
   let activeTab = $state<AppTab>("library");
   let tracks = $state<Track[]>([]);
   let selectedTrack = $state<Track | null>(null);
@@ -118,6 +121,41 @@
     }
   }
 
+  function rekordboxLockUnchanged(
+    prev: RekordboxCheck | null,
+    next: RekordboxCheck,
+  ): boolean {
+    return (
+      prev != null &&
+      prev.rekordboxRunning === next.rekordboxRunning &&
+      prev.dbPath === next.dbPath
+    );
+  }
+
+  async function refreshRekordboxStatus(): Promise<RekordboxCheck | null> {
+    try {
+      const next = await rekordboxCheck();
+      const prev = rekordboxStatus;
+      if (rekordboxLockUnchanged(prev, next)) {
+        return prev;
+      }
+
+      rekordboxStatus = next;
+
+      if (prev && prev.rekordboxRunning !== next.rekordboxRunning) {
+        if (next.rekordboxRunning) {
+          pushActivityLog("warning", "Rekordbox が起動したため編集をロックしました");
+        } else if (next.dbPath) {
+          pushActivityLog("info", "Rekordbox が終了したため編集できます");
+        }
+      }
+
+      return next;
+    } catch {
+      return rekordboxStatus;
+    }
+  }
+
   async function loadRekordbox(silent = true) {
     rekordboxLoading = true;
     try {
@@ -153,7 +191,8 @@
     selectedRekordboxId = track.id;
   }
 
-  function ensureRekordboxWritable(): boolean {
+  async function ensureRekordboxWritable(): Promise<boolean> {
+    await refreshRekordboxStatus();
     if (!rekordboxStatus?.dbPath) {
       pushActivityLog("warning", "Rekordbox ライブラリが見つかりません");
       return false;
@@ -170,7 +209,7 @@
 
   async function handleAddToRekordbox(selected: Track[]) {
     if (selected.length === 0 || rekordboxBusy) return;
-    if (!ensureRekordboxWritable()) return;
+    if (!(await ensureRekordboxWritable())) return;
 
     rekordboxBusy = true;
     let added = 0;
@@ -211,7 +250,7 @@
 
   async function handleRemoveFromRekordbox(selected: Track[]) {
     if (selected.length === 0 || rekordboxBusy) return;
-    if (!ensureRekordboxWritable()) return;
+    if (!(await ensureRekordboxWritable())) return;
 
     rekordboxBusy = true;
     let removed = 0;
@@ -347,6 +386,15 @@
     void loadTracks(false);
     void loadRekordbox(true);
 
+    let rekordboxPollInFlight = false;
+    const rekordboxPollId = window.setInterval(() => {
+      if (rekordboxPollInFlight || rekordboxLoading) return;
+      rekordboxPollInFlight = true;
+      void refreshRekordboxStatus().finally(() => {
+        rekordboxPollInFlight = false;
+      });
+    }, REKORDBOX_RUNNING_POLL_MS);
+
     let unlistenUpdated: (() => void) | undefined;
     let unlistenActivity: (() => void) | undefined;
     let unlistenScanComplete: (() => void) | undefined;
@@ -388,7 +436,15 @@
     });
 
     void listen<ScanProgress>("library-scan-progress", (event) => {
-      scanProgress = event.payload;
+      // Clone into a new object so Svelte 5 always sees a state change.
+      const next = event.payload;
+      scanProgress = {
+        processed: next.processed,
+        added: next.added,
+        skipped: next.skipped,
+        currentPath: next.currentPath,
+        total: next.total ?? null,
+      };
     }).then((unlisten) => {
       unlistenScanProgress = unlisten;
     });
@@ -412,6 +468,7 @@
     });
 
     return () => {
+      window.clearInterval(rekordboxPollId);
       unlistenUpdated?.();
       unlistenActivity?.();
       unlistenScanComplete?.();
@@ -546,6 +603,7 @@
           status={rekordboxStatus}
           onselect={handleSelectRekordbox}
           onrefresh={() => loadRekordbox(false)}
+          onensurewritable={ensureRekordboxWritable}
         />
       </div>
     </main>
