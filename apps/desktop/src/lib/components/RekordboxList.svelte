@@ -27,6 +27,7 @@
     RekordboxPlaylist,
     Track,
   } from "$lib/types";
+  import { appSession, persistAppSession } from "$lib/appSession.svelte";
 
   type BrowseMode = "all" | "playlist";
   type TextPromptKind = "playlist" | "folder" | "rename";
@@ -55,10 +56,10 @@
     onensurewritable,
   }: Props = $props();
 
-  let browseMode = $state<BrowseMode>("all");
+  let browseMode = $state<BrowseMode>(appSession.rekordbox.browseMode);
   let playlists = $state<RekordboxPlaylist[]>([]);
-  let selectedPlaylistId = $state<string | null>(null);
-  let selectedFolderId = $state<string | null>(null);
+  let selectedPlaylistId = $state<string | null>(appSession.rekordbox.selectedPlaylistId);
+  let selectedFolderId = $state<string | null>(appSession.rekordbox.selectedFolderId);
   let playlistTracks = $state<RekordboxContent[]>([]);
   let playlistLoading = $state(false);
   let actionError = $state<string | null>(null);
@@ -122,7 +123,8 @@
   );
 
   $effect(() => {
-    if (status?.dbPath) {
+    if (status == null) return;
+    if (status.dbPath) {
       void loadPlaylists();
     } else {
       playlists = [];
@@ -130,6 +132,13 @@
       selectedFolderId = null;
       playlistTracks = [];
     }
+  });
+
+  $effect(() => {
+    appSession.rekordbox.browseMode = browseMode;
+    appSession.rekordbox.selectedPlaylistId = selectedPlaylistId;
+    appSession.rekordbox.selectedFolderId = selectedFolderId;
+    persistAppSession();
   });
 
   async function loadPlaylists() {
@@ -150,6 +159,9 @@
         )
       ) {
         selectedFolderId = null;
+      }
+      if (browseMode === "playlist" && selectedPlaylistId) {
+        void loadPlaylistTracks(selectedPlaylistId);
       }
     } catch {
       playlists = [];
@@ -621,6 +633,7 @@
           tracks={displayTracks}
           selectedId={selectedListId}
           readonly={!writable}
+          sessionScope="rekordbox"
           searchPlaceholder="Rekordbox トラックを検索..."
           emptyTitle={browseMode === "playlist"
             ? "このプレイリストにトラックがありません"

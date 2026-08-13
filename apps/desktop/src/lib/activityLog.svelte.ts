@@ -1,8 +1,9 @@
 import type { ActivityLogEntry, ActivityLogLevel, ActivityLogPayload } from "./types";
+import { appSession, persistAppSession } from "./appSession.svelte";
 
 let nextId = 1;
 export const activityLogs = $state<ActivityLogEntry[]>([]);
-export const consolePanel = $state({ open: false });
+export const consolePanel = $state({ open: appSession.consoleOpen });
 
 function isActivityLogLevel(value: string): value is ActivityLogLevel {
   return value === "info" || value === "success" || value === "warning" || value === "error";
@@ -10,10 +11,14 @@ function isActivityLogLevel(value: string): value is ActivityLogLevel {
 
 export function setConsoleOpen(open: boolean) {
   consolePanel.open = open;
+  appSession.consoleOpen = open;
+  persistAppSession();
 }
 
 export function toggleConsole() {
   consolePanel.open = !consolePanel.open;
+  appSession.consoleOpen = consolePanel.open;
+  persistAppSession();
 }
 
 export function pushActivityLog(

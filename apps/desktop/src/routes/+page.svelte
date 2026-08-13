@@ -2,7 +2,7 @@
   import { listen } from "@tauri-apps/api/event";
   import { open } from "@tauri-apps/plugin-dialog";
   import { onMount } from "svelte";
-  import { pushActivityLog, pushActivityLogPayload } from "$lib/activityLog.svelte";
+  import { consolePanel, pushActivityLog, pushActivityLogPayload } from "$lib/activityLog.svelte";
   import {
     importFromRekordbox,
     listTracks,
@@ -22,6 +22,11 @@
   import StatusBar from "$lib/components/StatusBar.svelte";
   import TrackList from "$lib/components/TrackList.svelte";
   import {
+    appSession,
+    persistAppSession,
+    type AppTab,
+  } from "$lib/appSession.svelte";
+  import {
     buildRekordboxPathIndex,
     contentIdForPath,
   } from "$lib/rekordboxMembership";
@@ -38,16 +43,14 @@
     Track,
   } from "$lib/types";
 
-  type AppTab = "library" | "rekordbox";
-
   /** Rekordbox may start or quit after the initial check; keep the write lock aligned. */
   const REKORDBOX_RUNNING_POLL_MS = 2000;
 
-  let activeTab = $state<AppTab>("library");
+  let activeTab = $state<AppTab>(appSession.activeTab);
   let tracks = $state<Track[]>([]);
   let selectedTrack = $state<Track | null>(null);
   let rekordboxTracks = $state<RekordboxContent[]>([]);
-  let selectedRekordboxId = $state<string | null>(null);
+  let selectedRekordboxId = $state<string | null>(appSession.selectedRekordboxId);
   let rekordboxStatus = $state<RekordboxCheck | null>(null);
   let rekordboxLoading = $state(false);
   let rekordboxBusy = $state(false);
@@ -107,10 +110,11 @@
     loading = true;
     try {
       tracks = await listTracks();
-      if (selectedTrack) {
-        const updated = tracks.find((t) => t.id === selectedTrack!.id);
-        selectedTrack = updated ?? null;
-      }
+      const selectedId = selectedTrack?.id ?? appSession.selectedTrackId;
+      selectedTrack =
+        selectedId != null ? (tracks.find((t) => t.id === selectedId) ?? null) : null;
+      appSession.selectedTrackId = selectedTrack?.id ?? null;
+      persistAppSession();
       if (!silent) {
         pushActivityLog("info", `ライブラリを読み込みました (${tracks.length} 曲)`);
       }
@@ -336,13 +340,23 @@
 
   function handleSelect(track: Track) {
     selectedTrack = track;
+    appSession.selectedTrackId = track.id;
+    persistAppSession();
   }
+
+  $effect(() => {
+    appSession.activeTab = activeTab;
+    appSession.selectedRekordboxId = selectedRekordboxId;
+    appSession.consoleOpen = consolePanel.open;
+    persistAppSession();
+  });
 
   async function handleRemove(track: Track) {
     try {
       await removeTrack(track.id);
       if (selectedTrack?.id === track.id) {
         selectedTrack = null;
+        appSession.selectedTrackId = null;
       }
       await loadTracks();
       pushActivityLog(
@@ -360,6 +374,7 @@
       const count = await removeTracks(ids);
       if (selectedTrack && ids.includes(selectedTrack.id)) {
         selectedTrack = null;
+        appSession.selectedTrackId = null;
       }
       await loadTracks();
       pushActivityLog("success", `${count} 曲をライブラリから削除しました`);
@@ -579,6 +594,7 @@
         <TrackList
           {tracks}
           selectedId={selectedTrack?.id ?? null}
+          sessionScope="library"
           {rekordboxPathIndex}
           {rekordboxWritable}
           {rekordboxBusy}

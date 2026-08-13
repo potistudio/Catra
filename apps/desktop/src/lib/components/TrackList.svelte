@@ -4,6 +4,7 @@
   import SelectionCheckbox from "$lib/components/SelectionCheckbox.svelte";
   import TrackGrid from "$lib/components/TrackGrid.svelte";
   import TrackRow from "$lib/components/TrackRow.svelte";
+  import { appSession, persistAppSession } from "$lib/appSession.svelte";
   import type { Track } from "$lib/types";
   import { isInRekordbox } from "$lib/rekordboxMembership";
   import {
@@ -30,6 +31,7 @@
   };
 
   type MembershipFilter = "all" | "missing" | "present";
+  type ListSessionScope = "library" | "rekordbox";
 
   interface Props {
     tracks: Track[];
@@ -45,6 +47,7 @@
     rekordboxWritable?: boolean;
     rekordboxBusy?: boolean;
     rekordboxLockedHint?: string | null;
+    sessionScope?: ListSessionScope;
     onselect: (track: Track) => void;
     onremove?: (track: Track) => void;
     onbulkremove?: (ids: number[]) => void | Promise<void>;
@@ -66,6 +69,7 @@
     rekordboxWritable = false,
     rekordboxBusy = false,
     rekordboxLockedHint = null,
+    sessionScope,
     onselect,
     onremove,
     onbulkremove,
@@ -79,14 +83,21 @@
   );
   let showRowRemove = $derived(!commandBarMode && !readonly && !!onremove);
 
-  let checkedIds = $state<Set<number>>(new Set());
-  let membershipFilter = $state<MembershipFilter>("all");
+  const listSession =
+    sessionScope === "rekordbox"
+      ? appSession.rekordbox.list
+      : sessionScope === "library"
+        ? appSession.library
+        : null;
 
-  let queryInput = $state("");
-  let query = $state("");
-  let viewMode = $state<ViewMode>("list");
-  let sortColumn = $state<SortColumn>("artist");
-  let sortDirection = $state<SortDirection>("asc");
+  let checkedIds = $state<Set<number>>(new Set());
+  let membershipFilter = $state<MembershipFilter>(listSession?.membershipFilter ?? "all");
+
+  let queryInput = $state(listSession?.query ?? "");
+  let query = $state(listSession?.query ?? "");
+  let viewMode = $state<ViewMode>(listSession?.viewMode ?? "list");
+  let sortColumn = $state<SortColumn>(listSession?.sortColumn ?? "artist");
+  let sortDirection = $state<SortDirection>(listSession?.sortDirection ?? "asc");
   let scrollTop = $state(0);
   let viewportHeight = $state(0);
 
@@ -99,6 +110,16 @@
     }, 150);
 
     return () => clearTimeout(timer);
+  });
+
+  $effect(() => {
+    if (!listSession) return;
+    listSession.query = queryInput;
+    listSession.viewMode = viewMode;
+    listSession.sortColumn = sortColumn;
+    listSession.sortDirection = sortDirection;
+    listSession.membershipFilter = membershipFilter;
+    persistAppSession();
   });
 
   $effect(() => {
