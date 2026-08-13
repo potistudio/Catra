@@ -1,4 +1,4 @@
-use super::db::LibraryState;
+use super::db::{LibraryState, Track};
 use super::paths::{library_prefix, swap_location_prefix, trash_prefix};
 use std::collections::HashSet;
 use std::fs;
@@ -19,12 +19,7 @@ pub fn trash_tracks(library: &LibraryState, ids: &[i64]) -> Result<u32, String> 
         if track.trashed_at.is_some() {
             continue;
         }
-        relocate_track_dir(library, id, "library", "trash")?;
-        let relative = swap_location_prefix(&track.stored_path, "library", "trash");
-        library
-            .set_trashed(id, Some(now), &relative)
-            .map_err(|error| error.to_string())?;
-        relink_folder_path(library, id, &relative)?;
+        apply_location_change(library, &track, "library", "trash", Some(now))?;
         moved += 1;
     }
     Ok(moved)
@@ -45,12 +40,7 @@ pub fn restore_tracks(library: &LibraryState, ids: &[i64]) -> Result<u32, String
         if track.trashed_at.is_none() {
             continue;
         }
-        relocate_track_dir(library, id, "trash", "library")?;
-        let relative = swap_location_prefix(&track.stored_path, "trash", "library");
-        library
-            .set_trashed(id, None, &relative)
-            .map_err(|error| error.to_string())?;
-        relink_folder_path(library, id, &relative)?;
+        apply_location_change(library, &track, "trash", "library", None)?;
         restored += 1;
     }
     Ok(restored)
@@ -137,6 +127,31 @@ fn collect_ids(
     Ok(())
 }
 
+fn apply_location_change(
+    library: &LibraryState,
+    track: &Track,
+    from_kind: &str,
+    to_kind: &str,
+    trashed_at: Option<i64>,
+) -> Result<(), String> {
+    relocate_track_dir(library, track.id, from_kind, to_kind)?;
+    let relative = swap_location_prefix(&track.stored_path, from_kind, to_kind);
+    if let Err(error) = library.set_trashed(track.id, trashed_at, &relative) {
+        let _ = relocate_track_dir(library, track.id, to_kind, from_kind);
+        return Err(error.to_string());
+    }
+    if let Err(error) = relink_folder_path(library, track.id, &relative) {
+        revert_location_change(library, track, to_kind, from_kind);
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn revert_location_change(library: &LibraryState, track: &Track, from_kind: &str, to_kind: &str) {
+    let _ = relocate_track_dir(library, track.id, from_kind, to_kind);
+    let _ = library.set_trashed(track.id, track.trashed_at, &track.stored_path);
+}
+
 fn relocate_track_dir(
     library: &LibraryState,
     id: i64,
@@ -169,8 +184,21 @@ fn relink_folder_path(
         return Ok(());
     }
     let absolute = library.absolute_string(relative);
-    crate::rekordbox::update_content_folder_path(&content_id, &absolute)?;
-    Ok(())
+    match crate::rekordbox::update_content_folder_path(&content_id, &absolute) {
+        Ok(_) => Ok(()),
+        Err(error) if is_missing_content_error(&error) => {
+            // Content 行が無いときは Catra 側の移動を継続する。リンク ID を外し、再リンクは利用者が行う。
+            library
+                .set_rekordbox_content_id(id, None)
+                .map_err(|error| error.to_string())?;
+            Ok(())
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn is_missing_content_error(error: &str) -> bool {
+    error.starts_with("content ") && error.ends_with(" was not found")
 }
 
 fn ensure_rekordbox_writable_if_linked(
@@ -300,6 +328,32 @@ mod tests {
         trash_tracks(&library, &[first]).unwrap();
         assert!(library.get_track(first).unwrap().unwrap().trashed_at.is_some());
         assert!(library.get_track(second).unwrap().unwrap().trashed_at.is_none());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn missing_content_error_does_not_match_other_not_found() {
+        assert!(is_missing_content_error("content 58253138 was not found"));
+        assert!(!is_missing_content_error("Rekordbox master.db was not found"));
+        assert!(!is_missing_content_error("file not found: C:\\x"));
+        assert!(!is_missing_content_error("playlist 1 was not found"));
+    }
+
+    #[test]
+    fn revert_location_returns_track_to_trash() {
+        let (library, root) = temp_library();
+        let id = insert_file(&library, "song.wav", None);
+        trash_tracks(&library, &[id]).unwrap();
+        let track = library.get_track(id).unwrap().unwrap();
+        apply_location_change(&library, &track, "trash", "library", None).unwrap();
+        let restored = library.get_track(id).unwrap().unwrap();
+        assert!(restored.trashed_at.is_none());
+        revert_location_change(&library, &track, "library", "trash");
+        let reverted = library.get_track(id).unwrap().unwrap();
+        assert!(reverted.trashed_at.is_some());
+        assert!(reverted.stored_path.starts_with("trash/"));
+        assert!(library.absolute_path(&format!("trash/{id}")).exists());
+        assert!(!library.absolute_path(&format!("library/{id}")).exists());
         let _ = fs::remove_dir_all(&root);
     }
 }

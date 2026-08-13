@@ -220,6 +220,9 @@
 
   function switchTab(tab: AppTab) {
     activeTab = tab;
+    if (tab === "library") {
+      void loadTracks(true);
+    }
     if (tab === "rekordbox" && rekordboxTracks.length === 0 && !rekordboxLoading) {
       void loadRekordbox(false);
     }
@@ -457,8 +460,6 @@
         selectedTrack = null;
         appSession.selectedTrackId = null;
       }
-      await loadTracks();
-      await loadTrashed();
       pushActivityLog(
         "success",
         `ゴミ箱へ移しました: ${track.title ?? track.path}`,
@@ -467,6 +468,8 @@
     } catch (e) {
       pushActivityLog("error", "トラックの削除に失敗しました", String(e));
     }
+    await loadTracks();
+    await loadTrashed();
   }
 
   async function handleBulkRemove(ids: number[]) {
@@ -476,12 +479,12 @@
         selectedTrack = null;
         appSession.selectedTrackId = null;
       }
-      await loadTracks();
-      await loadTrashed();
       pushActivityLog("success", `${count} 曲をゴミ箱へ移しました`);
     } catch (e) {
       pushActivityLog("error", "トラックの一括削除に失敗しました", String(e));
     }
+    await loadTracks();
+    await loadTrashed();
   }
 
   async function handleDuplicateChoice(choice: DuplicateChoice) {
@@ -503,23 +506,23 @@
   async function handleRestore(track: Track) {
     try {
       await restoreTracks([track.id]);
-      await loadTracks();
-      await loadTrashed();
       pushActivityLog("success", `復元しました: ${track.title ?? track.path}`);
     } catch (e) {
       pushActivityLog("error", "復元に失敗しました", String(e));
     }
+    await loadTracks();
+    await loadTrashed();
   }
 
   async function handleBulkRestore(ids: number[]) {
     try {
       const count = await restoreTracks(ids);
-      await loadTracks();
-      await loadTrashed();
       pushActivityLog("success", `${count} 曲を復元しました`);
     } catch (e) {
       pushActivityLog("error", "復元に失敗しました", String(e));
     }
+    await loadTracks();
+    await loadTrashed();
   }
 
   async function handlePermanentDelete(ids: number[]) {
@@ -529,12 +532,12 @@
         selectedTrack = null;
         appSession.selectedTrackId = null;
       }
-      await loadTracks();
-      await loadTrashed();
       pushActivityLog("success", `${count} 曲を完全に削除しました`);
     } catch (e) {
       pushActivityLog("error", "完全削除に失敗しました", String(e));
     }
+    await loadTracks();
+    await loadTrashed();
   }
 
   async function handleEmptyTrash() {
@@ -542,12 +545,12 @@
       const count = await emptyTrash();
       selectedTrack = null;
       appSession.selectedTrackId = null;
-      await loadTracks();
-      await loadTrashed();
       pushActivityLog("success", `ゴミ箱を空にしました (${count} 曲)`);
     } catch (e) {
       pushActivityLog("error", "ゴミ箱を空にできませんでした", String(e));
     }
+    await loadTracks();
+    await loadTrashed();
   }
 
   async function handleHealthCheck() {
