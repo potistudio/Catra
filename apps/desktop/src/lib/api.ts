@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  ConvertOptions,
   DuplicateChoice,
   RekordboxCheck,
   RekordboxContent,
@@ -39,6 +40,13 @@ export async function removeTracks(ids: number[]): Promise<number> {
 
 export async function resolveDuplicate(choice: DuplicateChoice): Promise<void> {
   return invoke("library_resolve_duplicate", { choice });
+}
+
+export async function convertTracks(
+  ids: number[],
+  options: ConvertOptions,
+): Promise<void> {
+  return invoke("library_convert_tracks", { ids, options });
 }
 
 export async function rekordboxCheck(): Promise<RekordboxCheck> {

@@ -4,6 +4,7 @@
   import { onMount } from "svelte";
   import { consolePanel, pushActivityLog, pushActivityLogPayload } from "$lib/activityLog.svelte";
   import {
+    convertTracks,
     importFromRekordbox,
     listTracks,
     rekordboxAddContent,
@@ -16,6 +17,7 @@
     scanFolder,
   } from "$lib/api";
   import ActivityConsole from "$lib/components/ActivityConsole.svelte";
+  import ConvertDialog from "$lib/components/ConvertDialog.svelte";
   import DuplicateTrackDialog from "$lib/components/DuplicateTrackDialog.svelte";
   import PreviewPlayer from "$lib/components/PreviewPlayer.svelte";
   import RekordboxList from "$lib/components/RekordboxList.svelte";
@@ -33,6 +35,9 @@
   import { rekordboxContentToPreview } from "$lib/rekordboxListView";
   import type {
     ActivityLogPayload,
+    ConvertOptions,
+    ConvertProgress,
+    ConvertResult,
     DownloadProgress,
     DuplicateFoundPayload,
     PreviewableTrack,
@@ -60,6 +65,10 @@
   let scanProgress = $state<ScanProgress | null>(null);
   let duplicatePayload = $state<DuplicateFoundPayload | null>(null);
   let downloadProgress = $state<DownloadProgress | null>(null);
+  let convertProgress = $state<ConvertProgress | null>(null);
+  let convertTargets = $state<Track[]>([]);
+  let convertDialogOpen = $state(false);
+  let converting = $derived(convertProgress != null);
 
   let scanStatusLabel = $derived.by((): string => {
     if (duplicatePayload) return "重複の確認待ち";
@@ -287,6 +296,37 @@
     }
   }
 
+  function handleOpenConvert(selected: Track[]) {
+    if (selected.length === 0 || converting || scanning) return;
+    convertTargets = selected;
+    convertDialogOpen = true;
+  }
+
+  async function handleConvertConfirm(options: ConvertOptions) {
+    const ids = convertTargets.map((track) => track.id);
+    convertDialogOpen = false;
+    convertTargets = [];
+    if (ids.length === 0) return;
+
+    convertProgress = {
+      processed: 0,
+      total: ids.length,
+      converted: 0,
+      skipped: 0,
+      failed: 0,
+      currentPath: "",
+      percent: 0,
+      message: "変換を開始しています...",
+    };
+
+    try {
+      await convertTracks(ids, options);
+    } catch (e) {
+      convertProgress = null;
+      pushActivityLog("error", "変換を開始できませんでした", String(e));
+    }
+  }
+
   async function handleAddFolder() {
     const selected = await open({
       directory: true,
@@ -417,6 +457,9 @@
     let unlistenScanProgress: (() => void) | undefined;
     let unlistenDuplicate: (() => void) | undefined;
     let unlistenDownloadProgress: (() => void) | undefined;
+    let unlistenConvertProgress: (() => void) | undefined;
+    let unlistenConvertComplete: (() => void) | undefined;
+    let unlistenConvertError: (() => void) | undefined;
 
     void listen("library-updated", () => {
       void loadTracks();
@@ -482,6 +525,34 @@
       unlistenDownloadProgress = unlisten;
     });
 
+    void listen<ConvertProgress>("library-convert-progress", (event) => {
+      const next = event.payload;
+      convertProgress = {
+        processed: next.processed,
+        total: next.total,
+        converted: next.converted,
+        skipped: next.skipped,
+        failed: next.failed,
+        currentPath: next.currentPath,
+        percent: next.percent ?? convertProgress?.percent ?? null,
+        message: next.message ?? convertProgress?.message ?? null,
+      };
+    }).then((unlisten) => {
+      unlistenConvertProgress = unlisten;
+    });
+
+    void listen<ConvertResult>("library-convert-complete", () => {
+      convertProgress = null;
+    }).then((unlisten) => {
+      unlistenConvertComplete = unlisten;
+    });
+
+    void listen<string>("library-convert-error", () => {
+      convertProgress = null;
+    }).then((unlisten) => {
+      unlistenConvertError = unlisten;
+    });
+
     return () => {
       window.clearInterval(rekordboxPollId);
       unlistenUpdated?.();
@@ -491,12 +562,26 @@
       unlistenScanProgress?.();
       unlistenDuplicate?.();
       unlistenDownloadProgress?.();
+      unlistenConvertProgress?.();
+      unlistenConvertComplete?.();
+      unlistenConvertError?.();
     };
   });
 </script>
 
 {#if duplicatePayload}
   <DuplicateTrackDialog payload={duplicatePayload} onchoose={handleDuplicateChoice} />
+{/if}
+
+{#if convertDialogOpen}
+  <ConvertDialog
+    trackCount={convertTargets.length}
+    oncancel={() => {
+      convertDialogOpen = false;
+      convertTargets = [];
+    }}
+    onconfirm={handleConvertConfirm}
+  />
 {/if}
 
 <div class="app">
@@ -546,6 +631,32 @@
           ></progress>
         {/if}
       </div>
+    {:else if convertProgress}
+      <div class="download-status" aria-live="polite">
+        <span class="download-message">
+          {convertProgress.message ?? "変換中"}
+        </span>
+        {#if convertProgress.percent != null}
+          <span class="download-percent">{Math.round(convertProgress.percent)}%</span>
+        {:else if convertProgress.total > 0}
+          <span class="download-percent">
+            {convertProgress.processed}/{convertProgress.total}
+          </span>
+        {/if}
+        {#if convertProgress.percent != null}
+          <progress
+            class="download-bar"
+            max="100"
+            value={Math.round(convertProgress.percent)}
+          ></progress>
+        {:else if convertProgress.total > 0}
+          <progress
+            class="download-bar"
+            max={convertProgress.total}
+            value={convertProgress.processed}
+          ></progress>
+        {/if}
+      </div>
     {:else if downloadProgress}
       <div class="download-status" aria-live="polite">
         <span class="download-message">
@@ -570,14 +681,14 @@
     <button
       class="btn primary"
       onclick={handleAddFolder}
-      disabled={loading || scanning || activeTab !== "library"}
+      disabled={loading || scanning || converting || activeTab !== "library"}
     >
       {scanning && scanKind === "folder" ? "スキャン中..." : "Add Folder"}
     </button>
     <button
       class="btn primary"
       onclick={handleImportFromRekordbox}
-      disabled={loading || scanning || activeTab !== "rekordbox" || !rekordboxStatus?.dbPath}
+      disabled={loading || scanning || converting || activeTab !== "rekordbox" || !rekordboxStatus?.dbPath}
     >
       {scanning && scanKind === "rekordbox" ? "インポート中..." : "ライブラリにインポート"}
     </button>
@@ -604,6 +715,8 @@
           onbulkremove={handleBulkRemove}
           onAddToRekordbox={handleAddToRekordbox}
           onRemoveFromRekordbox={handleRemoveFromRekordbox}
+          onconvert={handleOpenConvert}
+          convertBusy={converting || scanning}
         />
       </div>
       <div

@@ -56,3 +56,18 @@ export function formatAddedAt(unixSeconds: number): string {
     minute: "2-digit",
   });
 }
+
+const AUDIO_FORMAT_ALIASES: Record<string, string> = {
+  aif: "AIFF",
+  aiff: "AIFF",
+  m4a: "AAC",
+};
+
+/** File extension label for converted-track badges. */
+export function audioFormatLabel(path: string): string {
+  const filename = path.split(/[/\\]/).pop() ?? "";
+  const dot = filename.lastIndexOf(".");
+  if (dot < 0 || dot === filename.length - 1) return "";
+  const ext = filename.slice(dot + 1).toLowerCase();
+  return AUDIO_FORMAT_ALIASES[ext] ?? ext.toUpperCase();
+}

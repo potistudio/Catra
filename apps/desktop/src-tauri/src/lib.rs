@@ -6,8 +6,8 @@ mod library;
 mod rekordbox;
 
 use commands::{
-    library_import_from_rekordbox, library_list_tracks, library_remove_track, library_remove_tracks,
-    library_resolve_duplicate, library_scan_folder, rekordbox_add_content,
+    library_convert_tracks, library_import_from_rekordbox, library_list_tracks, library_remove_track,
+    library_remove_tracks, library_resolve_duplicate, library_scan_folder, rekordbox_add_content,
     rekordbox_add_to_playlist, rekordbox_check, rekordbox_create_playlist,
     rekordbox_create_playlist_folder, rekordbox_db_status, rekordbox_delete_content,
     rekordbox_delete_playlist, rekordbox_get_content, rekordbox_get_playlist_content,
@@ -35,6 +35,7 @@ pub fn run() {
             library_remove_track,
             library_remove_tracks,
             library_resolve_duplicate,
+            library_convert_tracks,
             rekordbox_check,
             rekordbox_db_status,
             rekordbox_get_content,

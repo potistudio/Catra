@@ -1,5 +1,5 @@
 use super::duplicate::is_same_track;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, Row};
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -31,6 +31,7 @@ pub struct Track {
     pub rating: Option<u8>,
     pub artwork_path: Option<String>,
     pub source: Option<String>,
+    pub converted: bool,
     pub added_at: i64,
 }
 
@@ -74,6 +75,7 @@ impl LibraryState {
                 rating INTEGER,
                 artwork_path TEXT,
                 source TEXT,
+                converted INTEGER NOT NULL DEFAULT 0,
                 added_at INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
@@ -96,35 +98,29 @@ impl LibraryState {
         let conn = lock_conn(&self.conn)?;
         let mut stmt = conn.prepare(
             "SELECT id, path, title, artist, album, duration_ms, bpm, bitrate_kbps,
-                    genre, key_name, rating, artwork_path, source, added_at
+                    genre, key_name, rating, artwork_path, source, converted, added_at
              FROM tracks
              ORDER BY artist COLLATE NOCASE, title COLLATE NOCASE",
         )?;
 
         let tracks = stmt
-            .query_map([], |row| {
-                Ok(Track {
-                    id: row.get(0)?,
-                    path: row.get(1)?,
-                    title: row.get(2)?,
-                    artist: row.get(3)?,
-                    album: row.get(4)?,
-                    duration_ms: row
-                        .get::<_, Option<i64>>(5)?
-                        .map(|value| value as u64),
-                    bpm: row.get(6)?,
-                    bitrate_kbps: row.get(7)?,
-                    genre: row.get(8)?,
-                    key: row.get(9)?,
-                    rating: row.get(10)?,
-                    artwork_path: row.get(11)?,
-                    source: row.get(12)?,
-                    added_at: row.get(13)?,
-                })
-            })?
+            .query_map([], map_track_row)?
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(tracks)
+    }
+
+    pub fn get_track(&self, id: i64) -> Result<Option<Track>, rusqlite::Error> {
+        let conn = lock_conn(&self.conn)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, path, title, artist, album, duration_ms, bpm, bitrate_kbps,
+                    genre, key_name, rating, artwork_path, source, converted, added_at
+             FROM tracks
+             WHERE id = ?1",
+        )?;
+
+        let mut rows = stmt.query_map(params![id], map_track_row)?;
+        rows.next().transpose()
     }
 
     pub fn track_exists(&self, path: &str) -> Result<bool, rusqlite::Error> {
@@ -144,10 +140,31 @@ impl LibraryState {
         artist: Option<&str>,
         duration_ms: Option<u64>,
     ) -> Result<Option<Track>, rusqlite::Error> {
-        let tracks = self.list_tracks()?;
-        Ok(tracks
-            .into_iter()
-            .find(|track| track.path != path && is_same_track(track, title, artist, duration_ms)))
+        let Some(title) = title.map(str::trim).filter(|value| !value.is_empty()) else {
+            return Ok(None);
+        };
+
+        let conn = lock_conn(&self.conn)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, path, title, artist, album, duration_ms, bpm, bitrate_kbps,
+                    genre, key_name, rating, artwork_path, source, converted, added_at
+             FROM tracks
+             WHERE path != ?1
+               AND title IS NOT NULL
+               AND trim(title) != ''
+               AND lower(trim(title)) = lower(trim(?2))",
+        )?;
+
+        let rows = stmt.query_map(params![path, title], map_track_row)?;
+
+        for row in rows {
+            let track = row?;
+            if is_same_track(&track, Some(title), artist, duration_ms) {
+                return Ok(Some(track));
+            }
+        }
+
+        Ok(None)
     }
 
     pub fn insert_track(
@@ -164,14 +181,15 @@ impl LibraryState {
         rating: Option<u8>,
         artwork_path: Option<&str>,
         source: Option<&str>,
+        converted: bool,
         added_at: i64,
     ) -> Result<bool, rusqlite::Error> {
         let conn = lock_conn(&self.conn)?;
         let rows = conn.execute(
             "INSERT OR IGNORE INTO tracks (
                 path, title, artist, album, duration_ms, bpm, bitrate_kbps,
-                genre, key_name, rating, artwork_path, source, added_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                genre, key_name, rating, artwork_path, source, converted, added_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             params![
                 path,
                 title,
@@ -185,6 +203,7 @@ impl LibraryState {
                 rating,
                 artwork_path,
                 source,
+                converted as i64,
                 added_at
             ],
         )?;
@@ -263,6 +282,26 @@ pub fn save_artwork(
     }
 }
 
+fn map_track_row(row: &Row<'_>) -> rusqlite::Result<Track> {
+    Ok(Track {
+        id: row.get(0)?,
+        path: row.get(1)?,
+        title: row.get(2)?,
+        artist: row.get(3)?,
+        album: row.get(4)?,
+        duration_ms: row.get::<_, Option<i64>>(5)?.map(|value| value as u64),
+        bpm: row.get(6)?,
+        bitrate_kbps: row.get(7)?,
+        genre: row.get(8)?,
+        key: row.get(9)?,
+        rating: row.get(10)?,
+        artwork_path: row.get(11)?,
+        source: row.get(12)?,
+        converted: row.get::<_, i64>(13)? != 0,
+        added_at: row.get(14)?,
+    })
+}
+
 fn path_hash(path: &str) -> String {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     path.hash(&mut hasher);
@@ -277,6 +316,7 @@ fn migrate(conn: &Connection) -> Result<(), rusqlite::Error> {
         "ALTER TABLE tracks ADD COLUMN rating INTEGER",
         "ALTER TABLE tracks ADD COLUMN artwork_path TEXT",
         "ALTER TABLE tracks ADD COLUMN source TEXT",
+        "ALTER TABLE tracks ADD COLUMN converted INTEGER NOT NULL DEFAULT 0",
     ];
 
     for sql in migrations {

@@ -53,6 +53,8 @@
     onbulkremove?: (ids: number[]) => void | Promise<void>;
     onAddToRekordbox?: (tracks: Track[]) => void | Promise<void>;
     onRemoveFromRekordbox?: (tracks: Track[]) => void | Promise<void>;
+    onconvert?: (tracks: Track[]) => void;
+    convertBusy?: boolean;
   }
 
   let {
@@ -75,6 +77,8 @@
     onbulkremove,
     onAddToRekordbox,
     onRemoveFromRekordbox,
+    onconvert,
+    convertBusy = false,
   }: Props = $props();
 
   /** Library bridge mode: actions live in the command bar, not on rows. */
@@ -271,6 +275,11 @@
     );
     if (!confirmed) return;
     await onRemoveFromRekordbox(targetInRekordbox);
+  }
+
+  function handleConvert() {
+    if (!onconvert || targetTracks.length === 0 || convertBusy) return;
+    onconvert(targetTracks);
   }
 
   function handleScroll(event: Event) {
@@ -589,6 +598,19 @@
   {#if showCommandBar}
     <div class="command-bar" aria-label="トラック操作">
       <span class="command-summary">{targetSummary}</span>
+      {#if onconvert}
+        <button
+          type="button"
+          class="command-btn"
+          disabled={convertBusy || rekordboxBusy}
+          onclick={handleConvert}
+        >
+          変換
+          {#if targetTracks.length > 0}
+            ({targetTracks.length})
+          {/if}
+        </button>
+      {/if}
       <div class="command-rekordbox">
         {#if onAddToRekordbox}
           <button

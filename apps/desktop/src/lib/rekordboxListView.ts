@@ -25,6 +25,7 @@ export function rekordboxContentToTrack(
     rating: content.rating,
     artworkPath: content.artworkPath,
     source: null,
+    converted: false,
     addedAt: 0,
   };
 }

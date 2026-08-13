@@ -1,6 +1,7 @@
 <script lang="ts">
   import SelectionCheckbox from "$lib/components/SelectionCheckbox.svelte";
   import TrackArtwork from "$lib/components/TrackArtwork.svelte";
+  import TrackConvertedBadge from "$lib/components/TrackConvertedBadge.svelte";
   import TrackSourceBadge from "$lib/components/TrackSourceBadge.svelte";
   import type { Track } from "$lib/types";
   import { isTrackSource } from "$lib/trackSource";
@@ -81,6 +82,9 @@
   </span>
   <span class="cell title" role="gridcell">
     <span class="title-text">{displayTitle(track)}</span>
+    {#if track.converted}
+      <TrackConvertedBadge path={track.path} />
+    {/if}
     {#if inRekordbox}
       <span class="rb-badge" title="Rekordbox に登録済み">Rekordbox</span>
     {/if}

@@ -1,6 +1,7 @@
 <script lang="ts">
   import SelectionCheckbox from "$lib/components/SelectionCheckbox.svelte";
   import TrackArtwork from "$lib/components/TrackArtwork.svelte";
+  import TrackConvertedBadge from "$lib/components/TrackConvertedBadge.svelte";
   import TrackSourceBadge from "$lib/components/TrackSourceBadge.svelte";
   import type { Track } from "$lib/types";
   import { isTrackSource } from "$lib/trackSource";
@@ -62,9 +63,14 @@
         <TrackSourceBadge source={track.source} />
       </span>
     {/if}
-    {#if inRekordbox}
-      <span class="rb-badge" title="Rekordbox に登録済み">Rekordbox</span>
-    {/if}
+    <div class="card-badges">
+      {#if track.converted}
+        <TrackConvertedBadge path={track.path} />
+      {/if}
+      {#if inRekordbox}
+        <span class="rb-badge" title="Rekordbox に登録済み">Rekordbox</span>
+      {/if}
+    </div>
     {#if !readonly && ontogglecheck}
       <div class="checkbox-wrap" class:visible={checked}>
         <SelectionCheckbox
@@ -192,11 +198,18 @@
     z-index: 1;
   }
 
-  .rb-badge {
+  .card-badges {
     position: absolute;
     bottom: 0.35rem;
     left: 0.35rem;
     z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    max-width: calc(100% - 4.5rem);
+  }
+
+  .rb-badge {
     padding: 0.15rem 0.4rem;
     border-radius: 4px;
     background: var(--overlay-strong);

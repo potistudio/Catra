@@ -204,7 +204,9 @@ pub(crate) fn add_track(
     let artwork_path = metadata
         .artwork
         .as_ref()
-        .and_then(|(data, mime)| save_artwork(library.artwork_dir(), &path_str, data, mime));
+        .cloned()
+        .or_else(|| load_artwork_file(metadata.artwork_file.as_deref()))
+        .and_then(|(data, mime)| save_artwork(library.artwork_dir(), &path_str, &data, &mime));
 
     let inserted = library.insert_track(
         &path_str,
@@ -219,6 +221,7 @@ pub(crate) fn add_track(
         metadata.rating,
         artwork_path.as_deref(),
         metadata.source.as_deref(),
+        false,
         added_at,
     )?;
 
@@ -256,10 +259,12 @@ pub(crate) struct FileMetadata {
     pub key: Option<String>,
     pub rating: Option<u8>,
     pub artwork: Option<(Vec<u8>, String)>,
+    /// Absolute artwork file to read after duplicate checks (Rekordbox import).
+    pub artwork_file: Option<String>,
     pub source: Option<String>,
 }
 
-fn read_metadata(path: &Path) -> FileMetadata {
+pub(crate) fn read_metadata(path: &Path) -> FileMetadata {
     let fallback_title = path
         .file_stem()
         .and_then(|s| s.to_str())
@@ -306,6 +311,7 @@ fn read_metadata(path: &Path) -> FileMetadata {
             key,
             rating,
             artwork,
+            artwork_file: None,
             source,
         };
     }
@@ -321,6 +327,7 @@ fn read_metadata(path: &Path) -> FileMetadata {
         key: None,
         rating: None,
         artwork: None,
+        artwork_file: None,
         source: None,
     }
 }
@@ -337,6 +344,7 @@ fn empty_metadata(fallback_title: Option<String>) -> FileMetadata {
         key: None,
         rating: None,
         artwork: None,
+        artwork_file: None,
         source: None,
     }
 }
@@ -422,4 +430,25 @@ fn extract_artwork(tag: &lofty::tag::Tag) -> Option<(Vec<u8>, String)> {
         .unwrap_or_else(|| "image/jpeg".to_string());
 
     Some((picture.data().to_vec(), mime))
+}
+
+fn load_artwork_file(path: Option<&str>) -> Option<(Vec<u8>, String)> {
+    let path = path?;
+    let data = std::fs::read(path).ok()?;
+    if data.is_empty() {
+        return None;
+    }
+    let mime = match Path::new(path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("png") => "image/png".to_string(),
+        Some("gif") => "image/gif".to_string(),
+        Some("webp") => "image/webp".to_string(),
+        Some("bmp") => "image/bmp".to_string(),
+        _ => "image/jpeg".to_string(),
+    };
+    Some((data, mime))
 }

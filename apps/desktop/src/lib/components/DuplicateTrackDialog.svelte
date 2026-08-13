@@ -1,5 +1,6 @@
 <script lang="ts">
   import TrackArtwork from "$lib/components/TrackArtwork.svelte";
+  import TrackConvertedBadge from "$lib/components/TrackConvertedBadge.svelte";
   import TrackSourceBadge from "$lib/components/TrackSourceBadge.svelte";
   import {
     displayArtist,
@@ -57,6 +58,9 @@
               <span class="track-title">{existingTitle}</span>
               {#if isTrackSource(payload.existing.source)}
                 <TrackSourceBadge source={payload.existing.source} size={14} />
+              {/if}
+              {#if payload.existing.converted}
+                <TrackConvertedBadge path={payload.existing.path} />
               {/if}
             </div>
             <span class="artist">{displayArtist(payload.existing)}</span>

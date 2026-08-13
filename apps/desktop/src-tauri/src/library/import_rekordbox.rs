@@ -6,10 +6,9 @@ use super::scan::{
 use crate::activity_log::emit_activity_log;
 use crate::rekordbox::{get_content, RekordboxContent};
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager};
 
-const IMPORT_PROGRESS_INTERVAL: u32 = 10;
 const MISSING_SAMPLE_LIMIT: usize = 5;
 
 /// Import Rekordbox collection rows into `library.db` using Rekordbox metadata.
@@ -87,23 +86,16 @@ fn import_from_rekordbox(
         processed += 1;
         let display_path = content.folder_path.clone();
 
-        if processed == 1 || processed % IMPORT_PROGRESS_INTERVAL == 0 || processed == total {
-            let progress = ScanProgress {
-                processed,
-                added,
-                skipped,
-                current_path: display_path.clone(),
-                total: Some(total),
-            };
-            let _ = app.emit("library-scan-progress", &progress);
-        }
+        // Emit before potentially slow filesystem / duplicate checks so the UI keeps moving.
+        emit_import_progress(app, processed, added, skipped, &display_path, total);
 
         let Some(path) = resolve_content_path(&content) else {
             missing += 1;
             skipped += 1;
             if missing_samples.len() < MISSING_SAMPLE_LIMIT {
-                missing_samples.push(display_path);
+                missing_samples.push(display_path.clone());
             }
+            emit_import_progress(app, processed, added, skipped, &display_path, total);
             continue;
         };
 
@@ -111,6 +103,7 @@ fn import_from_rekordbox(
         if existing_keys.contains(&path_key(&normalized)) {
             already_present += 1;
             skipped += 1;
+            emit_import_progress(app, processed, added, skipped, &display_path, total);
             continue;
         }
 
@@ -140,6 +133,8 @@ fn import_from_rekordbox(
                 );
             }
         }
+
+        emit_import_progress(app, processed, added, skipped, &display_path, total);
     }
 
     if missing > 0 {
@@ -174,6 +169,26 @@ fn import_from_rekordbox(
     }
 
     Ok(ScanResult { added, skipped })
+}
+
+fn emit_import_progress(
+    app: &AppHandle,
+    processed: u32,
+    added: u32,
+    skipped: u32,
+    current_path: &str,
+    total: u32,
+) {
+    let _ = app.emit(
+        "library-scan-progress",
+        &ScanProgress {
+            processed,
+            added,
+            skipped,
+            current_path: current_path.to_string(),
+            total: Some(total),
+        },
+    );
 }
 
 fn path_key(path: &str) -> String {
@@ -227,10 +242,6 @@ fn metadata_from_rekordbox(content: &RekordboxContent) -> FileMetadata {
     let rating = content
         .rating
         .map(|value| value.clamp(0, 255) as u8);
-    let artwork = content
-        .artwork_path
-        .as_deref()
-        .and_then(load_artwork_file);
 
     FileMetadata {
         title: content.title.clone(),
@@ -242,31 +253,8 @@ fn metadata_from_rekordbox(content: &RekordboxContent) -> FileMetadata {
         genre: content.genre.clone(),
         key: content.key.clone(),
         rating,
-        artwork,
+        artwork: None,
+        artwork_file: content.artwork_path.clone(),
         source: None,
-    }
-}
-
-fn load_artwork_file(path: &str) -> Option<(Vec<u8>, String)> {
-    let data = std::fs::read(path).ok()?;
-    if data.is_empty() {
-        return None;
-    }
-    let mime = mime_from_path(Path::new(path));
-    Some((data, mime))
-}
-
-fn mime_from_path(path: &Path) -> String {
-    match path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| ext.to_ascii_lowercase())
-        .as_deref()
-    {
-        Some("png") => "image/png".to_string(),
-        Some("gif") => "image/gif".to_string(),
-        Some("webp") => "image/webp".to_string(),
-        Some("bmp") => "image/bmp".to_string(),
-        _ => "image/jpeg".to_string(),
     }
 }

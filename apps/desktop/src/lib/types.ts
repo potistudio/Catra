@@ -14,6 +14,7 @@ export interface Track {
   rating: number | null;
   artworkPath: string | null;
   source: TrackSource | null;
+  converted: boolean;
   addedAt: number;
 }
 
@@ -69,6 +70,40 @@ export interface DownloadProgress {
   total?: number | null;
   queuePosition?: number | null;
   message?: string | null;
+}
+
+export type ConvertFormat =
+  | "mp3"
+  | "aac"
+  | "flac"
+  | "wav"
+  | "aiff"
+  | "ogg"
+  | "opus";
+
+export interface ConvertOptions {
+  format: ConvertFormat;
+  bitrateKbps?: number | null;
+  bitDepth?: number | null;
+  sampleRate?: number | null;
+  channels?: number | null;
+}
+
+export interface ConvertProgress {
+  processed: number;
+  total: number;
+  converted: number;
+  skipped: number;
+  failed: number;
+  currentPath: string;
+  percent?: number | null;
+  message?: string | null;
+}
+
+export interface ConvertResult {
+  converted: number;
+  skipped: number;
+  failed: number;
 }
 
 export interface ActivityLogPayload {

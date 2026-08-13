@@ -1,6 +1,6 @@
 use crate::library::{
-    start_import_from_rekordbox, start_scan_folder, DuplicateChoice, DuplicateResolver,
-    LibraryState, Track,
+    start_convert_tracks, start_import_from_rekordbox, start_scan_folder, ConvertOptions,
+    DuplicateChoice, DuplicateResolver, LibraryState, Track,
 };
 use std::path::Path;
 use tauri::{AppHandle, State};
@@ -53,4 +53,13 @@ pub fn library_resolve_duplicate(
     };
 
     resolver.resolve(choice)
+}
+
+#[tauri::command]
+pub fn library_convert_tracks(
+    app: AppHandle,
+    ids: Vec<i64>,
+    options: ConvertOptions,
+) -> Result<(), String> {
+    start_convert_tracks(app, ids, options)
 }
