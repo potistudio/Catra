@@ -1,5 +1,6 @@
 use super::content::{
-    map_content_row_with_song_id, resolve_artwork_path, CONTENT_QUERY_WITH_SONG, RekordboxContent,
+    map_content_row_with_song_id, resolve_artwork_path, CONTENT_QUERY_WITH_SONG, CONTENT_VISIBLE,
+    RekordboxContent,
 };
 use super::db::MasterDatabase;
 use super::ids::{new_uuid, unused_numeric_id};
@@ -49,6 +50,8 @@ impl MasterDatabase {
             "{CONTENT_QUERY_WITH_SONG}
 INNER JOIN djmdSongPlaylist sp ON sp.ContentID = c.ID
 WHERE sp.PlaylistID = ?1
+  AND {CONTENT_VISIBLE}
+  AND IFNULL(sp.rb_local_deleted, 0) = 0
 ORDER BY sp.TrackNo"
         );
 

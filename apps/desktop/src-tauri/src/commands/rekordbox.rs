@@ -1,6 +1,6 @@
 use crate::rekordbox::{
     add_content, add_to_playlist, check, create_playlist, create_playlist_folder, db_status,
-    delete_content, delete_playlist, get_content, get_playlist_content, list_playlists,
+    delete_playlist, get_content, get_playlist_content, hide_content, list_playlists,
     move_song_in_playlist, remove_from_playlist, rename_playlist, update_content, RekordboxCheck,
     RekordboxContent, RekordboxContentUpdate, RekordboxDbStatus, RekordboxPlaylist,
 };
@@ -102,7 +102,8 @@ pub fn rekordbox_update_content(
     update_content(id, fields)
 }
 
+/// Hide Content with `rb_local_deleted`. Cue, analysis files, and UUID stay.
 #[tauri::command(async)]
 pub fn rekordbox_delete_content(id: String) -> Result<(), String> {
-    delete_content(id)
+    hide_content(id)
 }

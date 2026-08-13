@@ -14,6 +14,7 @@ pub use playlist::RekordboxPlaylist;
 use config::{is_rekordbox_running, load_config, RekordboxConfig};
 use content::{
     add_content as add_content_impl, delete_content as delete_content_impl,
+    hide_content as hide_content_impl, restore_content as restore_content_impl,
     update_content as update_content_impl,
     update_content_folder_path as update_content_folder_path_impl,
 };
@@ -117,6 +118,14 @@ pub fn move_song_in_playlist(
 
 pub fn add_content(path: String, title: Option<String>) -> Result<RekordboxContent, String> {
     add_content_impl(path, title)
+}
+
+pub fn hide_content(id: String) -> Result<(), String> {
+    hide_content_impl(id)
+}
+
+pub fn restore_content(id: &str, path: Option<&str>) -> Result<RekordboxContent, String> {
+    restore_content_impl(id, path)
 }
 
 pub fn update_content(
