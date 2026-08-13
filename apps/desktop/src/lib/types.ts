@@ -16,6 +16,11 @@ export interface Track {
   source: TrackSource | null;
   converted: boolean;
   addedAt: number;
+  contentHash?: string | null;
+  trashedAt?: number | null;
+  parentTrackId?: number | null;
+  formatGroupId?: string | null;
+  rekordboxContentId?: string | null;
 }
 
 export interface TrackCandidate {
@@ -35,9 +40,10 @@ export interface TrackCandidate {
 export interface DuplicateFoundPayload {
   existing: Track;
   candidate: TrackCandidate;
+  allowAltFormat: boolean;
 }
 
-export type DuplicateChoice = "existing" | "new";
+export type DuplicateChoice = "existing" | "new" | "altFormat";
 
 export interface ScanResult {
   added: number;
@@ -191,4 +197,17 @@ export interface RekordboxContentUpdate {
   trackNo?: number | null;
   releaseYear?: number | null;
   key?: string | null;
+}
+
+export interface HealthIssue {
+  trackId: number;
+  kind: string;
+  path: string;
+}
+
+export interface HealthReport {
+  checked: number;
+  missing: number;
+  hashMismatch: number;
+  issues: HealthIssue[];
 }

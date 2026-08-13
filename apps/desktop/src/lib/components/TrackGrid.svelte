@@ -15,6 +15,7 @@
     checkedIds: Set<number>;
     readonly?: boolean;
     rekordboxPathIndex?: Map<string, string>;
+    rekordboxContentIds?: Set<string>;
     showRowRemove?: boolean;
     onselect: (track: Track) => void;
     onremove?: (track: Track) => void;
@@ -27,6 +28,7 @@
     checkedIds,
     readonly = false,
     rekordboxPathIndex,
+    rekordboxContentIds,
     showRowRemove = true,
     onselect,
     onremove,
@@ -90,7 +92,7 @@
           checked={checkedIds.has(track.id)}
           {readonly}
           inRekordbox={rekordboxPathIndex
-            ? isInRekordbox(track.path, rekordboxPathIndex)
+            ? isInRekordbox(track, rekordboxPathIndex, rekordboxContentIds)
             : false}
           {showRowRemove}
           {onselect}

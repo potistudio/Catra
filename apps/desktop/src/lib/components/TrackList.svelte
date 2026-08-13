@@ -31,7 +31,7 @@
   };
 
   type MembershipFilter = "all" | "missing" | "present";
-  type ListSessionScope = "library" | "rekordbox";
+  type ListSessionScope = "library" | "rekordbox" | "trash";
 
   interface Props {
     tracks: Track[];
@@ -42,8 +42,13 @@
     emptyHint?: string;
     bulkRemoveConfirmMessage?: string;
     removeTitle?: string;
+    bulkRemoveLabel?: string;
+    permanentConfirmMessage?: string;
+    permanentTitle?: string;
+    emptyTrashLabel?: string;
     headerExtra?: Snippet;
     rekordboxPathIndex?: Map<string, string>;
+    rekordboxContentIds?: Set<string>;
     rekordboxWritable?: boolean;
     rekordboxBusy?: boolean;
     rekordboxLockedHint?: string | null;
@@ -51,6 +56,8 @@
     onselect: (track: Track) => void;
     onremove?: (track: Track) => void;
     onbulkremove?: (ids: number[]) => void | Promise<void>;
+    onbulkpermanent?: (ids: number[]) => void | Promise<void>;
+    onemptytrash?: () => void | Promise<void>;
     onAddToRekordbox?: (tracks: Track[]) => void | Promise<void>;
     onRemoveFromRekordbox?: (tracks: Track[]) => void | Promise<void>;
     onconvert?: (tracks: Track[]) => void;
@@ -64,10 +71,15 @@
     searchPlaceholder = "トラックを検索...",
     emptyTitle = "ライブラリにトラックがありません",
     emptyHint = "フォルダを追加するか、ファイルをドロップしてください",
-    bulkRemoveConfirmMessage = "曲をライブラリから削除しますか？",
-    removeTitle = "ライブラリから削除",
+    bulkRemoveConfirmMessage = "曲をライブラリから外してゴミ箱へ移しますか？",
+    removeTitle = "ライブラリから外す",
+    bulkRemoveLabel = "ライブラリから外す",
+    permanentConfirmMessage = "曲を完全に削除しますか？この操作は取り消せません。",
+    permanentTitle = "完全に削除",
+    emptyTrashLabel = "ゴミ箱を空にする",
     headerExtra,
     rekordboxPathIndex,
+    rekordboxContentIds,
     rekordboxWritable = false,
     rekordboxBusy = false,
     rekordboxLockedHint = null,
@@ -75,6 +87,8 @@
     onselect,
     onremove,
     onbulkremove,
+    onbulkpermanent,
+    onemptytrash,
     onAddToRekordbox,
     onRemoveFromRekordbox,
     onconvert,
@@ -90,9 +104,11 @@
   const listSession =
     sessionScope === "rekordbox"
       ? appSession.rekordbox.list
-      : sessionScope === "library"
-        ? appSession.library
-        : null;
+      : sessionScope === "trash"
+        ? appSession.trash
+        : sessionScope === "library"
+          ? appSession.library
+          : null;
 
   let checkedIds = $state<Set<number>>(new Set());
   let membershipFilter = $state<MembershipFilter>(listSession?.membershipFilter ?? "all");
@@ -144,9 +160,9 @@
   let membershipFiltered = $derived.by(() => {
     if (!rekordboxPathIndex || membershipFilter === "all") return searched;
     if (membershipFilter === "missing") {
-      return searched.filter((track) => !isInRekordbox(track.path, rekordboxPathIndex));
+      return searched.filter((track) => !isInRekordbox(track, rekordboxPathIndex, rekordboxContentIds));
     }
-    return searched.filter((track) => isInRekordbox(track.path, rekordboxPathIndex));
+    return searched.filter((track) => isInRekordbox(track, rekordboxPathIndex, rekordboxContentIds));
   });
   let sorted = $derived(sortTracks(membershipFiltered, sortColumn, sortDirection));
 
@@ -175,12 +191,12 @@
 
   let targetNotInRekordbox = $derived(
     rekordboxPathIndex
-      ? targetTracks.filter((track) => !isInRekordbox(track.path, rekordboxPathIndex))
+      ? targetTracks.filter((track) => !isInRekordbox(track, rekordboxPathIndex, rekordboxContentIds))
       : [],
   );
   let targetInRekordbox = $derived(
     rekordboxPathIndex
-      ? targetTracks.filter((track) => isInRekordbox(track.path, rekordboxPathIndex))
+      ? targetTracks.filter((track) => isInRekordbox(track, rekordboxPathIndex, rekordboxContentIds))
       : [],
   );
 
@@ -259,6 +275,30 @@
     if (!confirmed) return;
 
     await onbulkremove(ids);
+    checkedIds = new Set();
+  }
+
+  async function handlePermanentDelete() {
+    if (!onbulkpermanent) return;
+    const ids = targetTracks.map((track) => track.id);
+    if (ids.length === 0) return;
+    const confirmed = await ask(`${ids.length} ${permanentConfirmMessage}`, {
+      title: "完全削除の確認",
+      kind: "warning",
+    });
+    if (!confirmed) return;
+    await onbulkpermanent(ids);
+    checkedIds = new Set();
+  }
+
+  async function handleEmptyTrash() {
+    if (!onemptytrash) return;
+    const confirmed = await ask("ゴミ箱の中身をすべて完全に削除しますか？この操作は取り消せません。", {
+      title: "ゴミ箱を空にする",
+      kind: "warning",
+    });
+    if (!confirmed) return;
+    await onemptytrash();
     checkedIds = new Set();
   }
 
@@ -383,11 +423,23 @@
     {#if !commandBarMode && !readonly && checkedCount > 0}
       <span class="selection-count">{checkedCount} 曲を選択中</span>
       <button type="button" class="bulk-btn danger" onclick={handleBulkRemove}>
-        削除
+        {bulkRemoveLabel}
       </button>
+      {#if onbulkpermanent}
+        <button type="button" class="bulk-btn danger" onclick={handlePermanentDelete}>
+          {permanentTitle}
+        </button>
+      {/if}
     {/if}
     {#if headerExtra}
-      {@render headerExtra()}
+      <div class="header-extra">
+        {@render headerExtra()}
+      </div>
+    {/if}
+    {#if onemptytrash}
+      <button type="button" class="bulk-btn danger" onclick={handleEmptyTrash}>
+        {emptyTrashLabel}
+      </button>
     {/if}
     <div class="view-toggle" role="group" aria-label="表示切替">
       <button
@@ -440,6 +492,7 @@
       {checkedIds}
       {readonly}
       {rekordboxPathIndex}
+      {rekordboxContentIds}
       {showRowRemove}
       {onselect}
       onremove={showRowRemove ? onremove : undefined}
@@ -581,7 +634,7 @@
                 {readonly}
                 {removeTitle}
                 inRekordbox={rekordboxPathIndex
-                  ? isInRekordbox(track.path, rekordboxPathIndex)
+                  ? isInRekordbox(track, rekordboxPathIndex, rekordboxContentIds)
                   : false}
                 showActions={showRowRemove}
                 {onselect}
@@ -651,7 +704,17 @@
           disabled={rekordboxBusy}
           onclick={handleLibraryRemove}
         >
-          ライブラリから削除
+          {bulkRemoveLabel}
+        </button>
+      {/if}
+      {#if onbulkpermanent}
+        <button
+          type="button"
+          class="command-btn danger"
+          disabled={rekordboxBusy}
+          onclick={handlePermanentDelete}
+        >
+          {permanentTitle}
         </button>
       {/if}
     </div>
@@ -737,6 +800,16 @@
     font-size: 0.8rem;
     color: var(--text-muted);
     white-space: nowrap;
+  }
+
+  .header-extra :global(button) {
+    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.78rem;
+    cursor: pointer;
   }
 
   .selection-count {

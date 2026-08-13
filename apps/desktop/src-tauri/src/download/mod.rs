@@ -490,12 +490,10 @@ impl DownloadQueue {
 }
 
 pub fn download_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("downloads");
-
+    let library = app.state::<LibraryState>();
+    let dir = library
+        .incoming_dir()
+        .join(format!("download-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }
@@ -686,11 +684,21 @@ fn import_downloaded_path(app: &AppHandle, path: &Path) -> Result<(), String> {
     emit_activity_log(app, "info", "ライブラリへインポート中...", None);
     let state = app.state::<LibraryState>();
     let resolver = app.state::<DuplicateResolver>();
-    import_file(app, &state, &resolver, path)?;
+    let added = import_file(app, &state, &resolver, path)?;
+    if !added {
+        let _ = std::fs::remove_file(path);
+    }
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::remove_dir(parent);
+    }
     emit_activity_log(
         app,
         "success",
-        "ライブラリへ追加しました",
+        if added {
+            "ライブラリへ追加しました"
+        } else {
+            "同一ファイルのためスキップしました"
+        },
         Some(path.to_string_lossy().to_string()),
     );
     let _ = app.emit(

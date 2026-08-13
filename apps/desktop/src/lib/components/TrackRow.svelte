@@ -34,7 +34,7 @@
     selected,
     checked,
     readonly = false,
-    removeTitle = "ライブラリから削除",
+    removeTitle = "ライブラリから外す",
     inRekordbox = false,
     showActions = true,
     onselect,

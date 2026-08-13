@@ -12,7 +12,12 @@ pub use content::{RekordboxContent, RekordboxContentUpdate};
 pub use playlist::RekordboxPlaylist;
 
 use config::{is_rekordbox_running, load_config, RekordboxConfig};
-use content::{add_content as add_content_impl, delete_content as delete_content_impl, update_content as update_content_impl};
+use content::{
+    add_content as add_content_impl, delete_content as delete_content_impl,
+    update_content as update_content_impl,
+    update_content_folder_path as update_content_folder_path_impl,
+};
+use write::ensure_writable as ensure_writable_impl;
 use db::MasterDatabase;
 use playlist::{
     add_to_playlist as add_to_playlist_impl, create_playlist as create_playlist_impl,
@@ -123,6 +128,14 @@ pub fn update_content(
 
 pub fn delete_content(id: String) -> Result<(), String> {
     delete_content_impl(id)
+}
+
+pub fn update_content_folder_path(id: &str, path: &str) -> Result<RekordboxContent, String> {
+    update_content_folder_path_impl(id, path)
+}
+
+pub fn ensure_writable() -> Result<(), String> {
+    ensure_writable_impl()
 }
 
 fn open_db() -> Result<(MasterDatabase, std::path::PathBuf), String> {

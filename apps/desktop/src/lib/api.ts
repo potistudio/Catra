@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   ConvertOptions,
   DuplicateChoice,
+  HealthReport,
   RekordboxCheck,
   RekordboxContent,
   RekordboxContentUpdate,
@@ -22,6 +23,10 @@ export async function listTracks(): Promise<Track[]> {
   return invoke<Track[]>("library_list_tracks");
 }
 
+export async function listTrashed(): Promise<Track[]> {
+  return invoke<Track[]>("library_list_trashed");
+}
+
 export async function scanFolder(folder: string): Promise<void> {
   return invoke("library_scan_folder", { folder });
 }
@@ -40,6 +45,30 @@ export async function removeTrack(id: number): Promise<void> {
 
 export async function removeTracks(ids: number[]): Promise<number> {
   return invoke<number>("library_remove_tracks", { ids });
+}
+
+export async function restoreTracks(ids: number[]): Promise<number> {
+  return invoke<number>("library_restore_tracks", { ids });
+}
+
+export async function deleteTracksPermanently(ids: number[]): Promise<number> {
+  return invoke<number>("library_delete_permanently", { ids });
+}
+
+export async function emptyTrash(): Promise<number> {
+  return invoke<number>("library_empty_trash");
+}
+
+export async function checkLibraryHealth(): Promise<HealthReport> {
+  return invoke<HealthReport>("library_check_health");
+}
+
+export async function libraryAddToRekordbox(id: number): Promise<void> {
+  return invoke("library_add_to_rekordbox", { id });
+}
+
+export async function libraryRemoveFromRekordbox(id: number): Promise<boolean> {
+  return invoke<boolean>("library_remove_from_rekordbox", { id });
 }
 
 export async function resolveDuplicate(choice: DuplicateChoice): Promise<void> {

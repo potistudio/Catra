@@ -1,21 +1,15 @@
 use super::db::{LibraryState, ScanResult};
 use super::duplicate::DuplicateResolver;
-use super::scan::{
-    add_track, normalize_fs_path, FileMetadata, InsertOutcome, ScanProgress,
-};
+use super::ingest::{count_outcome, ingest_path, log_ingest_error, IngestOptions};
+use super::scan::{normalize_fs_path, FileMetadata, ScanProgress};
 use crate::activity_log::emit_activity_log;
 use crate::rekordbox::{get_content, RekordboxContent};
-use std::collections::HashSet;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager};
 
 const MISSING_SAMPLE_LIMIT: usize = 5;
 
-/// Import Rekordbox collection rows into `library.db` using Rekordbox metadata.
-///
-/// Skips paths already present in the library and files missing on disk.
-/// Title/artist/duration collisions use the same interactive duplicate dialog as folder scan.
-/// Emits the same progress/complete events as folder scan.
+/// Copies Rekordbox collection files into Catra and rewrites the same Content FolderPath.
 pub fn start_import_from_rekordbox(app: AppHandle) {
     std::thread::spawn(move || {
         let state = app.state::<LibraryState>();
@@ -54,22 +48,16 @@ fn import_from_rekordbox(
     library: &LibraryState,
     resolver: &DuplicateResolver,
 ) -> Result<ScanResult, String> {
+    crate::rekordbox::ensure_writable()?;
+
     let contents = get_content(None)?;
     let total = contents.len() as u32;
     let added_at = chrono::Utc::now().timestamp();
     let mut added = 0u32;
     let mut skipped = 0u32;
     let mut missing = 0u32;
-    let mut already_present = 0u32;
     let mut processed = 0u32;
     let mut missing_samples: Vec<String> = Vec::new();
-
-    let mut existing_keys: HashSet<String> = library
-        .list_tracks()
-        .map_err(|error| error.to_string())?
-        .into_iter()
-        .map(|track| path_key(&track.path))
-        .collect();
 
     let _ = app.emit(
         "library-scan-progress",
@@ -85,8 +73,6 @@ fn import_from_rekordbox(
     for content in contents {
         processed += 1;
         let display_path = content.folder_path.clone();
-
-        // Emit before potentially slow filesystem / duplicate checks so the UI keeps moving.
         emit_import_progress(app, processed, added, skipped, &display_path, total);
 
         let Some(path) = resolve_content_path(&content) else {
@@ -99,38 +85,29 @@ fn import_from_rekordbox(
             continue;
         };
 
-        let normalized = normalize_fs_path(&path.to_string_lossy());
-        if existing_keys.contains(&path_key(&normalized)) {
-            already_present += 1;
-            skipped += 1;
-            emit_import_progress(app, processed, added, skipped, &display_path, total);
-            continue;
-        }
-
         let metadata = metadata_from_rekordbox(&content);
+        let options = IngestOptions {
+            owned: false,
+            rekordbox_content_id: Some(content.id.clone()),
+            parent_track_id: None,
+            converted: false,
+            format_group_id: None,
+            skip_duplicate_dialog: false,
+        };
 
-        match add_track(app, library, resolver, &path, &metadata, added_at) {
-            Ok(InsertOutcome::Added) => {
-                added += 1;
-                existing_keys.insert(path_key(&normalized));
-            }
-            Ok(InsertOutcome::Skipped) => {
-                already_present += 1;
-                skipped += 1;
-            }
+        match ingest_path(
+            Some(app),
+            library,
+            Some(resolver),
+            &path,
+            &metadata,
+            added_at,
+            options,
+        ) {
+            Ok(outcome) => count_outcome(outcome, &mut added, &mut skipped),
             Err(error) => {
                 skipped += 1;
-                emit_activity_log(
-                    app,
-                    "warning",
-                    format!(
-                        "スキップ: {}",
-                        path.file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                    ),
-                    Some(error.to_string()),
-                );
+                log_ingest_error(app, &path, error);
             }
         }
 
@@ -151,21 +128,7 @@ fn import_from_rekordbox(
                 }
             ))
         };
-        emit_activity_log(
-            app,
-            "warning",
-            format!("ファイル未検出: {missing} 曲"),
-            sample,
-        );
-    }
-
-    if already_present > 0 {
-        emit_activity_log(
-            app,
-            "info",
-            format!("ライブラリ登録済みのためスキップ: {already_present} 曲"),
-            None,
-        );
+        emit_activity_log(app, "warning", format!("ファイル未検出: {missing} 曲"), sample);
     }
 
     Ok(ScanResult { added, skipped })
@@ -191,10 +154,6 @@ fn emit_import_progress(
     );
 }
 
-fn path_key(path: &str) -> String {
-    normalize_fs_path(path).to_ascii_lowercase()
-}
-
 fn resolve_content_path(content: &RekordboxContent) -> Option<PathBuf> {
     let raw = content.folder_path.trim();
     if raw.is_empty() {
@@ -213,7 +172,6 @@ fn resolve_content_path(content: &RekordboxContent) -> Option<PathBuf> {
         )));
     }
 
-    // Some rows store the directory in FolderPath and the file name separately.
     if let Some(file_name) = content.file_name.as_deref().filter(|name| !name.is_empty()) {
         for base in [&normalized, &original] {
             if base.is_dir() {
@@ -239,9 +197,7 @@ fn metadata_from_rekordbox(content: &RekordboxContent) -> FileMetadata {
         .bit_rate
         .filter(|&rate| rate >= 0)
         .map(|rate| rate as u32);
-    let rating = content
-        .rating
-        .map(|value| value.clamp(0, 255) as u8);
+    let rating = content.rating.map(|value| value.clamp(0, 255) as u8);
 
     FileMetadata {
         title: content.title.clone(),

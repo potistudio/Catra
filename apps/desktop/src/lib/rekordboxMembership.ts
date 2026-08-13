@@ -16,6 +16,10 @@ export function buildRekordboxPathIndex(
   return index;
 }
 
+export function buildRekordboxIdSet(contents: RekordboxContent[]): Set<string> {
+  return new Set(contents.map((content) => content.id));
+}
+
 export function contentIdForPath(
   trackPath: string,
   index: Map<string, string>,
@@ -24,8 +28,16 @@ export function contentIdForPath(
 }
 
 export function isInRekordbox(
-  trackPath: string,
+  track: { path: string; rekordboxContentId?: string | null },
   index: Map<string, string>,
+  contentIds?: Set<string>,
 ): boolean {
-  return contentIdForPath(trackPath, index) != null;
+  if (track.rekordboxContentId) {
+    if (contentIds) return contentIds.has(track.rekordboxContentId);
+    for (const id of index.values()) {
+      if (id === track.rekordboxContentId) return true;
+    }
+    return false;
+  }
+  return contentIdForPath(track.path, index) != null;
 }

@@ -425,6 +425,47 @@ pub fn update_content(
         .ok_or_else(|| "updated content could not be reloaded".to_string())
 }
 
+pub fn update_content_folder_path(id: &str, path: &str) -> Result<RekordboxContent, String> {
+    let path = PathBuf::from(path);
+    if !path.is_file() {
+        return Err(format!("file not found: {}", path.display()));
+    }
+    let folder_path = path.to_string_lossy().replace('/', "\\");
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "invalid file name".to_string())?;
+
+    let mut session = WriteSession::open()?;
+    let exists: bool = session
+        .conn()
+        .prepare("SELECT 1 FROM djmdContent WHERE ID = ?1 LIMIT 1")
+        .map_err(|error| error.to_string())?
+        .exists(params![id])
+        .map_err(|error| error.to_string())?;
+    if !exists {
+        return Err(format!("content {id} was not found"));
+    }
+
+    let ts = timestamp_sql(now_local());
+    session
+        .conn()
+        .execute(
+            "UPDATE djmdContent SET FolderPath = ?1, FileNameL = ?2, updated_at = ?3 WHERE ID = ?4",
+            params![folder_path.as_str(), file_name, ts.as_str(), id],
+        )
+        .map_err(|error| error.to_string())?;
+    session.usn.track("djmdContent", id.to_string());
+    let db_dir = session.db_dir.clone();
+    session.commit()?;
+
+    let db = MasterDatabase::open()?;
+    let mut contents = db.get_content(Some(id), &db_dir)?;
+    contents
+        .pop()
+        .ok_or_else(|| "updated content could not be reloaded".to_string())
+}
+
 pub fn delete_content(id: String) -> Result<(), String> {
     let mut session = WriteSession::open()?;
     let exists: bool = session
