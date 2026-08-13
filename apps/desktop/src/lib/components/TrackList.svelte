@@ -171,9 +171,10 @@
 
   let showCommandBar = $derived(commandBarMode && checkedCount > 0);
 
+  /** Remove IDs that are not in the current filtered list from checkedIds. */
   $effect(() => {
-    const validIds = new Set(tracks.map((track) => track.id));
-    const next = new Set([...checkedIds].filter((id) => validIds.has(id)));
+    const visibleIds = new Set(sorted.map((track) => track.id));
+    const next = new Set([...checkedIds].filter((id) => visibleIds.has(id)));
     if (next.size !== checkedIds.size) {
       checkedIds = next;
     }
@@ -191,11 +192,7 @@
 
   function toggleSelectAll() {
     if (allVisibleSelected || someVisibleSelected) {
-      const next = new Set(checkedIds);
-      for (const track of sorted) {
-        next.delete(track.id);
-      }
-      checkedIds = next;
+      checkedIds = new Set();
       return;
     }
 
