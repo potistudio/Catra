@@ -87,6 +87,7 @@ export interface ConvertOptions {
   bitDepth?: number | null;
   sampleRate?: number | null;
   channels?: number | null;
+  addToRekordbox?: boolean;
 }
 
 export interface ConvertProgress {
@@ -104,6 +105,8 @@ export interface ConvertResult {
   converted: number;
   skipped: number;
   failed: number;
+  rekordboxAdded: number;
+  rekordboxFailed: number;
 }
 
 export interface ActivityLogPayload {

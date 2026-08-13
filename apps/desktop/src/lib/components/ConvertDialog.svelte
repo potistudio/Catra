@@ -16,17 +16,26 @@
 
   interface Props {
     trackCount: number;
+    rekordboxWritable?: boolean;
+    rekordboxLockedHint?: string | null;
     oncancel: () => void;
     onconfirm: (options: ConvertOptions) => void | Promise<void>;
   }
 
-  let { trackCount, oncancel, onconfirm }: Props = $props();
+  let {
+    trackCount,
+    rekordboxWritable = false,
+    rekordboxLockedHint = null,
+    oncancel,
+    onconfirm,
+  }: Props = $props();
 
   let format = $state<ConvertFormat>("mp3");
   let bitrateKbps = $state("320");
   let bitDepth = $state("16");
   let sampleRate = $state("keep");
   let channels = $state("keep");
+  let addToRekordbox = $state(true);
   let backdropDismissArmed = $state(false);
 
   let lossy = $derived(LOSSY_FORMATS.has(format));
@@ -49,6 +58,7 @@
       bitDepth: lossy ? null : Number(bitDepth),
       sampleRate: sampleRate === "keep" ? null : Number(sampleRate),
       channels: channels === "keep" ? null : Number(channels),
+      addToRekordbox: rekordboxWritable && addToRekordbox,
     };
     void onconfirm(options);
   }
@@ -107,6 +117,20 @@
         <option value="1">モノラル</option>
       </select>
     </label>
+    <label class="check-row">
+      <input
+        type="checkbox"
+        checked={rekordboxWritable && addToRekordbox}
+        disabled={!rekordboxWritable}
+        onchange={(event) => {
+          addToRekordbox = event.currentTarget.checked;
+        }}
+      />
+      変換後のファイルを Rekordbox に追加
+    </label>
+    {#if !rekordboxWritable && rekordboxLockedHint}
+      <p class="hint">{rekordboxLockedHint}</p>
+    {/if}
     <div class="modal-actions">
       <button type="button" class="modal-btn" onclick={oncancel}>キャンセル</button>
       <button type="button" class="modal-btn primary" onclick={submit}>変換</button>
@@ -165,6 +189,22 @@
     background: var(--surface-raised);
     color: var(--text);
     font-size: 0.85rem;
+  }
+
+  .check-row {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text);
+    font-size: 0.85rem;
+  }
+
+  .check-row input {
+    margin: 0;
+  }
+
+  .check-row:has(input:disabled) {
+    color: var(--text-muted);
   }
 
   .modal-actions {

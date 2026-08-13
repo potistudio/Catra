@@ -541,8 +541,11 @@
       unlistenConvertProgress = unlisten;
     });
 
-    void listen<ConvertResult>("library-convert-complete", () => {
+    void listen<ConvertResult>("library-convert-complete", (event) => {
       convertProgress = null;
+      if (event.payload.rekordboxAdded > 0) {
+        void loadRekordbox(true);
+      }
     }).then((unlisten) => {
       unlistenConvertComplete = unlisten;
     });
@@ -576,6 +579,8 @@
 {#if convertDialogOpen}
   <ConvertDialog
     trackCount={convertTargets.length}
+    {rekordboxWritable}
+    {rekordboxLockedHint}
     oncancel={() => {
       convertDialogOpen = false;
       convertTargets = [];

@@ -68,6 +68,9 @@ pub struct ConvertOptions {
     pub bit_depth: Option<u32>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u32>,
+    /// When true, each newly converted file is inserted into Rekordbox after library insert.
+    #[serde(default)]
+    pub add_to_rekordbox: bool,
 }
 
 impl ConvertOptions {
@@ -131,6 +134,8 @@ pub struct ConvertResult {
     pub converted: u32,
     pub skipped: u32,
     pub failed: u32,
+    pub rekordbox_added: u32,
+    pub rekordbox_failed: u32,
 }
 
 /// Starts sequential conversion on a background thread.
@@ -158,8 +163,11 @@ pub fn start_convert_tracks(
                     &app,
                     "success",
                     format!(
-                        "変換完了: 成功 {} · スキップ {} · 失敗 {}",
-                        summary.converted, summary.skipped, summary.failed
+                        "変換完了: 成功 {} · スキップ {} · 失敗 {}{}",
+                        summary.converted,
+                        summary.skipped,
+                        summary.failed,
+                        rekordbox_summary_suffix(&summary)
                     ),
                     None,
                 );
@@ -202,6 +210,13 @@ fn convert_tracks(
     let mut converted = 0u32;
     let mut skipped = 0u32;
     let mut failed = 0u32;
+    let mut rekordbox_added = 0u32;
+    let mut rekordbox_failed = 0u32;
+    let mut add_to_rekordbox = options.add_to_rekordbox;
+
+    if add_to_rekordbox && !rekordbox_accepts_writes(app) {
+        add_to_rekordbox = false;
+    }
 
     emit_activity_log(
         app,
@@ -267,7 +282,7 @@ fn convert_tracks(
             skipped,
             failed,
         ) {
-            Ok(ConvertOutcome::Converted) => {
+            Ok(ConvertOutcome::Converted { output }) => {
                 converted += 1;
                 emit_activity_log(
                     app,
@@ -276,6 +291,31 @@ fn convert_tracks(
                     None,
                 );
                 let _ = app.emit("library-updated", ());
+                if add_to_rekordbox {
+                    match crate::rekordbox::add_content(
+                        output.to_string_lossy().into_owned(),
+                        track.title.clone(),
+                    ) {
+                        Ok(_) => {
+                            rekordbox_added += 1;
+                            emit_activity_log(
+                                app,
+                                "success",
+                                format!("Rekordbox に追加: {current_name}"),
+                                None,
+                            );
+                        }
+                        Err(error) => {
+                            rekordbox_failed += 1;
+                            emit_activity_log(
+                                app,
+                                "warning",
+                                format!("Rekordbox への追加に失敗: {current_name}"),
+                                Some(error),
+                            );
+                        }
+                    }
+                }
             }
             Ok(ConvertOutcome::Skipped) => {
                 skipped += 1;
@@ -302,11 +342,57 @@ fn convert_tracks(
         converted,
         skipped,
         failed,
+        rekordbox_added,
+        rekordbox_failed,
     })
 }
 
+fn rekordbox_summary_suffix(summary: &ConvertResult) -> String {
+    if summary.rekordbox_added == 0 && summary.rekordbox_failed == 0 {
+        return String::new();
+    }
+    format!(
+        " · Rekordbox 追加 {} · 失敗 {}",
+        summary.rekordbox_added, summary.rekordbox_failed
+    )
+}
+
+/// Returns false when Rekordbox cannot be written. Logs the reason once.
+fn rekordbox_accepts_writes(app: &AppHandle) -> bool {
+    match crate::rekordbox::check() {
+        Ok(status) if status.db_path.is_none() => {
+            emit_activity_log(
+                app,
+                "warning",
+                "Rekordbox ライブラリが見つからないため、変換のみ実行します",
+                None,
+            );
+            false
+        }
+        Ok(status) if status.rekordbox_running => {
+            emit_activity_log(
+                app,
+                "warning",
+                "Rekordbox が起動中のため、変換のみ実行します",
+                None,
+            );
+            false
+        }
+        Ok(_) => true,
+        Err(error) => {
+            emit_activity_log(
+                app,
+                "warning",
+                "Rekordbox に追加できないため、変換のみ実行します",
+                Some(error),
+            );
+            false
+        }
+    }
+}
+
 enum ConvertOutcome {
-    Converted,
+    Converted { output: PathBuf },
     Skipped,
 }
 
@@ -342,7 +428,7 @@ fn convert_one(
     )?;
 
     if insert_converted_file(library, track, &output)? {
-        Ok(ConvertOutcome::Converted)
+        Ok(ConvertOutcome::Converted { output })
     } else {
         Ok(ConvertOutcome::Skipped)
     }
@@ -749,6 +835,7 @@ mod tests {
             bit_depth: None,
             sample_rate: None,
             channels: None,
+            add_to_rekordbox: false,
         }
         .validated()
         .unwrap()
@@ -761,6 +848,7 @@ mod tests {
             bit_depth: Some(bit_depth),
             sample_rate: None,
             channels: None,
+            add_to_rekordbox: false,
         }
         .validated()
         .unwrap()
@@ -853,6 +941,7 @@ mod tests {
             bit_depth: Some(16),
             sample_rate: Some(44_100),
             channels: Some(2),
+            add_to_rekordbox: false,
         }
         .validated()
         .unwrap();
@@ -879,7 +968,23 @@ mod tests {
             bit_depth: None,
             sample_rate: None,
             channels: None,
+            add_to_rekordbox: true,
         };
         assert!(options.validated().is_err());
+    }
+
+    #[test]
+    fn validated_keeps_rekordbox_import_flag() {
+        let options = ConvertOptions {
+            format: ConvertFormat::Mp3,
+            bitrate_kbps: Some(320),
+            bit_depth: None,
+            sample_rate: None,
+            channels: None,
+            add_to_rekordbox: true,
+        }
+        .validated()
+        .unwrap();
+        assert!(options.add_to_rekordbox);
     }
 }
