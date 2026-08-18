@@ -5,17 +5,22 @@
   import { onMount } from "svelte";
   import { consolePanel, pushActivityLog, pushActivityLogPayload } from "$lib/activityLog.svelte";
   import {
+    checkLibraryHealth,
     convertTracks,
+    deleteTracksPermanently,
+    emptyTrash,
     importFromRekordbox,
     importPaths,
+    libraryAddToRekordbox,
+    libraryRemoveFromRekordbox,
     listTracks,
-    rekordboxAddContent,
+    listTrashed,
     rekordboxCheck,
-    rekordboxDeleteContent,
     rekordboxGetContent,
     removeTrack,
     removeTracks,
     resolveDuplicate,
+    restoreTracks,
     scanFolder,
   } from "$lib/api";
   import ActivityConsole from "$lib/components/ActivityConsole.svelte";
@@ -31,8 +36,8 @@
     type AppTab,
   } from "$lib/appSession.svelte";
   import {
+    buildRekordboxIdSet,
     buildRekordboxPathIndex,
-    contentIdForPath,
   } from "$lib/rekordboxMembership";
   import { rekordboxContentToPreview } from "$lib/rekordboxListView";
   import type {
@@ -42,6 +47,7 @@
     ConvertResult,
     DownloadProgress,
     DuplicateFoundPayload,
+    DuplicateChoice,
     PreviewableTrack,
     RekordboxCheck,
     RekordboxContent,
@@ -55,6 +61,7 @@
 
   let activeTab = $state<AppTab>(appSession.activeTab);
   let tracks = $state<Track[]>([]);
+  let trashedTracks = $state<Track[]>([]);
   let selectedTrack = $state<Track | null>(null);
   let rekordboxTracks = $state<RekordboxContent[]>([]);
   let selectedRekordboxId = $state<string | null>(appSession.selectedRekordboxId);
@@ -96,6 +103,7 @@
   });
 
   let rekordboxPathIndex = $derived(buildRekordboxPathIndex(rekordboxTracks));
+  let rekordboxContentIds = $derived(buildRekordboxIdSet(rekordboxTracks));
   let rekordboxWritable = $derived(
     !!rekordboxStatus?.dbPath && !rekordboxStatus.rekordboxRunning,
   );
@@ -110,7 +118,7 @@
   });
 
   let previewTrack = $derived.by((): PreviewableTrack | null => {
-    if (activeTab === "library") {
+    if (activeTab === "library" || activeTab === "trash") {
       return selectedTrack;
     }
 
@@ -124,8 +132,10 @@
     try {
       tracks = await listTracks();
       const selectedId = selectedTrack?.id ?? appSession.selectedTrackId;
-      selectedTrack =
-        selectedId != null ? (tracks.find((t) => t.id === selectedId) ?? null) : null;
+      const fromLibrary = selectedId != null ? (tracks.find((t) => t.id === selectedId) ?? null) : null;
+      const fromTrash =
+        selectedId != null ? (trashedTracks.find((t) => t.id === selectedId) ?? null) : null;
+      selectedTrack = fromLibrary ?? fromTrash;
       appSession.selectedTrackId = selectedTrack?.id ?? null;
       persistAppSession();
       if (!silent) {
@@ -135,6 +145,17 @@
       pushActivityLog("error", "ライブラリの読み込みに失敗しました", String(e));
     } finally {
       loading = false;
+    }
+  }
+
+  async function loadTrashed(silent = true) {
+    try {
+      trashedTracks = await listTrashed();
+      if (!silent) {
+        pushActivityLog("info", `ゴミ箱を読み込みました (${trashedTracks.length} 曲)`);
+      }
+    } catch (e) {
+      pushActivityLog("error", "ゴミ箱の読み込みに失敗しました", String(e));
     }
   }
 
@@ -199,8 +220,14 @@
 
   function switchTab(tab: AppTab) {
     activeTab = tab;
+    if (tab === "library") {
+      void loadTracks(true);
+    }
     if (tab === "rekordbox" && rekordboxTracks.length === 0 && !rekordboxLoading) {
       void loadRekordbox(false);
+    }
+    if (tab === "trash") {
+      void loadTrashed(true);
     }
   }
 
@@ -234,12 +261,12 @@
     let failed = 0;
     try {
       for (const track of selected) {
-        if (contentIdForPath(track.path, rekordboxPathIndex)) {
+        if (track.rekordboxContentId && rekordboxContentIds.has(track.rekordboxContentId)) {
           skipped += 1;
           continue;
         }
         try {
-          await rekordboxAddContent(track.path, track.title);
+          await libraryAddToRekordbox(track.id);
           added += 1;
         } catch (e) {
           failed += 1;
@@ -251,6 +278,7 @@
         }
       }
       await loadRekordbox(true);
+      await loadTracks();
       if (added > 0) {
         pushActivityLog("success", `${added} 曲を Rekordbox に追加しました`);
       }
@@ -274,11 +302,11 @@
     let failed = 0;
     try {
       for (const track of selected) {
-        const contentId = contentIdForPath(track.path, rekordboxPathIndex);
-        if (!contentId) continue;
         try {
-          await rekordboxDeleteContent(contentId);
-          removed += 1;
+          const didRemove = await libraryRemoveFromRekordbox(track.id);
+          if (didRemove) {
+            removed += 1;
+          }
         } catch (e) {
           failed += 1;
           pushActivityLog(
@@ -289,6 +317,7 @@
         }
       }
       await loadRekordbox(true);
+      await loadTracks();
       if (removed > 0) {
         pushActivityLog("success", `${removed} 曲を Rekordbox から削除しました`);
       }
@@ -356,10 +385,7 @@
   }
 
   async function handleImportFromRekordbox() {
-    if (!rekordboxStatus?.dbPath) {
-      pushActivityLog("error", "Rekordbox ライブラリが見つかりません");
-      return;
-    }
+    if (!(await ensureRekordboxWritable())) return;
 
     scanning = true;
     scanKind = "rekordbox";
@@ -434,15 +460,16 @@
         selectedTrack = null;
         appSession.selectedTrackId = null;
       }
-      await loadTracks();
       pushActivityLog(
         "success",
-        `ライブラリから削除: ${track.title ?? track.path}`,
+        `ゴミ箱へ移しました: ${track.title ?? track.path}`,
         track.path,
       );
     } catch (e) {
       pushActivityLog("error", "トラックの削除に失敗しました", String(e));
     }
+    await loadTracks();
+    await loadTrashed();
   }
 
   async function handleBulkRemove(ids: number[]) {
@@ -452,29 +479,104 @@
         selectedTrack = null;
         appSession.selectedTrackId = null;
       }
-      await loadTracks();
-      pushActivityLog("success", `${count} 曲をライブラリから削除しました`);
+      pushActivityLog("success", `${count} 曲をゴミ箱へ移しました`);
     } catch (e) {
       pushActivityLog("error", "トラックの一括削除に失敗しました", String(e));
     }
+    await loadTracks();
+    await loadTrashed();
   }
 
-  async function handleDuplicateChoice(choice: "existing" | "new") {
+  async function handleDuplicateChoice(choice: DuplicateChoice) {
     try {
       await resolveDuplicate(choice);
       duplicatePayload = null;
-      pushActivityLog(
-        "info",
-        choice === "existing" ? "既存のトラックを残しました" : "新しいトラックをライブラリに追加しました",
-      );
+      const message =
+        choice === "existing"
+          ? "既存のトラックを残しました"
+          : choice === "altFormat"
+            ? "別フォーマットとして取り込みます"
+            : "新しいトラックをライブラリに追加します";
+      pushActivityLog("info", message);
     } catch (e) {
       pushActivityLog("error", "重複の解決に失敗しました", String(e));
+    }
+  }
+
+  async function handleRestore(track: Track) {
+    try {
+      await restoreTracks([track.id]);
+      pushActivityLog("success", `復元しました: ${track.title ?? track.path}`);
+    } catch (e) {
+      pushActivityLog("error", "復元に失敗しました", String(e));
+    }
+    await loadTracks();
+    await loadTrashed();
+  }
+
+  async function handleBulkRestore(ids: number[]) {
+    try {
+      const count = await restoreTracks(ids);
+      pushActivityLog("success", `${count} 曲を復元しました`);
+    } catch (e) {
+      pushActivityLog("error", "復元に失敗しました", String(e));
+    }
+    await loadTracks();
+    await loadTrashed();
+  }
+
+  async function handlePermanentDelete(ids: number[]) {
+    try {
+      const count = await deleteTracksPermanently(ids);
+      if (selectedTrack && ids.includes(selectedTrack.id)) {
+        selectedTrack = null;
+        appSession.selectedTrackId = null;
+      }
+      pushActivityLog("success", `${count} 曲を完全に削除しました`);
+    } catch (e) {
+      pushActivityLog("error", "完全削除に失敗しました", String(e));
+    }
+    await loadTracks();
+    await loadTrashed();
+  }
+
+  async function handleEmptyTrash() {
+    try {
+      const count = await emptyTrash();
+      selectedTrack = null;
+      appSession.selectedTrackId = null;
+      pushActivityLog("success", `ゴミ箱を空にしました (${count} 曲)`);
+    } catch (e) {
+      pushActivityLog("error", "ゴミ箱を空にできませんでした", String(e));
+    }
+    await loadTracks();
+    await loadTrashed();
+  }
+
+  async function handleHealthCheck() {
+    try {
+      const report = await checkLibraryHealth();
+      if (!report.missing && !report.hashMismatch) {
+        pushActivityLog("success", `健全性チェック: ${report.checked} 曲問題なし`);
+        return;
+      }
+      pushActivityLog(
+        "warning",
+        `健全性チェック: 欠損 ${report.missing} · ハッシュ不一致 ${report.hashMismatch}`,
+        report.issues
+          .slice(0, 5)
+          .map((issue) => `${issue.kind}: ${issue.path}`)
+          .join(" | ") || undefined,
+      );
+    } catch (e) {
+      pushActivityLog("error", "健全性チェックに失敗しました", String(e));
     }
   }
 
   onMount(() => {
     pushActivityLog("info", "Catra を起動しました");
     void loadTracks(false);
+    void loadTrashed(true);
     void loadRekordbox(true);
 
     let rekordboxPollInFlight = false;
@@ -531,6 +633,7 @@
 
     void listen("library-updated", () => {
       void loadTracks();
+      void loadTrashed();
     }).then((unlisten) => {
       unlistenUpdated = unlisten;
     });
@@ -684,6 +787,16 @@
       >
         Rekordbox
       </button>
+      <button
+        type="button"
+        class="tab"
+        class:active={activeTab === "trash"}
+        role="tab"
+        aria-selected={activeTab === "trash"}
+        onclick={() => switchTab("trash")}
+      >
+        ゴミ箱
+      </button>
     </div>
     {#if scanning || duplicatePayload}
       <div class="download-status" aria-live="polite">
@@ -783,6 +896,7 @@
           selectedId={selectedTrack?.id ?? null}
           sessionScope="library"
           {rekordboxPathIndex}
+          {rekordboxContentIds}
           {rekordboxWritable}
           {rekordboxBusy}
           {rekordboxLockedHint}
@@ -793,7 +907,17 @@
           onRemoveFromRekordbox={handleRemoveFromRekordbox}
           onconvert={handleOpenConvert}
           convertBusy={converting || scanning}
-        />
+        >
+          {#snippet headerExtra()}
+            <button
+              type="button"
+              onclick={handleHealthCheck}
+              disabled={loading || scanning || converting}
+            >
+              健全性チェック
+            </button>
+          {/snippet}
+        </TrackList>
       </div>
       <div
         class="tab-panel"
@@ -809,6 +933,28 @@
           onselect={handleSelectRekordbox}
           onrefresh={() => loadRekordbox(false)}
           onensurewritable={ensureRekordboxWritable}
+        />
+      </div>
+      <div
+        class="tab-panel"
+        hidden={activeTab !== "trash"}
+        inert={activeTab !== "trash" ? true : undefined}
+        aria-hidden={activeTab !== "trash"}
+      >
+        <TrackList
+          tracks={trashedTracks}
+          selectedId={selectedTrack?.id ?? null}
+          sessionScope="trash"
+          emptyTitle="ゴミ箱は空です"
+          emptyHint="ライブラリから外した曲がここに入ります"
+          removeTitle="復元"
+          bulkRemoveLabel="復元"
+          bulkRemoveConfirmMessage="曲をライブラリに戻しますか？"
+          onselect={handleSelect}
+          onremove={handleRestore}
+          onbulkremove={handleBulkRestore}
+          onbulkpermanent={handlePermanentDelete}
+          onemptytrash={handleEmptyTrash}
         />
       </div>
     </main>

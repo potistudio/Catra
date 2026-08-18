@@ -91,7 +91,7 @@
           onremove(track);
         }}
         aria-label="Remove from library"
-        title="ライブラリから削除"
+        title="ライブラリから外す"
       >
         ✕
       </button>

@@ -35,3 +35,4 @@ dirs = "6"
 uuid = { version = "1", features = ["v4"] }
 quick-xml = "0.37"
 getrandom = "0.3"
+xxhash-rust = { version = "0.8", features = ["xxh64"] }

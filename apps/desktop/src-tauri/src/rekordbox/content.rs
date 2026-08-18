@@ -171,16 +171,23 @@ pub fn add_content(path: String, title: Option<String>) -> Result<RekordboxConte
 
     {
         let db = MasterDatabase::open()?;
-        let existing_id: Option<String> = db
+        let existing: Option<(String, i32)> = db
             .conn()
             .query_row(
-                "SELECT ID FROM djmdContent WHERE FolderPath = ?1 LIMIT 1",
+                "SELECT ID, IFNULL(rb_local_deleted, 0) FROM djmdContent
+                 WHERE FolderPath = ?1
+                 ORDER BY IFNULL(rb_local_deleted, 0) ASC
+                 LIMIT 1",
                 params![folder_path.as_str()],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .optional()
             .map_err(|error| format!("failed to lookup existing content: {error}"))?;
-        if let Some(id) = existing_id {
+        if let Some((id, deleted)) = existing {
+            if deleted != 0 {
+                let source = path.to_string_lossy().into_owned();
+                return restore_content(&id, Some(&source));
+            }
             let db_dir = load_config()?
                 .db_dir
                 .ok_or_else(|| "Rekordbox database directory was not found".to_string())?;
@@ -425,37 +432,128 @@ pub fn update_content(
         .ok_or_else(|| "updated content could not be reloaded".to_string())
 }
 
-pub fn delete_content(id: String) -> Result<(), String> {
+pub fn update_content_folder_path(id: &str, path: &str) -> Result<RekordboxContent, String> {
+    let path = PathBuf::from(path);
+    if !path.is_file() {
+        return Err(format!("file not found: {}", path.display()));
+    }
+    let folder_path = path.to_string_lossy().replace('/', "\\");
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "invalid file name".to_string())?;
+
     let mut session = WriteSession::open()?;
     let exists: bool = session
         .conn()
         .prepare("SELECT 1 FROM djmdContent WHERE ID = ?1 LIMIT 1")
         .map_err(|error| error.to_string())?
-        .exists(params![id.as_str()])
+        .exists(params![id])
         .map_err(|error| error.to_string())?;
     if !exists {
         return Err(format!("content {id} was not found"));
     }
 
+    let ts = timestamp_sql(now_local());
+    session
+        .conn()
+        .execute(
+            "UPDATE djmdContent SET FolderPath = ?1, FileNameL = ?2, updated_at = ?3 WHERE ID = ?4",
+            params![folder_path.as_str(), file_name, ts.as_str(), id],
+        )
+        .map_err(|error| error.to_string())?;
+    session.usn.track("djmdContent", id.to_string());
+    let db_dir = session.db_dir.clone();
+    session.commit()?;
+
+    let db = MasterDatabase::open()?;
+    let mut contents = db.get_content(Some(id), &db_dir)?;
+    contents
+        .pop()
+        .ok_or_else(|| "updated content could not be reloaded".to_string())
+}
+
+/// Set `rb_local_deleted = 0` on Content and its `djmdSongPlaylist` rows.
+/// When `path` is set, `FolderPath` and `FileNameL` are updated in the same write.
+pub fn restore_content(id: &str, path: Option<&str>) -> Result<RekordboxContent, String> {
+    let mut folder_path = None;
+    let mut file_name = None;
+    if let Some(path) = path {
+        let path = PathBuf::from(path);
+        if !path.is_file() {
+            return Err(format!("file not found: {}", path.display()));
+        }
+        folder_path = Some(path.to_string_lossy().replace('/', "\\"));
+        file_name = Some(
+            path.file_name()
+                .and_then(|value| value.to_str())
+                .ok_or_else(|| "invalid file name".to_string())?
+                .to_string(),
+        );
+    }
+
+    let mut session = WriteSession::open()?;
+    if !content_row_exists(session.conn(), id)? {
+        return Err(format!("content {id} was not found"));
+    }
+    let ts = timestamp_sql(now_local());
+    set_playlist_songs_deleted(&mut session, id, 0, &ts)?;
+    session
+        .conn()
+        .execute(
+            "UPDATE djmdContent
+             SET rb_local_deleted = 0,
+                 FolderPath = COALESCE(?1, FolderPath),
+                 FileNameL = COALESCE(?2, FileNameL),
+                 updated_at = ?3
+             WHERE ID = ?4",
+            params![
+                folder_path.as_deref(),
+                file_name.as_deref(),
+                ts.as_str(),
+                id
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    session.usn.track("djmdContent", id.to_string());
+    let db_dir = session.db_dir.clone();
+    session.commit()?;
+
+    let db = MasterDatabase::open()?;
+    let mut contents = db.get_content(Some(id), &db_dir)?;
+    contents
+        .pop()
+        .ok_or_else(|| "restored content could not be reloaded".to_string())
+}
+
+pub fn delete_content(id: String) -> Result<(), String> {
+    let mut session = WriteSession::open()?;
+    if !content_row_exists(session.conn(), &id)? {
+        return Err(format!("content {id} was not found"));
+    }
+    purge_content_rows(&mut session, &id)?;
+    session.commit()?;
+    Ok(())
+}
+
+pub(crate) fn purge_content_rows(session: &mut WriteSession, id: &str) -> Result<(), String> {
     let song_ids: Vec<String> = {
         let mut stmt = session
             .conn()
             .prepare("SELECT ID FROM djmdSongPlaylist WHERE ContentID = ?1")
             .map_err(|error| error.to_string())?;
         let rows = stmt
-            .query_map(params![id.as_str()], |row| row.get(0))
+            .query_map(params![id], |row| row.get(0))
             .map_err(|error| error.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())?
     };
-    session
-        .usn
-        .track_many("djmdSongPlaylist", song_ids);
+    session.usn.track_many("djmdSongPlaylist", song_ids);
     session
         .conn()
         .execute(
             "DELETE FROM djmdSongPlaylist WHERE ContentID = ?1",
-            params![id.as_str()],
+            params![id],
         )
         .map_err(|error| error.to_string())?;
 
@@ -467,17 +565,53 @@ pub fn delete_content(id: String) -> Result<(), String> {
     ] {
         let _ = session.conn().execute(
             &format!("DELETE FROM {table} WHERE ContentID = ?1"),
-            params![id.as_str()],
+            params![id],
         );
     }
 
     session
         .conn()
-        .execute("DELETE FROM djmdContent WHERE ID = ?1", params![id.as_str()])
+        .execute("DELETE FROM djmdContent WHERE ID = ?1", params![id])
         .map_err(|error| error.to_string())?;
-    session.usn.track("djmdContent", id);
+    session.usn.track("djmdContent", id.to_string());
+    Ok(())
+}
 
-    session.commit()?;
+fn content_row_exists(conn: &rusqlite::Connection, id: &str) -> Result<bool, String> {
+    conn.prepare("SELECT 1 FROM djmdContent WHERE ID = ?1 LIMIT 1")
+        .map_err(|error| error.to_string())?
+        .exists(params![id])
+        .map_err(|error| error.to_string())
+}
+
+fn set_playlist_songs_deleted(
+    session: &mut WriteSession,
+    content_id: &str,
+    deleted: i32,
+    ts: &str,
+) -> Result<(), String> {
+    let song_ids: Vec<String> = {
+        let mut stmt = session
+            .conn()
+            .prepare("SELECT ID FROM djmdSongPlaylist WHERE ContentID = ?1")
+            .map_err(|error| error.to_string())?;
+        let rows = stmt
+            .query_map(params![content_id], |row| row.get(0))
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())?
+    };
+    if song_ids.is_empty() {
+        return Ok(());
+    }
+    session
+        .conn()
+        .execute(
+            "UPDATE djmdSongPlaylist SET rb_local_deleted = ?1, updated_at = ?2 WHERE ContentID = ?3",
+            params![deleted, ts, content_id],
+        )
+        .map_err(|error| error.to_string())?;
+    session.usn.track_many("djmdSongPlaylist", song_ids);
     Ok(())
 }
 

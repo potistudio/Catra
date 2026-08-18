@@ -3,7 +3,7 @@ import type { SortColumn, SortDirection, ViewMode } from "$lib/trackListView";
 const STORAGE_KEY = "catra.app-session.v1";
 const PERSIST_MS = 250;
 
-export type AppTab = "library" | "rekordbox";
+export type AppTab = "library" | "rekordbox" | "trash";
 export type MembershipFilter = "all" | "missing" | "present";
 export type BrowseMode = "all" | "playlist";
 
@@ -21,6 +21,7 @@ export type AppSession = {
   selectedRekordboxId: string | null;
   consoleOpen: boolean;
   library: TrackListSession;
+  trash: TrackListSession;
   rekordbox: {
     browseMode: BrowseMode;
     selectedPlaylistId: string | null;
@@ -59,6 +60,7 @@ function defaultSession(): AppSession {
     selectedRekordboxId: null,
     consoleOpen: false,
     library: defaultList(),
+    trash: defaultList(),
     rekordbox: {
       browseMode: "all",
       selectedPlaylistId: null,
@@ -69,7 +71,7 @@ function defaultSession(): AppSession {
 }
 
 function isAppTab(value: unknown): value is AppTab {
-  return value === "library" || value === "rekordbox";
+  return value === "library" || value === "rekordbox" || value === "trash";
 }
 
 function isViewMode(value: unknown): value is ViewMode {
@@ -123,6 +125,7 @@ function parseSession(raw: unknown): AppSession {
   next.selectedRekordboxId = asString(record.selectedRekordboxId);
   if (typeof record.consoleOpen === "boolean") next.consoleOpen = record.consoleOpen;
   next.library = parseList(record.library);
+  next.trash = parseList(record.trash);
   if (record.rekordbox && typeof record.rekordbox === "object") {
     const rekordbox = record.rekordbox as Record<string, unknown>;
     if (isBrowseMode(rekordbox.browseMode)) next.rekordbox.browseMode = rekordbox.browseMode;

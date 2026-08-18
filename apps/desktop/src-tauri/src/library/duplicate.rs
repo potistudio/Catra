@@ -9,6 +9,7 @@ pub const DURATION_TOLERANCE_MS: u64 = 3000;
 pub enum DuplicateChoice {
     KeepExisting,
     KeepNew,
+    KeepAsAltFormat,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -32,6 +33,7 @@ pub struct TrackCandidate {
 pub struct DuplicateFoundPayload {
     pub existing: Track,
     pub candidate: TrackCandidate,
+    pub allow_alt_format: bool,
 }
 
 pub struct DuplicateResolver {
@@ -56,6 +58,7 @@ impl DuplicateResolver {
         app: &AppHandle,
         existing: Track,
         candidate: TrackCandidate,
+        allow_alt_format: bool,
     ) -> DuplicateChoice {
         let mut inner = self.inner.lock().unwrap();
         inner.resolution = None;
@@ -63,6 +66,7 @@ impl DuplicateResolver {
         let payload = DuplicateFoundPayload {
             existing,
             candidate,
+            allow_alt_format,
         };
         let _ = app.emit("library-duplicate-found", &payload);
 

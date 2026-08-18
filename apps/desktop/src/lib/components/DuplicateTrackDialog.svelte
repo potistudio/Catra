@@ -11,17 +11,17 @@
     formatDuration,
   } from "$lib/format";
   import { isTrackSource } from "$lib/trackSource";
-  import type { DuplicateFoundPayload } from "$lib/types";
+  import type { DuplicateChoice, DuplicateFoundPayload } from "$lib/types";
 
   interface Props {
     payload: DuplicateFoundPayload;
-    onchoose: (choice: "existing" | "new") => void | Promise<void>;
+    onchoose: (choice: DuplicateChoice) => void | Promise<void>;
   }
 
   let { payload, onchoose }: Props = $props();
 
-  const existingTitle = displayTitle(payload.existing);
-  const candidateTitle = displayTitle(payload.candidate);
+  const existingTitle = $derived(displayTitle(payload.existing));
+  const candidateTitle = $derived(displayTitle(payload.candidate));
 </script>
 
 <div class="backdrop" role="presentation">
@@ -99,6 +99,18 @@
         </div>
       </button>
     </div>
+    {#if payload.allowAltFormat}
+      <div class="alt-format">
+        <button
+          type="button"
+          class="choice alt"
+          aria-label={`別フォーマットとして取り込む: ${candidateTitle}`}
+          onclick={() => onchoose("altFormat")}
+        >
+          別フォーマットとして取り込む
+        </button>
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -152,6 +164,18 @@
     gap: 1rem;
     padding: 1.25rem 1.5rem 1.5rem;
     box-sizing: border-box;
+  }
+
+  .alt-format {
+    padding: 0 1.5rem 1.5rem;
+  }
+
+  .choice.alt {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    font-weight: 600;
   }
 
   .choice {

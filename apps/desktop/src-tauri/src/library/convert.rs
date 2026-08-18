@@ -1,5 +1,6 @@
-use super::db::{save_artwork, LibraryState, Track};
-use super::scan::{normalize_fs_path, read_metadata};
+use super::db::{LibraryState, Track};
+use super::ingest::ingest_converted;
+use super::paths::converted_filename;
 use crate::activity_log::emit_activity_log;
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Read};
@@ -282,7 +283,7 @@ fn convert_tracks(
             skipped,
             failed,
         ) {
-            Ok(ConvertOutcome::Converted { output }) => {
+            Ok(ConvertOutcome::Converted { output, id }) => {
                 converted += 1;
                 emit_activity_log(
                     app,
@@ -296,14 +297,27 @@ fn convert_tracks(
                         output.to_string_lossy().into_owned(),
                         track.title.clone(),
                     ) {
-                        Ok(_) => {
-                            rekordbox_added += 1;
-                            emit_activity_log(
-                                app,
-                                "success",
-                                format!("Rekordbox に追加: {current_name}"),
-                                None,
-                            );
+                        Ok(content) => {
+                            if let Err(error) = library
+                                .set_rekordbox_content_id(id, Some(&content.id))
+                                .map_err(|error| error.to_string())
+                            {
+                                rekordbox_failed += 1;
+                                emit_activity_log(
+                                    app,
+                                    "warning",
+                                    format!("Rekordbox Content ID の保存に失敗: {current_name}"),
+                                    Some(error),
+                                );
+                            } else {
+                                rekordbox_added += 1;
+                                emit_activity_log(
+                                    app,
+                                    "success",
+                                    format!("Rekordbox に追加: {current_name}"),
+                                    None,
+                                );
+                            }
                         }
                         Err(error) => {
                             rekordbox_failed += 1;
@@ -392,7 +406,7 @@ fn rekordbox_accepts_writes(app: &AppHandle) -> bool {
 }
 
 enum ConvertOutcome {
-    Converted { output: PathBuf },
+    Converted { output: PathBuf, id: i64 },
     Skipped,
 }
 
@@ -413,8 +427,14 @@ fn convert_one(
         return Err(format!("ファイルがありません: {}", source.display()));
     }
 
-    let output = unique_output_path(source, options.format.extension())?;
-    run_ffmpeg(
+    let incoming_dir = library
+        .incoming_dir()
+        .join(uuid::Uuid::new_v4().to_string());
+    std::fs::create_dir_all(&incoming_dir).map_err(|error| error.to_string())?;
+    let filename = converted_filename(source, options.format.extension());
+    let output = incoming_dir.join(&filename);
+
+    if let Err(error) = run_ffmpeg(
         app,
         source,
         &output,
@@ -425,77 +445,33 @@ fn convert_one(
         converted,
         skipped,
         failed,
-    )?;
-
-    if insert_converted_file(library, track, &output)? {
-        Ok(ConvertOutcome::Converted { output })
-    } else {
-        Ok(ConvertOutcome::Skipped)
-    }
-}
-
-/// Writes a converted file into the library without the duplicate-choice dialog.
-///
-/// Copies `source` from the original track. Sets `converted = 1`. Skips path collisions only.
-fn insert_converted_file(
-    library: &LibraryState,
-    source_track: &Track,
-    output: &Path,
-) -> Result<bool, String> {
-    let path_str = normalize_fs_path(&output.to_string_lossy());
-    if library
-        .track_exists(&path_str)
-        .map_err(|error| error.to_string())?
-    {
-        return Ok(false);
+    ) {
+        let _ = std::fs::remove_dir_all(&incoming_dir);
+        return Err(error);
     }
 
-    let metadata = read_metadata(output);
-    let added_at = chrono::Utc::now().timestamp();
-    let artwork_path = metadata
-        .artwork
-        .as_ref()
-        .and_then(|(data, mime)| save_artwork(library.artwork_dir(), &path_str, data, mime))
-        .or_else(|| source_track.artwork_path.clone());
-    let source = source_track
-        .source
-        .as_deref()
-        .or(metadata.source.as_deref());
-    let title = metadata
-        .title
-        .as_deref()
-        .or(source_track.title.as_deref());
-    let artist = metadata
-        .artist
-        .as_deref()
-        .or(source_track.artist.as_deref());
-    let album = metadata.album.as_deref().or(source_track.album.as_deref());
-    let genre = metadata.genre.as_deref().or(source_track.genre.as_deref());
-    let key = metadata.key.as_deref().or(source_track.key.as_deref());
-    let bpm = metadata.bpm.or(source_track.bpm);
-    let rating = metadata.rating.or(source_track.rating);
-    let duration_ms = metadata.duration_ms.or(source_track.duration_ms);
-
-    let inserted = library
-        .insert_track(
-            &path_str,
-            title,
-            artist,
-            album,
-            duration_ms,
-            bpm,
-            metadata.bitrate_kbps,
-            genre,
-            key,
-            rating,
-            artwork_path.as_deref(),
-            source,
-            true,
-            added_at,
-        )
-        .map_err(|error| error.to_string())?;
-
-    Ok(inserted)
+    match ingest_converted(
+        library,
+        track,
+        &output,
+        chrono::Utc::now().timestamp(),
+    ) {
+        Ok(inserted) => {
+            let _ = std::fs::remove_dir_all(&incoming_dir);
+            Ok(ConvertOutcome::Converted {
+                output: PathBuf::from(&inserted.path),
+                id: inserted.id,
+            })
+        }
+        Err(error) if error.contains("既にライブラリ") => {
+            let _ = std::fs::remove_dir_all(&incoming_dir);
+            Ok(ConvertOutcome::Skipped)
+        }
+        Err(error) => {
+            let _ = std::fs::remove_dir_all(&incoming_dir);
+            Err(error)
+        }
+    }
 }
 
 fn ensure_ffmpeg() -> Result<(), String> {
@@ -767,46 +743,6 @@ pub(crate) fn ffmpeg_args(source: &Path, output: &Path, options: &ConvertOptions
     args
 }
 
-/// Chooses a non-existing path next to `source`. Never returns `source` itself.
-pub(crate) fn unique_output_path(source: &Path, extension: &str) -> Result<PathBuf, String> {
-    let parent = source
-        .parent()
-        .filter(|path| !path.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
-    let stem = source
-        .file_stem()
-        .ok_or_else(|| "ファイル名を取得できません".to_string())?
-        .to_string_lossy();
-
-    let named = [
-        parent.join(format!("{stem}.{extension}")),
-        parent.join(format!("{stem}-converted.{extension}")),
-    ];
-    for candidate in named {
-        if usable_output_path(source, &candidate) {
-            return Ok(candidate);
-        }
-    }
-    for index in 2..10_000 {
-        let candidate = parent.join(format!("{stem}-converted-{index}.{extension}"));
-        if usable_output_path(source, &candidate) {
-            return Ok(candidate);
-        }
-    }
-
-    Err("出力ファイル名を生成できません".to_string())
-}
-
-fn usable_output_path(source: &Path, candidate: &Path) -> bool {
-    !is_same_output_path(source, candidate) && !candidate.exists()
-}
-
-fn is_same_output_path(source: &Path, candidate: &Path) -> bool {
-    source
-        .to_string_lossy()
-        .eq_ignore_ascii_case(&candidate.to_string_lossy())
-}
-
 pub(crate) fn parse_out_time_ms(line: &str) -> Option<u64> {
     if let Some(value) = line.strip_prefix("out_time_us=") {
         return value.trim().parse::<u64>().ok().map(|us| us / 1000);
@@ -820,6 +756,8 @@ pub(crate) fn parse_out_time_ms(line: &str) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::library::db::{LibraryState, NewTrack};
+    use crate::library::paths::{converted_filename, library_prefix};
     use std::fs;
 
     fn temp_dir() -> PathBuf {
@@ -855,45 +793,54 @@ mod tests {
     }
 
     #[test]
-    fn unique_path_changes_extension() {
-        let dir = temp_dir();
-        let source = dir.join("song.flac");
-        fs::write(&source, b"src").unwrap();
-        let output = unique_output_path(&source, "mp3").unwrap();
-        assert_eq!(output, dir.join("song.mp3"));
-        let _ = fs::remove_dir_all(&dir);
-    }
+    fn converted_output_uses_stem_and_parent_id() {
+        let root = temp_dir();
+        let library = LibraryState::new(root.clone()).unwrap();
+        let incoming = library.incoming_dir().join(uuid::Uuid::new_v4().to_string());
+        fs::create_dir_all(&incoming).unwrap();
+        let source_file = incoming.join("song title.flac");
+        fs::write(&source_file, b"src").unwrap();
+        let relative = library.relative_of(&source_file).unwrap();
+        let parent_id = library
+            .insert_track(NewTrack {
+                path: &relative,
+                title: Some("Song"),
+                artist: None,
+                album: None,
+                duration_ms: None,
+                bpm: None,
+                bitrate_kbps: None,
+                genre: None,
+                key: None,
+                rating: None,
+                artwork_path: None,
+                source: None,
+                converted: false,
+                added_at: 1,
+                content_hash: Some("abc"),
+                parent_track_id: None,
+                format_group_id: None,
+                rekordbox_content_id: None,
+            })
+            .unwrap();
+        let dest = library.absolute_path(&library_prefix(parent_id));
+        fs::rename(&incoming, &dest).unwrap();
+        library
+            .update_location(parent_id, &format!("{}/song title.flac", library_prefix(parent_id)))
+            .unwrap();
 
-    #[test]
-    fn unique_path_same_extension_uses_converted_suffix() {
-        let dir = temp_dir();
-        let source = dir.join("song.mp3");
-        fs::write(&source, b"src").unwrap();
-        let output = unique_output_path(&source, "mp3").unwrap();
-        assert_eq!(output, dir.join("song-converted.mp3"));
-        let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn unique_path_increments_after_converted_exists() {
-        let dir = temp_dir();
-        let source = dir.join("song.mp3");
-        fs::write(&source, b"src").unwrap();
-        fs::write(dir.join("song-converted.mp3"), b"out").unwrap();
-        let output = unique_output_path(&source, "mp3").unwrap();
-        assert_eq!(output, dir.join("song-converted-2.mp3"));
-        let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn unique_path_skips_existing_target_extension() {
-        let dir = temp_dir();
-        let source = dir.join("song.flac");
-        fs::write(&source, b"src").unwrap();
-        fs::write(dir.join("song.mp3"), b"existing").unwrap();
-        let output = unique_output_path(&source, "mp3").unwrap();
-        assert_eq!(output, dir.join("song-converted.mp3"));
-        let _ = fs::remove_dir_all(&dir);
+        let output_dir = library.incoming_dir().join(uuid::Uuid::new_v4().to_string());
+        fs::create_dir_all(&output_dir).unwrap();
+        let filename = converted_filename(Path::new("song title.flac"), "mp3");
+        let output = output_dir.join(&filename);
+        fs::write(&output, b"converted-bytes").unwrap();
+        let parent = library.get_track(parent_id).unwrap().unwrap();
+        let inserted = ingest_converted(&library, &parent, &output, 2).unwrap();
+        assert_eq!(inserted.parent_track_id, Some(parent_id));
+        assert!(inserted.converted);
+        assert!(inserted.stored_path.starts_with("library/"));
+        assert!(inserted.stored_path.ends_with("/song title.mp3"));
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]

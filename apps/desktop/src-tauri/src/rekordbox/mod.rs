@@ -6,13 +6,23 @@ mod key;
 mod playlist;
 mod playlist_xml;
 mod registry;
+mod snapshot;
 mod write;
 
 pub use content::{RekordboxContent, RekordboxContentUpdate};
 pub use playlist::RekordboxPlaylist;
 
 use config::{is_rekordbox_running, load_config, RekordboxConfig};
-use content::{add_content as add_content_impl, delete_content as delete_content_impl, update_content as update_content_impl};
+use content::{
+    add_content as add_content_impl, delete_content as delete_content_impl,
+    restore_content as restore_content_impl, update_content as update_content_impl,
+    update_content_folder_path as update_content_folder_path_impl,
+};
+use snapshot::{
+    export_content_snapshot as export_content_snapshot_impl,
+    import_content_snapshot as import_content_snapshot_impl,
+};
+use write::ensure_writable as ensure_writable_impl;
 use db::MasterDatabase;
 use playlist::{
     add_to_playlist as add_to_playlist_impl, create_playlist as create_playlist_impl,
@@ -114,6 +124,21 @@ pub fn add_content(path: String, title: Option<String>) -> Result<RekordboxConte
     add_content_impl(path, title)
 }
 
+pub fn export_content_snapshot(id: &str) -> Result<String, String> {
+    export_content_snapshot_impl(id)
+}
+
+pub fn import_content_snapshot(
+    snapshot: &str,
+    path: Option<&str>,
+) -> Result<RekordboxContent, String> {
+    import_content_snapshot_impl(snapshot, path)
+}
+
+pub fn restore_content(id: &str, path: Option<&str>) -> Result<RekordboxContent, String> {
+    restore_content_impl(id, path)
+}
+
 pub fn update_content(
     id: String,
     fields: RekordboxContentUpdate,
@@ -123,6 +148,14 @@ pub fn update_content(
 
 pub fn delete_content(id: String) -> Result<(), String> {
     delete_content_impl(id)
+}
+
+pub fn update_content_folder_path(id: &str, path: &str) -> Result<RekordboxContent, String> {
+    update_content_folder_path_impl(id, path)
+}
+
+pub fn ensure_writable() -> Result<(), String> {
+    ensure_writable_impl()
 }
 
 fn open_db() -> Result<(MasterDatabase, std::path::PathBuf), String> {

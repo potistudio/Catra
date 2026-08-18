@@ -1,5 +1,6 @@
-use super::db::{save_artwork, LibraryState, ScanResult};
-use super::duplicate::{DuplicateChoice, DuplicateResolver, TrackCandidate};
+use super::db::{LibraryState, ScanResult};
+use super::duplicate::DuplicateResolver;
+use super::ingest::{count_outcome, ingest_path, log_ingest_error, IngestOptions};
 use crate::activity_log::emit_activity_log;
 use lofty::config::ParseOptions;
 use lofty::file::AudioFile;
@@ -57,7 +58,7 @@ pub fn start_scan_folder(app: AppHandle, folder: String) {
     });
 }
 
-/// Registers dropped files and folders in library.db. Files stay on disk.
+/// Copies dropped files into the managed library directory.
 pub fn start_import_paths(app: AppHandle, paths: Vec<String>) {
     std::thread::spawn(move || {
         let state = app.state::<LibraryState>();
@@ -137,20 +138,17 @@ fn import_paths(
         }
 
         let metadata = read_metadata(&path);
-        match add_track(app, library, resolver, &path, &metadata, added_at) {
-            Ok(InsertOutcome::Added) => added += 1,
-            Ok(InsertOutcome::Skipped) => skipped += 1,
-            Err(error) => {
-                emit_activity_log(
-                    app,
-                    "warning",
-                    format!(
-                        "スキップ: {}",
-                        path.file_name().unwrap_or_default().to_string_lossy()
-                    ),
-                    Some(error.to_string()),
-                );
-            }
+        match ingest_path(
+            Some(app),
+            library,
+            Some(resolver),
+            &path,
+            &metadata,
+            added_at,
+            IngestOptions::default(),
+        ) {
+            Ok(outcome) => count_outcome(outcome, &mut added, &mut skipped),
+            Err(error) => log_ingest_error(app, &path, error),
         }
     }
 
@@ -202,25 +200,17 @@ pub fn scan_folder(
         }
 
         let metadata = read_metadata(path);
-
-        match add_track(
-            app,
+        match ingest_path(
+            Some(app),
             library,
-            resolver,
+            Some(resolver),
             path,
             &metadata,
             added_at,
+            IngestOptions::default(),
         ) {
-            Ok(InsertOutcome::Added) => added += 1,
-            Ok(InsertOutcome::Skipped) => skipped += 1,
-            Err(error) => {
-                emit_activity_log(
-                    app,
-                    "warning",
-                    format!("スキップ: {}", path.file_name().unwrap_or_default().to_string_lossy()),
-                    Some(error.to_string()),
-                );
-            }
+            Ok(outcome) => count_outcome(outcome, &mut added, &mut skipped),
+            Err(error) => log_ingest_error(app, path, error),
         }
     }
 
@@ -243,92 +233,21 @@ pub fn import_file(
 
     let metadata = read_metadata(path);
     let added_at = chrono::Utc::now().timestamp();
-
-    match add_track(app, library, resolver, path, &metadata, added_at) {
-        Ok(InsertOutcome::Added) => Ok(true),
-        Ok(InsertOutcome::Skipped) => Ok(false),
-        Err(error) => Err(error.to_string()),
-    }
-}
-
-pub(crate) enum InsertOutcome {
-    Added,
-    Skipped,
-}
-
-pub(crate) fn add_track(
-    app: &AppHandle,
-    library: &LibraryState,
-    resolver: &DuplicateResolver,
-    path: &Path,
-    metadata: &FileMetadata,
-    added_at: i64,
-) -> Result<InsertOutcome, rusqlite::Error> {
-    let path_str = normalize_fs_path(&path.to_string_lossy());
-
-    if library.track_exists(&path_str)? {
-        return Ok(InsertOutcome::Skipped);
-    }
-
-    if let Some(existing) = library.find_duplicate(
-        &path_str,
-        metadata.title.as_deref(),
-        metadata.artist.as_deref(),
-        metadata.duration_ms,
-    )? {
-        let candidate = TrackCandidate {
-            path: path_str.clone(),
-            title: metadata.title.clone(),
-            artist: metadata.artist.clone(),
-            album: metadata.album.clone(),
-            duration_ms: metadata.duration_ms,
-            bpm: metadata.bpm,
-            bitrate_kbps: metadata.bitrate_kbps,
-            genre: metadata.genre.clone(),
-            key: metadata.key.clone(),
-            rating: metadata.rating,
-            source: metadata.source.clone(),
-        };
-
-        let existing_id = existing.id;
-        let choice = resolver.request_choice(app, existing, candidate);
-
-        match choice {
-            DuplicateChoice::KeepExisting => return Ok(InsertOutcome::Skipped),
-            DuplicateChoice::KeepNew => {
-                library.remove_track(existing_id)?;
-            }
-        }
-    }
-
-    let artwork_path = metadata
-        .artwork
-        .as_ref()
-        .cloned()
-        .or_else(|| load_artwork_file(metadata.artwork_file.as_deref()))
-        .and_then(|(data, mime)| save_artwork(library.artwork_dir(), &path_str, &data, &mime));
-
-    let inserted = library.insert_track(
-        &path_str,
-        metadata.title.as_deref(),
-        metadata.artist.as_deref(),
-        metadata.album.as_deref(),
-        metadata.duration_ms,
-        metadata.bpm,
-        metadata.bitrate_kbps,
-        metadata.genre.as_deref(),
-        metadata.key.as_deref(),
-        metadata.rating,
-        artwork_path.as_deref(),
-        metadata.source.as_deref(),
-        false,
+    match ingest_path(
+        Some(app),
+        library,
+        Some(resolver),
+        path,
+        &metadata,
         added_at,
-    )?;
-
-    if inserted {
-        Ok(InsertOutcome::Added)
-    } else {
-        Ok(InsertOutcome::Skipped)
+        IngestOptions {
+            owned: true,
+            ..IngestOptions::default()
+        },
+    ) {
+        Ok(super::ingest::IngestOutcome::Added { .. }) => Ok(true),
+        Ok(super::ingest::IngestOutcome::Skipped) => Ok(false),
+        Err(error) => Err(error),
     }
 }
 
@@ -560,7 +479,7 @@ fn extract_artwork(tag: &lofty::tag::Tag) -> Option<(Vec<u8>, String)> {
     Some((picture.data().to_vec(), mime))
 }
 
-fn load_artwork_file(path: Option<&str>) -> Option<(Vec<u8>, String)> {
+pub(crate) fn load_artwork_file(path: Option<&str>) -> Option<(Vec<u8>, String)> {
     let path = path?;
     let data = std::fs::read(path).ok()?;
     if data.is_empty() {
