@@ -2,14 +2,12 @@
 
 ## Development
 
-MUST Commit when you make any changes.
+SHOULD format and commit when you make any changes.
 
 ### Run
 
 ```bash
-mise install
-pnpm install
-pnpm dev
+pnpm tauri dev
 ```
 
 ### Structure
