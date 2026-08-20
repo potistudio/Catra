@@ -18,8 +18,8 @@ use commands::{
     rekordbox_remove_from_playlist, rekordbox_rename_playlist, rekordbox_update_content,
 };
 use extension_server::start as start_extension_server;
-use library::{check_health, init_library, LibraryState};
-use tauri::Manager;
+use library::{check_health_with, init_library, HealthDepth, LibraryState};
+use tauri::{AppHandle, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -29,20 +29,7 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
             init_library(app.handle())?;
-            let library = app.state::<LibraryState>();
-            if let Ok(report) = check_health(&library) {
-                if report.has_issues() {
-                    emit_activity_log(
-                        app.handle(),
-                        "warning",
-                        format!(
-                            "ライブラリ健全性: 欠損 {} · ハッシュ不一致 {}",
-                            report.missing, report.hash_mismatch
-                        ),
-                        None,
-                    );
-                }
-            }
+            spawn_startup_health_check(app.handle().clone());
             start_extension_server(app.handle().clone());
             Ok(())
         })
@@ -80,4 +67,24 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// 起動時の健全性チェック。ウィンドウ表示を待たせないよう別スレッドで動かし、
+/// ライブラリ全体を読み込むハッシュ検証は手動の `library_check_health` に任せる。
+fn spawn_startup_health_check(app: AppHandle) {
+    std::thread::spawn(move || {
+        let library = app.state::<LibraryState>();
+        let Ok(report) = check_health_with(&library, HealthDepth::Quick) else {
+            return;
+        };
+        if !report.has_issues() {
+            return;
+        }
+        emit_activity_log(
+            &app,
+            "warning",
+            format!("ライブラリ健全性: 欠損 {}", report.missing),
+            None,
+        );
+    });
 }

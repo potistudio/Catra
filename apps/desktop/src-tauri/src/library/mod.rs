@@ -12,7 +12,7 @@ mod trash;
 pub use convert::{start_convert_tracks, ConvertOptions};
 pub use db::{init_library, LibraryState, Track};
 pub use duplicate::{DuplicateChoice, DuplicateResolver};
-pub use health::{check_health, HealthReport};
+pub use health::{check_health, check_health_with, HealthDepth, HealthReport};
 pub use import_rekordbox::start_import_from_rekordbox;
 pub use link::{
     add_to_rekordbox as add_track_to_rekordbox, remove_content_id as remove_rekordbox_content_id,

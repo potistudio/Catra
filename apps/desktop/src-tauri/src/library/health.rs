@@ -2,6 +2,15 @@ use super::db::LibraryState;
 use super::ingest::hash_file;
 use serde::Serialize;
 
+/// 健全性チェックの深さ。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HealthDepth {
+    /// ファイルの有無だけを見る。ディスクI/Oはメタデータ参照のみ。
+    Quick,
+    /// 内容ハッシュまで検証する。ライブラリ全体を読み込む。
+    Full,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HealthIssue {
@@ -26,6 +35,13 @@ impl HealthReport {
 }
 
 pub fn check_health(library: &LibraryState) -> Result<HealthReport, String> {
+    check_health_with(library, HealthDepth::Full)
+}
+
+pub fn check_health_with(
+    library: &LibraryState,
+    depth: HealthDepth,
+) -> Result<HealthReport, String> {
     let tracks = library
         .list_all_tracks()
         .map_err(|error| error.to_string())?;
@@ -45,6 +61,9 @@ pub fn check_health(library: &LibraryState) -> Result<HealthReport, String> {
                 kind: "missing".to_string(),
                 path: track.path,
             });
+            continue;
+        }
+        if depth == HealthDepth::Quick {
             continue;
         }
         let Some(expected) = track.content_hash.as_deref() else {
