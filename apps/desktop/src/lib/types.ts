@@ -211,3 +211,148 @@ export interface HealthReport {
   hashMismatch: number;
   issues: HealthIssue[];
 }
+
+// ---------------------------------------------------------------- 分類（プレイリストとタグ）
+
+export type PlaylistKind = "folder" | "static" | "smart";
+
+export interface PlaylistNode {
+  id: number;
+  parentId: number | null;
+  kind: PlaylistKind;
+  name: string;
+  position: number;
+  /** static は列の長さ（重複を重複のまま数える）。smart と folder は集合の大きさ。 */
+  trackCount: number;
+  rule: Rule | null;
+  sortRule: SortRule | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * 列の要素。`Track` 単体では列を表せない。
+ * 同じ曲が2回入っていれば要素は2つあり、片方だけを動かしたり消したりできる。
+ */
+export interface PlaylistEntry {
+  /** 要素の同一性。static のみ。smart / folder は null（並べ替えできない）。 */
+  entryId: number | null;
+  position: number;
+  track: Track;
+}
+
+export interface PlaylistRef {
+  id: number;
+  name: string;
+}
+
+export interface PlaylistDeleteImpact {
+  /** 自分を含めて消えるノードの数。 */
+  nodes: number;
+  /** 消える要素の総数。曲は消えない。 */
+  entries: number;
+  /** この削除で述語が壊れるスマートプレイリスト。 */
+  referencing: PlaylistRef[];
+}
+
+export type RuleField =
+  | "title"
+  | "artist"
+  | "album"
+  | "genre"
+  | "key"
+  | "source"
+  | "path"
+  | "bpm"
+  | "rating"
+  | "bitrateKbps"
+  | "durationMs"
+  | "addedAt"
+  | "converted";
+
+export type RuleOp =
+  | "eq"
+  | "ne"
+  | "contains"
+  | "startsWith"
+  | "endsWith"
+  | "between"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "isNull"
+  | "isNotNull";
+
+export type RuleValue = string | number | boolean | [number, number] | null;
+
+export interface FieldTerm {
+  field: RuleField;
+  op: RuleOp;
+  value?: RuleValue;
+}
+
+export interface TagTerm {
+  tag: number;
+}
+
+/** 所属の判定。列に同じ曲が何度現れても、真偽は1回しか返らない。 */
+export interface InPlaylistTerm {
+  in_playlist: number;
+}
+
+export interface AllTerm {
+  all: Rule[];
+}
+
+export interface AnyTerm {
+  any: Rule[];
+}
+
+export interface NotTerm {
+  not: Rule;
+}
+
+export type Rule =
+  | FieldTerm
+  | TagTerm
+  | InPlaylistTerm
+  | AllTerm
+  | AnyTerm
+  | NotTerm;
+
+export interface SortRule {
+  column: RuleField;
+  direction: "asc" | "desc";
+}
+
+export type TagSelection = "single" | "multi";
+
+export interface Tag {
+  id: number;
+  axisId: number;
+  name: string;
+  position: number;
+  trackCount: number;
+}
+
+export interface TagAxis {
+  id: number;
+  name: string;
+  selection: TagSelection;
+  position: number;
+  tags: Tag[];
+}
+
+export interface TrackTags {
+  trackId: number;
+  tagIds: number[];
+}
+
+export type FacetField = "album" | "artist" | "genre" | "key" | "source";
+
+export interface FacetValue {
+  /** 空欄の曲は null にまとまる（「未設定」という束）。 */
+  value: string | null;
+  count: number;
+}

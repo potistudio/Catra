@@ -18,6 +18,8 @@
 
   interface Props {
     track: Track;
+    /** 列の中の何番目か。列でない一覧では null で、番号の列そのものが出ない。 */
+    position?: number | null;
     selected: boolean;
     checked: boolean;
     readonly?: boolean;
@@ -31,6 +33,7 @@
 
   let {
     track,
+    position = null,
     selected,
     checked,
     readonly = false,
@@ -55,6 +58,7 @@
   class:selected
   class:checked
   class:no-actions={!showActions}
+  class:with-position={position != null}
   role="row"
   tabindex="0"
   onclick={() => onselect(track)}
@@ -70,6 +74,9 @@
       />
     {/if}
   </span>
+  {#if position != null}
+    <span class="cell position" role="gridcell">{position + 1}</span>
+  {/if}
   <span class="cell artwork-cell" role="gridcell">
     <div class="artwork-wrap">
       <TrackArtwork artworkPath={track.artworkPath} title={displayTitle(track)} />
@@ -143,6 +150,28 @@
       2.5rem 3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
       3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 8.5rem;
     min-width: 79rem;
+  }
+
+  .table-row.with-position {
+    grid-template-columns:
+      2.5rem 3rem 3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
+      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 8.5rem 2rem;
+    min-width: 84rem;
+  }
+
+  .table-row.with-position.no-actions {
+    grid-template-columns:
+      2.5rem 3rem 3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
+      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 8.5rem;
+    min-width: 82rem;
+  }
+
+  .position {
+    text-align: right;
+    padding-right: 0.2rem;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.78rem;
+    color: var(--text-muted);
   }
 
   .table-row:hover {

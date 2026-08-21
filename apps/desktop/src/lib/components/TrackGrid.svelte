@@ -7,25 +7,26 @@
     getVisibleGridRange,
     TRACK_GRID_GAP,
     TRACK_GRID_ROW_HEIGHT,
+    type TrackListRow,
   } from "$lib/trackListView";
 
   interface Props {
-    tracks: Track[];
+    rows: TrackListRow[];
     selectedId: number | null;
-    checkedIds: Set<number>;
+    checkedKeys: Set<number>;
     readonly?: boolean;
     rekordboxPathIndex?: Map<string, string>;
     rekordboxContentIds?: Set<string>;
     showRowRemove?: boolean;
-    onselect: (track: Track) => void;
+    onselect: (row: TrackListRow) => void;
     onremove?: (track: Track) => void;
-    ontogglecheck?: (track: Track) => void;
+    ontogglecheck?: (row: TrackListRow) => void;
   }
 
   let {
-    tracks,
+    rows,
     selectedId,
-    checkedIds,
+    checkedKeys,
     readonly = false,
     rekordboxPathIndex,
     rekordboxContentIds,
@@ -59,10 +60,10 @@
 
   let columnCount = $derived(getGridColumnCount(containerWidth));
   let visibleRange = $derived(
-    getVisibleGridRange(scrollTop, viewportHeight, columnCount, tracks.length),
+    getVisibleGridRange(scrollTop, viewportHeight, columnCount, rows.length),
   );
-  let visibleTracks = $derived(tracks.slice(visibleRange.start, visibleRange.end));
-  let rowCount = $derived(Math.ceil(tracks.length / columnCount));
+  let visibleRows = $derived(rows.slice(visibleRange.start, visibleRange.end));
+  let rowCount = $derived(Math.ceil(rows.length / columnCount));
   let totalBodyHeight = $derived(rowCount * TRACK_GRID_ROW_HEIGHT);
   let bodyOffsetY = $derived(visibleRange.startRow * TRACK_GRID_ROW_HEIGHT);
 
@@ -85,19 +86,19 @@
       style:grid-template-columns="repeat({columnCount}, minmax(0, 1fr))"
       style:gap="{TRACK_GRID_GAP}px"
     >
-      {#each visibleTracks as track (track.id)}
+      {#each visibleRows as row (row.key)}
         <TrackCard
-          {track}
-          selected={selectedId === track.id}
-          checked={checkedIds.has(track.id)}
+          track={row.track}
+          selected={selectedId === row.track.id}
+          checked={checkedKeys.has(row.key)}
           {readonly}
           inRekordbox={rekordboxPathIndex
-            ? isInRekordbox(track, rekordboxPathIndex, rekordboxContentIds)
+            ? isInRekordbox(row.track, rekordboxPathIndex, rekordboxContentIds)
             : false}
           {showRowRemove}
-          {onselect}
+          onselect={() => onselect(row)}
           {onremove}
-          {ontogglecheck}
+          ontogglecheck={ontogglecheck ? () => ontogglecheck(row) : undefined}
         />
       {/each}
     </div>

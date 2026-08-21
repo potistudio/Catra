@@ -20,7 +20,12 @@ export type AppSession = {
   selectedTrackId: number | null;
   selectedRekordboxId: string | null;
   consoleOpen: boolean;
-  library: TrackListSession;
+  library: {
+    browseMode: BrowseMode;
+    selectedPlaylistId: number | null;
+    expandedPlaylistIds: number[];
+    list: TrackListSession;
+  };
   trash: TrackListSession;
   rekordbox: {
     browseMode: BrowseMode;
@@ -31,6 +36,7 @@ export type AppSession = {
 };
 
 const SORT_COLUMNS: readonly SortColumn[] = [
+  "position",
   "title",
   "artist",
   "album",
@@ -59,7 +65,12 @@ function defaultSession(): AppSession {
     selectedTrackId: null,
     selectedRekordboxId: null,
     consoleOpen: false,
-    library: defaultList(),
+    library: {
+      browseMode: "all",
+      selectedPlaylistId: null,
+      expandedPlaylistIds: [],
+      list: defaultList(),
+    },
     trash: defaultList(),
     rekordbox: {
       browseMode: "all",
@@ -102,6 +113,11 @@ function asNullableId(value: unknown): number | null {
   return typeof value === "number" && Number.isInteger(value) ? value : null;
 }
 
+function asIdList(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is number => typeof item === "number" && Number.isInteger(item));
+}
+
 function parseList(raw: unknown): TrackListSession {
   const next = defaultList();
   if (!raw || typeof raw !== "object") return next;
@@ -124,7 +140,18 @@ function parseSession(raw: unknown): AppSession {
   next.selectedTrackId = asNullableId(record.selectedTrackId);
   next.selectedRekordboxId = asString(record.selectedRekordboxId);
   if (typeof record.consoleOpen === "boolean") next.consoleOpen = record.consoleOpen;
-  next.library = parseList(record.library);
+  if (record.library && typeof record.library === "object") {
+    const library = record.library as Record<string, unknown>;
+    if ("list" in library) {
+      if (isBrowseMode(library.browseMode)) next.library.browseMode = library.browseMode;
+      next.library.selectedPlaylistId = asNullableId(library.selectedPlaylistId);
+      next.library.expandedPlaylistIds = asIdList(library.expandedPlaylistIds);
+      next.library.list = parseList(library.list);
+    } else {
+      // 旧形式。library がそのまま一覧の状態だった頃の保存を拾い上げる。
+      next.library.list = parseList(library);
+    }
+  }
   next.trash = parseList(record.trash);
   if (record.rekordbox && typeof record.rekordbox === "object") {
     const rekordbox = record.rekordbox as Record<string, unknown>;

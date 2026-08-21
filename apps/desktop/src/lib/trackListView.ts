@@ -10,6 +10,7 @@ export const VIRTUAL_OVERSCAN = 12;
 export type ViewMode = "list" | "grid";
 
 export type SortColumn =
+  | "position"
   | "title"
   | "artist"
   | "album"
@@ -43,8 +44,34 @@ function compareSortKeys(a: SortKey, b: SortKey): number {
   return compareStrings(String(a), String(b));
 }
 
-function sortKeyFor(track: Track, column: SortColumn): SortKey {
+/**
+ * 一覧の1行。静的プレイリストは**列**なので、同じ曲が2回現れる。
+ * そのとき `key` は要素 ID になり、2つの行は別物として扱われる。
+ * 列でない一覧（ライブラリ、スマート、フォルダ）では `entryId` は null で、
+ * `key` はトラック ID。
+ */
+export interface TrackListRow {
+  key: number;
+  entryId: number | null;
+  position: number;
+  track: Track;
+}
+
+/** 列を持たない一覧を行に包む。並び順がそのまま position になる。 */
+export function rowsFromTracks(tracks: Track[]): TrackListRow[] {
+  return tracks.map((track, index) => ({
+    key: track.id,
+    entryId: null,
+    position: index,
+    track,
+  }));
+}
+
+function sortKeyFor(row: TrackListRow, column: SortColumn): SortKey {
+  const track = row.track;
   switch (column) {
+    case "position":
+      return row.position;
     case "title":
       return displayTitle(track);
     case "artist":
@@ -68,12 +95,12 @@ function sortKeyFor(track: Track, column: SortColumn): SortKey {
   }
 }
 
-export function filterTracks(tracks: Track[], query: string): Track[] {
+export function filterRows(rows: TrackListRow[], query: string): TrackListRow[] {
   const trimmed = query.trim();
-  if (!trimmed) return tracks;
+  if (!trimmed) return rows;
 
   const q = trimmed.toLowerCase();
-  return tracks.filter((track) => {
+  return rows.filter(({ track }) => {
     const fields = [
       track.title,
       track.artist,
@@ -86,27 +113,30 @@ export function filterTracks(tracks: Track[], query: string): Track[] {
   });
 }
 
-export function sortTracks(
-  items: Track[],
+export function sortRows(
+  items: TrackListRow[],
   column: SortColumn,
   direction: SortDirection,
-): Track[] {
+): TrackListRow[] {
   if (items.length <= 1) return items;
 
   const mult = direction === "asc" ? 1 : -1;
-  const decorated = items.map((track) => ({
-    track,
-    key: sortKeyFor(track, column),
-    titleKey: displayTitle(track),
+  const decorated = items.map((row) => ({
+    row,
+    key: sortKeyFor(row, column),
+    titleKey: displayTitle(row.track),
   }));
 
   decorated.sort((a, b) => {
     const cmp = compareSortKeys(a.key, b.key);
     if (cmp !== 0) return cmp * mult;
-    return compareStrings(a.titleKey, b.titleKey) * mult;
+    // 同点は位置で決める。列の中で同じ曲が2回あっても行が入れ替わらない。
+    const tie = compareStrings(a.titleKey, b.titleKey);
+    if (tie !== 0) return tie * mult;
+    return a.row.position - b.row.position;
   });
 
-  return decorated.map(({ track }) => track);
+  return decorated.map(({ row }) => row);
 }
 
 export function getVisibleTrackRange(

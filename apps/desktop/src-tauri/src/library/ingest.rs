@@ -3,6 +3,7 @@ use super::duplicate::{DuplicateChoice, DuplicateResolver, TrackCandidate};
 use super::paths::{
     filename_for_ingest, is_alt_format, is_under, library_prefix, managed_track_id,
 };
+use super::playlist;
 use super::scan::{load_artwork_file, FileMetadata};
 use super::trash;
 use crate::activity_log::emit_activity_log;
@@ -74,11 +75,7 @@ pub fn ingest_path(
             .find_by_stored_path(&relative)
             .map_err(|error| error.to_string())?
         {
-            relink_rekordbox(
-                library,
-                &existing,
-                options.rekordbox_content_id.as_deref(),
-            )?;
+            relink_rekordbox(library, &existing, options.rekordbox_content_id.as_deref())?;
             return Ok(IngestOutcome::Skipped);
         }
         if let Some(track_id) = managed_track_id(&relative) {
@@ -97,13 +94,12 @@ pub fn ingest_path(
         .find_by_content_hash(&hash)
         .map_err(|error| error.to_string())?
     {
-        relink_rekordbox(
-            library,
-            &existing,
-            options.rekordbox_content_id.as_deref(),
-        )?;
+        relink_rekordbox(library, &existing, options.rekordbox_content_id.as_deref())?;
         return Ok(IngestOutcome::Skipped);
     }
+
+    // 「新しい方を残す」で負けた曲。所属とタグを勝ち側へ引き継ぐために覚えておく。
+    let mut superseded: Option<i64> = None;
 
     if !options.skip_duplicate_dialog {
         if let Some(existing) = library
@@ -135,22 +131,22 @@ pub fn ingest_path(
                 source: metadata.source.clone(),
             };
             let existing_id = existing.id;
-            let choice = resolver.request_choice(app, existing.clone(), candidate, allow_alt_format);
+            let choice =
+                resolver.request_choice(app, existing.clone(), candidate, allow_alt_format);
             match choice {
                 DuplicateChoice::KeepExisting => {
-                    relink_rekordbox(
-                        library,
-                        &existing,
-                        options.rekordbox_content_id.as_deref(),
-                    )?;
+                    relink_rekordbox(library, &existing, options.rekordbox_content_id.as_deref())?;
                     return Ok(IngestOutcome::Skipped);
                 }
                 DuplicateChoice::KeepNew => {
                     trash::trash_tracks(library, &[existing_id])?;
+                    superseded = Some(existing_id);
                 }
                 DuplicateChoice::KeepAsAltFormat => {
                     if !allow_alt_format {
-                        return Err("同じフォーマットでは別フォーマットとして取り込めません".to_string());
+                        return Err(
+                            "同じフォーマットでは別フォーマットとして取り込めません".to_string()
+                        );
                     }
                     let group_id = existing
                         .format_group_id
@@ -167,7 +163,14 @@ pub fn ingest_path(
         }
     }
 
-    commit_new_track(library, path, metadata, added_at, &hash, &options)
+    let outcome = commit_new_track(library, path, metadata, added_at, &hash, &options)?;
+
+    // 引き継ぎは新しい行ができてから。列の中では畳まないので、出現回数も位置もそのまま残る。
+    if let (Some(old_id), IngestOutcome::Added { id }) = (superseded, &outcome) {
+        playlist::carry_over(library, old_id, *id)?;
+    }
+
+    Ok(outcome)
 }
 
 fn relink_rekordbox(
@@ -208,7 +211,10 @@ fn commit_new_track(
 ) -> Result<IngestOutcome, String> {
     let owned = options.owned || is_under(&library.incoming_dir(), source) || {
         is_under(library.root(), source)
-            && library.relative_of(source).and_then(|relative| managed_track_id(&relative)).is_none()
+            && library
+                .relative_of(source)
+                .and_then(|relative| managed_track_id(&relative))
+                .is_none()
     };
 
     let incoming_dir = library.incoming_dir().join(Uuid::new_v4().to_string());
@@ -301,7 +307,8 @@ fn commit_new_track(
     let absolute = library.absolute_string(&relative_path);
     if let Some(content_id) = options.rekordbox_content_id.as_deref() {
         if rekordbox_configured() {
-            if let Err(error) = crate::rekordbox::update_content_folder_path(content_id, &absolute) {
+            if let Err(error) = crate::rekordbox::update_content_folder_path(content_id, &absolute)
+            {
                 rollback_committed(library, id);
                 return Err(error);
             }

@@ -17,7 +17,8 @@ fn lock_conn(conn: &Mutex<Connection>) -> Result<MutexGuard<'_, Connection>, rus
     })
 }
 
-const TRACK_COLUMNS: &str = "id, path, title, artist, album, duration_ms, bpm, bitrate_kbps,
+pub(super) const TRACK_COLUMNS: &str =
+    "id, path, title, artist, album, duration_ms, bpm, bitrate_kbps,
         genre, key_name, rating, artwork_path, source, converted, added_at,
         content_hash, trashed_at, parent_track_id, format_group_id, rekordbox_content_id";
 
@@ -78,6 +79,61 @@ pub struct NewTrack<'a> {
     pub rekordbox_content_id: Option<&'a str>,
 }
 
+/// 分類（プレイリストとタグ）のスキーマ。`docs/architecture/classification.md` を正とする。
+/// 静的プレイリストは集合ではなく列なので、`playlist_entries` に一意制約は置かない。
+const CLASSIFICATION_SCHEMA: &str = "
+    CREATE TABLE IF NOT EXISTS playlists (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        parent_id  INTEGER REFERENCES playlists(id) ON DELETE CASCADE,
+        kind       TEXT    NOT NULL,
+        name       TEXT    NOT NULL,
+        position   INTEGER NOT NULL,
+        rule       TEXT,
+        sort_rule  TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_playlists_parent ON playlists(parent_id, position);
+
+    CREATE TABLE IF NOT EXISTS playlist_entries (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+        track_id    INTEGER NOT NULL REFERENCES tracks(id)    ON DELETE CASCADE,
+        position    INTEGER NOT NULL,
+        added_at    INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_playlist_entries_playlist ON playlist_entries(playlist_id, position);
+    CREATE INDEX IF NOT EXISTS idx_playlist_entries_track    ON playlist_entries(track_id);
+
+    CREATE TABLE IF NOT EXISTS tag_axes (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT    NOT NULL UNIQUE,
+        selection  TEXT    NOT NULL,
+        position   INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS tags (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        axis_id    INTEGER NOT NULL REFERENCES tag_axes(id) ON DELETE CASCADE,
+        name       TEXT    NOT NULL,
+        position   INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE(axis_id, name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_tags_axis ON tags(axis_id, position);
+
+    CREATE TABLE IF NOT EXISTS track_tags (
+        track_id    INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+        tag_id      INTEGER NOT NULL REFERENCES tags(id)   ON DELETE CASCADE,
+        assigned_at INTEGER NOT NULL,
+        PRIMARY KEY (track_id, tag_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_track_tags_tag ON track_tags(tag_id);
+";
+
 pub struct LibraryState {
     conn: Mutex<Connection>,
     root: PathBuf,
@@ -108,6 +164,7 @@ impl LibraryState {
         conn.execute_batch(
             "
             PRAGMA journal_mode=WAL;
+            PRAGMA foreign_keys=ON;
             CREATE TABLE IF NOT EXISTS tracks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 path TEXT NOT NULL UNIQUE,
@@ -138,6 +195,7 @@ impl LibraryState {
             CREATE INDEX IF NOT EXISTS idx_tracks_parent ON tracks(parent_track_id);
             ",
         )?;
+        conn.execute_batch(CLASSIFICATION_SCHEMA)?;
         migrate(&conn)?;
 
         Ok(Self {
@@ -145,6 +203,11 @@ impl LibraryState {
             root,
             artwork_dir,
         })
+    }
+
+    /// 分類のモジュールがトランザクションを張れるように接続を貸す。
+    pub(super) fn conn(&self) -> Result<MutexGuard<'_, Connection>, rusqlite::Error> {
+        lock_conn(&self.conn)
     }
 
     pub fn root(&self) -> &Path {
@@ -171,7 +234,7 @@ impl LibraryState {
         to_relative(&self.root, path)
     }
 
-    fn expand_track(&self, mut track: Track) -> Track {
+    pub(super) fn expand_track(&self, mut track: Track) -> Track {
         track.path = self.absolute_string(&track.stored_path);
         track.artwork_path = track
             .stored_artwork_path
@@ -215,9 +278,7 @@ impl LibraryState {
 
     pub fn list_all_tracks(&self) -> Result<Vec<Track>, rusqlite::Error> {
         let conn = lock_conn(&self.conn)?;
-        let mut stmt = conn.prepare(&format!(
-            "SELECT {TRACK_COLUMNS} FROM tracks ORDER BY id"
-        ))?;
+        let mut stmt = conn.prepare(&format!("SELECT {TRACK_COLUMNS} FROM tracks ORDER BY id"))?;
         let tracks = stmt
             .query_map([], map_track_row)?
             .collect::<Result<Vec<_>, _>>()?;
@@ -229,11 +290,13 @@ impl LibraryState {
 
     pub fn get_track(&self, id: i64) -> Result<Option<Track>, rusqlite::Error> {
         let conn = lock_conn(&self.conn)?;
-        let mut stmt = conn.prepare(&format!(
-            "SELECT {TRACK_COLUMNS} FROM tracks WHERE id = ?1"
-        ))?;
+        let mut stmt =
+            conn.prepare(&format!("SELECT {TRACK_COLUMNS} FROM tracks WHERE id = ?1"))?;
         let mut rows = stmt.query_map(params![id], map_track_row)?;
-        Ok(rows.next().transpose()?.map(|track| self.expand_track(track)))
+        Ok(rows
+            .next()
+            .transpose()?
+            .map(|track| self.expand_track(track)))
     }
 
     pub fn find_by_content_hash(&self, hash: &str) -> Result<Option<Track>, rusqlite::Error> {
@@ -244,7 +307,10 @@ impl LibraryState {
              LIMIT 1"
         ))?;
         let mut rows = stmt.query_map(params![hash], map_track_row)?;
-        Ok(rows.next().transpose()?.map(|track| self.expand_track(track)))
+        Ok(rows
+            .next()
+            .transpose()?
+            .map(|track| self.expand_track(track)))
     }
 
     pub fn find_by_stored_path(&self, relative: &str) -> Result<Option<Track>, rusqlite::Error> {
@@ -253,7 +319,10 @@ impl LibraryState {
             "SELECT {TRACK_COLUMNS} FROM tracks WHERE path = ?1 LIMIT 1"
         ))?;
         let mut rows = stmt.query_map(params![relative], map_track_row)?;
-        Ok(rows.next().transpose()?.map(|track| self.expand_track(track)))
+        Ok(rows
+            .next()
+            .transpose()?
+            .map(|track| self.expand_track(track)))
     }
 
     pub fn find_duplicate(
@@ -461,7 +530,7 @@ pub fn save_artwork_for_track(
     }
 }
 
-fn map_track_row(row: &Row<'_>) -> rusqlite::Result<Track> {
+pub(super) fn map_track_row(row: &Row<'_>) -> rusqlite::Result<Track> {
     let stored_path: String = row.get(1)?;
     let stored_artwork_path: Option<String> = row.get(11)?;
     Ok(Track {

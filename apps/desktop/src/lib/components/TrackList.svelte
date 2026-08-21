@@ -5,19 +5,23 @@
   import TrackGrid from "$lib/components/TrackGrid.svelte";
   import TrackRow from "$lib/components/TrackRow.svelte";
   import { appSession, persistAppSession } from "$lib/appSession.svelte";
-  import type { Track } from "$lib/types";
+  import type { PlaylistEntry, Track } from "$lib/types";
   import { isInRekordbox } from "$lib/rekordboxMembership";
+  import { writeTrackDrag } from "$lib/trackDrag";
   import {
-    filterTracks,
+    filterRows,
     getVisibleTrackRange,
-    sortTracks,
+    rowsFromTracks,
+    sortRows,
     TRACK_ROW_HEIGHT,
     type SortColumn,
     type SortDirection,
+    type TrackListRow,
     type ViewMode,
   } from "$lib/trackListView";
 
   const SORT_LABELS: Record<SortColumn, string> = {
+    position: "列の順番",
     title: "タイトル",
     artist: "アーティスト",
     album: "アルバム",
@@ -34,7 +38,13 @@
   type ListSessionScope = "library" | "rekordbox" | "trash";
 
   interface Props {
-    tracks: Track[];
+    tracks?: Track[];
+    /**
+     * 列（静的プレイリスト）や集合（スマート／フォルダ）の中身。
+     * 渡すと `tracks` の代わりにこちらが一覧になる。
+     * `entryId` が入っているなら列なので、同じ曲が2回並ぶ。
+     */
+    entries?: PlaylistEntry[] | null;
     selectedId: number | null;
     readonly?: boolean;
     searchPlaceholder?: string;
@@ -62,10 +72,18 @@
     onRemoveFromRekordbox?: (tracks: Track[]) => void | Promise<void>;
     onconvert?: (tracks: Track[]) => void;
     convertBusy?: boolean;
+    /** 列の並べ替え。要素 ID の完全な配列を新しい順で受け取る。 */
+    onreorder?: (entryIds: number[]) => void | Promise<void>;
+    /** この要素だけプレイリストから外す。同じ曲の別の要素は残る。 */
+    onremoveentries?: (entryIds: number[]) => void | Promise<void>;
+    removeEntriesLabel?: string;
+    /** 選択中の曲にタグを付ける入口。 */
+    ontagtracks?: (tracks: Track[]) => void;
   }
 
   let {
-    tracks,
+    tracks = [],
+    entries = null,
     selectedId,
     readonly = false,
     searchPlaceholder = "トラックを検索...",
@@ -93,6 +111,10 @@
     onRemoveFromRekordbox,
     onconvert,
     convertBusy = false,
+    onreorder,
+    onremoveentries,
+    removeEntriesLabel = "プレイリストから外す",
+    ontagtracks,
   }: Props = $props();
 
   /** Library bridge mode: actions live in the command bar, not on rows. */
@@ -107,10 +129,11 @@
       : sessionScope === "trash"
         ? appSession.trash
         : sessionScope === "library"
-          ? appSession.library
+          ? appSession.library.list
           : null;
 
-  let checkedIds = $state<Set<number>>(new Set());
+  /** 選択の単位は行。列の中では要素 ID、それ以外はトラック ID。 */
+  let checkedKeys = $state<Set<number>>(new Set());
   let membershipFilter = $state<MembershipFilter>(listSession?.membershipFilter ?? "all");
 
   let queryInput = $state(listSession?.query ?? "");
@@ -156,37 +179,83 @@
     return () => observer.disconnect();
   });
 
-  let searched = $derived(filterTracks(tracks, query));
+  let allRows = $derived.by<TrackListRow[]>(() => {
+    if (!entries) return rowsFromTracks(tracks);
+    return entries.map((entry) => ({
+      key: entry.entryId ?? entry.track.id,
+      entryId: entry.entryId,
+      position: entry.position,
+      track: entry.track,
+    }));
+  });
+
+  /** 列かどうか。要素 ID を持つ一覧だけが列で、並べ替えができる。 */
+  let isSequence = $derived(!!entries && entries.length > 0 && entries[0].entryId != null);
+  let sourceCount = $derived(entries ? entries.length : tracks.length);
+
+  let searched = $derived(filterRows(allRows, query));
   let membershipFiltered = $derived.by(() => {
     if (!rekordboxPathIndex || membershipFilter === "all") return searched;
     if (membershipFilter === "missing") {
-      return searched.filter((track) => !isInRekordbox(track, rekordboxPathIndex, rekordboxContentIds));
+      return searched.filter(({ track }) => !isInRekordbox(track, rekordboxPathIndex, rekordboxContentIds));
     }
-    return searched.filter((track) => isInRekordbox(track, rekordboxPathIndex, rekordboxContentIds));
+    return searched.filter(({ track }) => isInRekordbox(track, rekordboxPathIndex, rekordboxContentIds));
   });
-  let sorted = $derived(sortTracks(membershipFiltered, sortColumn, sortDirection));
+  let sorted = $derived(sortRows(membershipFiltered, sortColumn, sortDirection));
+
+  /**
+   * 並べ替えは列の全体を書き換える操作なので、一覧が列そのものを映しているときだけ許す。
+   * 絞り込みや別の列での並びが挟まっていると、見えている順番が列の順番と違う。
+   */
+  let reorderable = $derived(
+    isSequence &&
+      !!onreorder &&
+      !readonly &&
+      viewMode === "list" &&
+      sortColumn === "position" &&
+      sortDirection === "asc" &&
+      sorted.length === allRows.length,
+  );
 
   let visibleRange = $derived(
     getVisibleTrackRange(scrollTop, viewportHeight, sorted.length),
   );
 
-  let visibleTracks = $derived(sorted.slice(visibleRange.start, visibleRange.end));
+  let visibleRows = $derived(sorted.slice(visibleRange.start, visibleRange.end));
   let totalBodyHeight = $derived(sorted.length * TRACK_ROW_HEIGHT);
   let bodyOffsetY = $derived(visibleRange.start * TRACK_ROW_HEIGHT);
 
-  let checkedCount = $derived(checkedIds.size);
+  let checkedCount = $derived(checkedKeys.size);
   let allVisibleSelected = $derived(
-    sorted.length > 0 && sorted.every((track) => checkedIds.has(track.id)),
+    sorted.length > 0 && sorted.every((row) => checkedKeys.has(row.key)),
   );
   let someVisibleSelected = $derived(
-    sorted.some((track) => checkedIds.has(track.id)) && !allVisibleSelected,
+    sorted.some((row) => checkedKeys.has(row.key)) && !allVisibleSelected,
   );
 
-  /** Action targets come only from checkboxes; card/row click is preview focus. */
-  let targetTracks = $derived(
-    checkedIds.size > 0
-      ? tracks.filter((track) => checkedIds.has(track.id))
-      : [],
+  let targetRows = $derived(allRows.filter((row) => checkedKeys.has(row.key)));
+
+  /**
+   * Action targets come only from checkboxes; card/row click is preview focus.
+   * 曲への操作（変換、Rekordbox、ゴミ箱、タグ）は曲に1回だけ効くので、
+   * 同じ曲の要素を2つ選んでいても1曲に畳む。
+   */
+  let targetTracks = $derived.by(() => {
+    const seen = new Set<number>();
+    const picked: Track[] = [];
+    for (const { track } of targetRows) {
+      if (seen.has(track.id)) continue;
+      seen.add(track.id);
+      picked.push(track);
+    }
+    return picked;
+  });
+
+  /** 列から外す操作だけは要素単位。同じ曲の片方だけを外せる。 */
+  let targetEntryIds = $derived(
+    targetRows
+      .map((row) => row.entryId)
+      .filter((id): id is number => id != null),
   );
 
   let targetNotInRekordbox = $derived(
@@ -210,38 +279,55 @@
     return parts.join(" · ");
   });
 
-  let showCommandBar = $derived(commandBarMode && checkedCount > 0);
+  let showCommandBar = $derived(
+    (commandBarMode || !!onremoveentries || !!ontagtracks) && checkedCount > 0,
+  );
 
-  /** Remove IDs that are not in the current filtered list from checkedIds. */
+  /** Remove keys that are not in the current filtered list from checkedKeys. */
   $effect(() => {
-    const visibleIds = new Set(sorted.map((track) => track.id));
-    const next = new Set([...checkedIds].filter((id) => visibleIds.has(id)));
-    if (next.size !== checkedIds.size) {
-      checkedIds = next;
+    const visibleKeys = new Set(sorted.map((row) => row.key));
+    const next = new Set([...checkedKeys].filter((key) => visibleKeys.has(key)));
+    if (next.size !== checkedKeys.size) {
+      checkedKeys = next;
     }
   });
 
-  function toggleCheck(track: Track) {
-    const next = new Set(checkedIds);
-    if (next.has(track.id)) {
-      next.delete(track.id);
+  function toggleCheck(row: TrackListRow) {
+    const next = new Set(checkedKeys);
+    if (next.has(row.key)) {
+      next.delete(row.key);
     } else {
-      next.add(track.id);
+      next.add(row.key);
     }
-    checkedIds = next;
+    checkedKeys = next;
   }
 
   function toggleSelectAll() {
     if (allVisibleSelected || someVisibleSelected) {
-      checkedIds = new Set();
+      checkedKeys = new Set();
       return;
     }
 
-    const next = new Set(checkedIds);
-    for (const track of sorted) {
-      next.add(track.id);
+    const next = new Set(checkedKeys);
+    for (const row of sorted) {
+      next.add(row.key);
     }
-    checkedIds = next;
+    checkedKeys = next;
+  }
+
+  /** どの行を今プレビューしているか。同じ曲が2回あっても、押した方だけ光る。 */
+  let focusedKey = $state<number | null>(null);
+
+  function isFocused(row: TrackListRow): boolean {
+    if (selectedId !== row.track.id) return false;
+    if (focusedKey == null) return true;
+    if (!allRows.some((candidate) => candidate.key === focusedKey)) return true;
+    return focusedKey === row.key;
+  }
+
+  function selectRow(row: TrackListRow) {
+    focusedKey = row.key;
+    onselect(row.track);
   }
 
   async function handleLibraryRemove() {
@@ -260,13 +346,13 @@
         await onremove(track);
       }
     }
-    checkedIds = new Set();
+    checkedKeys = new Set();
   }
 
   /** Legacy bulk remove for non-command-bar mode (Rekordbox tab). */
   async function handleBulkRemove() {
     if (!onbulkremove) return;
-    const ids = [...checkedIds];
+    const ids = targetTracks.map((track) => track.id);
     if (ids.length === 0) return;
     const confirmed = await ask(`${ids.length} ${bulkRemoveConfirmMessage}`, {
       title: "削除の確認",
@@ -275,7 +361,7 @@
     if (!confirmed) return;
 
     await onbulkremove(ids);
-    checkedIds = new Set();
+    checkedKeys = new Set();
   }
 
   async function handlePermanentDelete() {
@@ -288,7 +374,7 @@
     });
     if (!confirmed) return;
     await onbulkpermanent(ids);
-    checkedIds = new Set();
+    checkedKeys = new Set();
   }
 
   async function handleEmptyTrash() {
@@ -299,7 +385,7 @@
     });
     if (!confirmed) return;
     await onemptytrash();
-    checkedIds = new Set();
+    checkedKeys = new Set();
   }
 
   async function handleAddToRekordbox() {
@@ -322,6 +408,78 @@
     onconvert(targetTracks);
   }
 
+  function handleTag() {
+    if (!ontagtracks || targetTracks.length === 0) return;
+    ontagtracks(targetTracks);
+  }
+
+  /** 確認は出さない。列から要素を抜くのは、曲を消すことではない。 */
+  async function handleRemoveEntries() {
+    if (!onremoveentries || targetEntryIds.length === 0) return;
+    await onremoveentries(targetEntryIds);
+    checkedKeys = new Set();
+  }
+
+  let dragKey = $state<number | null>(null);
+  let dropKey = $state<number | null>(null);
+  let dropAfter = $state(false);
+
+  /**
+   * 掴んだ行がチェック済みなら選択の全部を、そうでなければその1行だけを運ぶ。
+   * 列の中では同じ曲が2回入ることもあるので、重複は畳まずそのまま渡す。
+   */
+  function draggedTrackIds(row: TrackListRow): number[] {
+    if (!checkedKeys.has(row.key)) return [row.track.id];
+    return sorted.filter((item) => checkedKeys.has(item.key)).map((item) => item.track.id);
+  }
+
+  function handleDragStart(row: TrackListRow, event: DragEvent) {
+    dragKey = reorderable ? row.key : null;
+    if (!event.dataTransfer) return;
+    event.dataTransfer.effectAllowed = reorderable ? "copyMove" : "copy";
+    event.dataTransfer.setData("text/plain", String(row.key));
+    writeTrackDrag(event, draggedTrackIds(row));
+  }
+
+  function handleDragOver(row: TrackListRow, event: DragEvent) {
+    if (!reorderable || dragKey == null) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    dropAfter = event.clientY - rect.top > rect.height / 2;
+    dropKey = row.key;
+  }
+
+  function clearDrag() {
+    dragKey = null;
+    dropKey = null;
+    dropAfter = false;
+  }
+
+  async function handleDrop(row: TrackListRow, event: DragEvent) {
+    if (!reorderable || !onreorder || dragKey == null) return;
+    event.preventDefault();
+
+    const moving = dragKey;
+    const after = dropAfter;
+    clearDrag();
+    if (moving === row.key) return;
+
+    // 列の全体を作り直して渡す。動かすのは要素なので、同じ曲の片方だけが動く。
+    const order = sorted.map((item) => item.key).filter((key) => key !== moving);
+    const anchor = order.indexOf(row.key);
+    if (anchor < 0) return;
+    order.splice(after ? anchor + 1 : anchor, 0, moving);
+
+    const byKey = new Map(sorted.map((item) => [item.key, item]));
+    const entryIds = order
+      .map((key) => byKey.get(key)?.entryId ?? null)
+      .filter((id): id is number => id != null);
+    if (entryIds.length !== order.length) return;
+
+    await onreorder(entryIds);
+  }
+
   function handleScroll(event: Event) {
     scrollTop = (event.currentTarget as HTMLDivElement).scrollTop;
   }
@@ -340,6 +498,24 @@
     if (sortColumn !== column) return "";
     return sortDirection === "asc" ? " ↑" : " ↓";
   }
+
+  let sortOptions = $derived(
+    Object.entries(SORT_LABELS).filter(([value]) => value !== "position" || isSequence),
+  );
+
+  /** 列を開いたら列の順番で見せる。列でない一覧に「列の順番」は残さない。 */
+  let wasSequence = $state(false);
+  $effect(() => {
+    if (isSequence === wasSequence) return;
+    wasSequence = isSequence;
+    if (isSequence) {
+      sortColumn = "position";
+      sortDirection = "asc";
+    } else if (sortColumn === "position") {
+      sortColumn = "artist";
+      sortDirection = "asc";
+    }
+  });
 </script>
 
 <div class="track-list">
@@ -402,7 +578,7 @@
           class="sort-select"
           bind:value={sortColumn}
         >
-          {#each Object.entries(SORT_LABELS) as [value, label] (value)}
+          {#each sortOptions as [value, label] (value)}
             <option value={value}>{label}</option>
           {/each}
         </select>
@@ -417,6 +593,19 @@
       </div>
     {/if}
     <span class="count">{sorted.length} tracks</span>
+    {#if isSequence && sortColumn !== "position"}
+      <button
+        type="button"
+        class="bulk-btn"
+        title="表示だけを並べ替えている。列そのものの順番は変わっていない。"
+        onclick={() => {
+          sortColumn = "position";
+          sortDirection = "asc";
+        }}
+      >
+        プレイリスト順に戻す
+      </button>
+    {/if}
     {#if commandBarMode && !rekordboxWritable && rekordboxLockedHint}
       <span class="rb-hint">{rekordboxLockedHint}</span>
     {/if}
@@ -476,7 +665,7 @@
 
   {#if sorted.length === 0}
     <div class="empty">
-      {#if tracks.length === 0}
+      {#if sourceCount === 0}
         <p>{emptyTitle}</p>
         <p class="hint">{emptyHint}</p>
       {:else if membershipFilter !== "all"}
@@ -487,14 +676,14 @@
     </div>
   {:else if viewMode === "grid"}
     <TrackGrid
-      tracks={sorted}
+      rows={sorted}
       selectedId={selectedId}
-      {checkedIds}
+      {checkedKeys}
       {readonly}
       {rekordboxPathIndex}
       {rekordboxContentIds}
       {showRowRemove}
-      {onselect}
+      onselect={selectRow}
       onremove={showRowRemove ? onremove : undefined}
       ontogglecheck={readonly ? undefined : toggleCheck}
     />
@@ -506,7 +695,7 @@
       bind:this={tableWrap}
       onscroll={handleScroll}
     >
-      <div class="table-inner" class:no-actions={!showRowRemove}>
+      <div class="table-inner" class:no-actions={!showRowRemove} class:with-position={isSequence}>
         <div class="table-header" role="row">
           <span class="checkbox-cell sticky-col" role="columnheader">
             {#if !readonly}
@@ -518,6 +707,19 @@
               />
             {/if}
           </span>
+          {#if isSequence}
+            <button
+              type="button"
+              class="column-header position-header"
+              class:active={sortColumn === "position"}
+              role="columnheader"
+              title="列の順番"
+              aria-sort={sortColumn === "position" ? (sortDirection === "asc" ? "ascending" : "descending") : "none"}
+              onclick={() => toggleSort("position")}
+            >
+              #{sortIndicator("position")}
+            </button>
+          {/if}
           <span role="columnheader">ジャケット</span>
           <button
             type="button"
@@ -626,21 +828,35 @@
 
         <div class="virtual-body" style:height="{totalBodyHeight}px">
           <div class="virtual-window" style:transform="translateY({bodyOffsetY}px)">
-            {#each visibleTracks as track (track.id)}
-              <TrackRow
-                {track}
-                selected={selectedId === track.id}
-                checked={checkedIds.has(track.id)}
-                {readonly}
-                {removeTitle}
-                inRekordbox={rekordboxPathIndex
-                  ? isInRekordbox(track, rekordboxPathIndex, rekordboxContentIds)
-                  : false}
-                showActions={showRowRemove}
-                {onselect}
-                onremove={showRowRemove ? onremove : undefined}
-                ontogglecheck={readonly ? undefined : toggleCheck}
-              />
+            {#each visibleRows as row (row.key)}
+              <div
+                class="row-slot"
+                class:dragging={dragKey === row.key}
+                class:drop-before={dropKey === row.key && !dropAfter}
+                class:drop-after={dropKey === row.key && dropAfter}
+                draggable={true}
+                role="presentation"
+                ondragstart={(event) => handleDragStart(row, event)}
+                ondragover={(event) => handleDragOver(row, event)}
+                ondrop={(event) => handleDrop(row, event)}
+                ondragend={clearDrag}
+              >
+                <TrackRow
+                  track={row.track}
+                  position={isSequence ? row.position : null}
+                  selected={isFocused(row)}
+                  checked={checkedKeys.has(row.key)}
+                  {readonly}
+                  {removeTitle}
+                  inRekordbox={rekordboxPathIndex
+                    ? isInRekordbox(row.track, rekordboxPathIndex, rekordboxContentIds)
+                    : false}
+                  showActions={showRowRemove}
+                  onselect={() => selectRow(row)}
+                  onremove={showRowRemove ? onremove : undefined}
+                  ontogglecheck={readonly ? undefined : () => toggleCheck(row)}
+                />
+              </div>
             {/each}
           </div>
         </div>
@@ -651,6 +867,11 @@
   {#if showCommandBar}
     <div class="command-bar" aria-label="トラック操作">
       <span class="command-summary">{targetSummary}</span>
+      {#if ontagtracks}
+        <button type="button" class="command-btn" onclick={handleTag}>
+          タグ ({targetTracks.length})
+        </button>
+      {/if}
       {#if onconvert}
         <button
           type="button"
@@ -697,6 +918,19 @@
         {/if}
       </div>
       <div class="command-spacer"></div>
+      {#if onremoveentries}
+        <button
+          type="button"
+          class="command-btn"
+          disabled={targetEntryIds.length === 0}
+          onclick={handleRemoveEntries}
+        >
+          {removeEntriesLabel}
+          {#if targetEntryIds.length > 0}
+            ({targetEntryIds.length})
+          {/if}
+        </button>
+      {/if}
       {#if onbulkremove || onremove}
         <button
           type="button"
@@ -1117,6 +1351,60 @@
     grid-template-columns:
       2.5rem 3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
       3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 8.5rem;
+  }
+
+  /* 列のときだけ先頭に順番の列が増える。 */
+  .table-inner.with-position {
+    min-width: 84rem;
+  }
+
+  .table-inner.with-position.no-actions {
+    min-width: 82rem;
+  }
+
+  .table-inner.with-position .table-header {
+    grid-template-columns:
+      2.5rem 3rem 3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
+      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 8.5rem 2rem;
+  }
+
+  .table-inner.with-position.no-actions .table-header {
+    grid-template-columns:
+      2.5rem 3rem 3rem minmax(10rem, 1.4fr) minmax(8rem, 1.1fr) minmax(8rem, 1.1fr)
+      3.5rem 5.5rem 3.5rem minmax(6rem, 1fr) 4.5rem 3.5rem 8.5rem;
+  }
+
+  .position-header {
+    text-align: right;
+    padding-right: 0.2rem;
+  }
+
+  .row-slot {
+    position: relative;
+  }
+
+  .row-slot.dragging {
+    opacity: 0.45;
+  }
+
+  .row-slot.drop-before::before,
+  .row-slot.drop-after::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--accent);
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  .row-slot.drop-before::before {
+    top: -1px;
+  }
+
+  .row-slot.drop-after::after {
+    bottom: -1px;
   }
 
   .column-header {

@@ -5,6 +5,8 @@
   import { onMount } from "svelte";
   import { consolePanel, pushActivityLog, pushActivityLogPayload } from "$lib/activityLog.svelte";
   import {
+    browseFacetTracks,
+    browseTagTracks,
     checkLibraryHealth,
     convertTracks,
     deleteTracksPermanently,
@@ -15,6 +17,11 @@
     libraryRemoveFromRekordbox,
     listTracks,
     listTrashed,
+    playlistAddTracks,
+    playlistEntries,
+    playlistListTree,
+    playlistRemoveEntries,
+    playlistReorderEntries,
     rekordboxCheck,
     rekordboxGetContent,
     removeTrack,
@@ -22,24 +29,30 @@
     resolveDuplicate,
     restoreTracks,
     scanFolder,
+    tagListAxes,
   } from "$lib/api";
   import ActivityConsole from "$lib/components/ActivityConsole.svelte";
   import ConvertDialog from "$lib/components/ConvertDialog.svelte";
   import DuplicateTrackDialog from "$lib/components/DuplicateTrackDialog.svelte";
+  import FacetBrowser from "$lib/components/FacetBrowser.svelte";
+  import PlaylistTree from "$lib/components/PlaylistTree.svelte";
   import PreviewPlayer from "$lib/components/PreviewPlayer.svelte";
   import RekordboxList from "$lib/components/RekordboxList.svelte";
   import StatusBar from "$lib/components/StatusBar.svelte";
+  import TagPanel from "$lib/components/TagPanel.svelte";
   import TrackList from "$lib/components/TrackList.svelte";
   import {
     appSession,
     persistAppSession,
     type AppTab,
+    type BrowseMode,
   } from "$lib/appSession.svelte";
   import {
     buildRekordboxIdSet,
     buildRekordboxPathIndex,
   } from "$lib/rekordboxMembership";
   import { rekordboxContentToPreview } from "$lib/rekordboxListView";
+  import { ancestorIds } from "$lib/playlistTree";
   import type {
     ActivityLogPayload,
     ConvertOptions,
@@ -48,11 +61,15 @@
     DownloadProgress,
     DuplicateFoundPayload,
     DuplicateChoice,
+    FacetField,
+    PlaylistEntry,
+    PlaylistNode,
     PreviewableTrack,
     RekordboxCheck,
     RekordboxContent,
     ScanProgress,
     ScanResult,
+    TagAxis,
     Track,
   } from "$lib/types";
 
@@ -79,6 +96,24 @@
   let convertTargets = $state<Track[]>([]);
   let convertDialogOpen = $state(false);
   let converting = $derived(convertProgress != null);
+
+  // 分類（集合層と属性層）。ライブラリタブの左側に出る。
+  let playlistNodes = $state<PlaylistNode[]>([]);
+  let tagAxes = $state<TagAxis[]>([]);
+  let browseMode = $state<BrowseMode>(appSession.library.browseMode);
+  let selectedPlaylistId = $state<number | null>(appSession.library.selectedPlaylistId);
+  let expandedPlaylistIds = $state<number[]>([...appSession.library.expandedPlaylistIds]);
+  /** 選ばれているプレイリストの中身。列なら要素 ID が入っている。 */
+  let playlistItems = $state<PlaylistEntry[]>([]);
+  let classifyBusy = $state(false);
+  /** タグパネルの操作対象。一覧の「タグ」ボタンで渡ってくる。 */
+  let tagTargets = $state<Track[]>([]);
+  let activeTagIds = $state<number[]>([]);
+  /** タグでの絞り込み結果。絞っていないときは null。 */
+  let tagNarrowed = $state<Track[] | null>(null);
+  let facetField = $state<FacetField>("album");
+  let facetValue = $state<string | null>(null);
+  let facetNarrowed = $state<Track[] | null>(null);
 
   let scanStatusLabel = $derived.by((): string => {
     if (duplicatePayload) return "重複の確認待ち";
@@ -116,6 +151,50 @@
     }
     return null;
   });
+
+  let selectedPlaylist = $derived(
+    selectedPlaylistId == null
+      ? null
+      : (playlistNodes.find((node) => node.id === selectedPlaylistId) ?? null),
+  );
+
+  /**
+   * プレイリストが空なのと、ライブラリが空なのは別の状態。
+   * 同じ「トラックがありません」を出すと、プレイリストを選んだだけで曲が消えたように見える。
+   */
+  let libraryEmptyTitle = $derived(
+    selectedPlaylist ? `「${selectedPlaylist.name}」に曲がありません` : "ライブラリにトラックがありません",
+  );
+  let libraryEmptyHint = $derived(
+    selectedPlaylist
+      ? "曲をドラッグして追加してください"
+      : "フォルダを追加するか、ファイルをドロップしてください",
+  );
+
+  /** 絞り込みの結果。タグとブラウズは重ねて効く（両方を満たす曲だけ残る）。 */
+  let narrowIds = $derived.by((): Set<number> | null => {
+    const groups: Set<number>[] = [];
+    if (tagNarrowed) groups.push(new Set(tagNarrowed.map((track) => track.id)));
+    if (facetNarrowed) groups.push(new Set(facetNarrowed.map((track) => track.id)));
+    if (groups.length === 0) return null;
+    return groups.reduce((left, right) => new Set([...left].filter((id) => right.has(id))));
+  });
+
+  let libraryTracks = $derived(
+    narrowIds ? tracks.filter((track) => narrowIds.has(track.id)) : tracks,
+  );
+
+  let libraryEntries = $derived.by((): PlaylistEntry[] | null => {
+    if (selectedPlaylistId == null) return null;
+    if (!narrowIds) return playlistItems;
+    return playlistItems.filter((entry) => narrowIds.has(entry.track.id));
+  });
+
+  /**
+   * 並べ替えは列の要素をすべて渡す約束なので、絞り込み中は触らせない。
+   * 見えている分だけ渡すと、隠れた要素が消えたことになってしまう。
+   */
+  let canReorder = $derived(selectedPlaylist?.kind === "static" && narrowIds == null);
 
   let previewTrack = $derived.by((): PreviewableTrack | null => {
     if (activeTab === "library" || activeTab === "trash") {
@@ -157,6 +236,165 @@
     } catch (e) {
       pushActivityLog("error", "ゴミ箱の読み込みに失敗しました", String(e));
     }
+  }
+
+  async function loadClassification(silent = true) {
+    try {
+      const [nodes, axes] = await Promise.all([playlistListTree(), tagListAxes()]);
+      playlistNodes = nodes;
+      tagAxes = axes;
+      if (selectedPlaylistId != null) {
+        if (nodes.some((node) => node.id === selectedPlaylistId)) {
+          expandAncestorsOf(selectedPlaylistId);
+        } else {
+          // 消えたプレイリストを指したままにしない。
+          selectPlaylist(null);
+        }
+      }
+      if (!silent) {
+        pushActivityLog("info", `プレイリストを読み込みました (${nodes.length} 件)`);
+      }
+    } catch (e) {
+      pushActivityLog("error", "プレイリストの読み込みに失敗しました", String(e));
+    }
+  }
+
+  async function loadPlaylistItems() {
+    const id = selectedPlaylistId;
+    if (id == null) {
+      playlistItems = [];
+      return;
+    }
+    try {
+      playlistItems = await playlistEntries(id);
+    } catch (e) {
+      playlistItems = [];
+      pushActivityLog("error", "プレイリストの中身を読み込めませんでした", String(e));
+    }
+  }
+
+  /** 絞り込みを引き直す。曲が増減したときも呼ぶ。 */
+  async function reloadNarrowing() {
+    try {
+      tagNarrowed = activeTagIds.length > 0 ? await browseTagTracks(activeTagIds) : null;
+      facetNarrowed = facetNarrowed ? await browseFacetTracks(facetField, facetValue) : null;
+    } catch (e) {
+      pushActivityLog("error", "絞り込みに失敗しました", String(e));
+    }
+  }
+
+  /** 選んだプレイリストが畳まれた枝の中にいても見えるように、祖先を開く。 */
+  function expandAncestorsOf(id: number) {
+    const missing = ancestorIds(playlistNodes, id).filter(
+      (ancestorId) => !expandedPlaylistIds.includes(ancestorId),
+    );
+    if (missing.length > 0) {
+      expandedPlaylistIds = [...expandedPlaylistIds, ...missing];
+    }
+  }
+
+  function selectPlaylist(id: number | null) {
+    selectedPlaylistId = id;
+    browseMode = id == null ? "all" : "playlist";
+    if (id != null) expandAncestorsOf(id);
+    void loadPlaylistItems();
+  }
+
+  function togglePlaylistExpanded(id: number) {
+    expandedPlaylistIds = expandedPlaylistIds.includes(id)
+      ? expandedPlaylistIds.filter((current) => current !== id)
+      : [...expandedPlaylistIds, id];
+  }
+
+  async function handlePlaylistChanged() {
+    await loadClassification();
+    await loadPlaylistItems();
+  }
+
+  async function handleDropTracksOnPlaylist(playlistId: number, trackIds: number[]) {
+    classifyBusy = true;
+    try {
+      await playlistAddTracks(playlistId, trackIds);
+      const name = playlistNodes.find((node) => node.id === playlistId)?.name ?? "プレイリスト";
+      pushActivityLog("success", `${name} に ${trackIds.length} 曲を追加しました`);
+      await loadClassification();
+      if (playlistId === selectedPlaylistId) await loadPlaylistItems();
+    } catch (e) {
+      pushActivityLog("error", "プレイリストに追加できませんでした", String(e));
+    } finally {
+      classifyBusy = false;
+    }
+  }
+
+  async function handleReorderEntries(entryIds: number[]) {
+    const id = selectedPlaylistId;
+    if (id == null) return;
+    try {
+      await playlistReorderEntries(id, entryIds);
+      await loadPlaylistItems();
+    } catch (e) {
+      pushActivityLog("error", "並べ替えに失敗しました", String(e));
+      await loadPlaylistItems();
+    }
+  }
+
+  async function handleRemoveEntries(entryIds: number[]) {
+    const id = selectedPlaylistId;
+    if (id == null || entryIds.length === 0) return;
+    try {
+      const removed = await playlistRemoveEntries(id, entryIds);
+      pushActivityLog("success", `プレイリストから ${removed} 件外しました`);
+      await loadClassification();
+      await loadPlaylistItems();
+    } catch (e) {
+      pushActivityLog("error", "プレイリストから外せませんでした", String(e));
+    }
+  }
+
+  async function handleTagFilterChange(tagIds: number[]) {
+    activeTagIds = tagIds;
+    try {
+      tagNarrowed = tagIds.length > 0 ? await browseTagTracks(tagIds) : null;
+    } catch (e) {
+      pushActivityLog("error", "タグでの絞り込みに失敗しました", String(e));
+    }
+  }
+
+  async function handleTagsChanged() {
+    await Promise.all([loadClassification(), reloadNarrowing()]);
+    await loadPlaylistItems();
+    if (tagTargets.length > 0) {
+      // 付け外しの結果を点灯に反映させるため、対象を作り直して読み込みを促す。
+      tagTargets = [...tagTargets];
+    }
+  }
+
+  async function handleFacetSelect(field: FacetField, value: string | null) {
+    if (field !== facetField) {
+      // フィールドを変えただけ。前の絞り込みは外す。
+      facetField = field;
+      facetValue = null;
+      facetNarrowed = null;
+      return;
+    }
+    facetValue = value;
+    try {
+      facetNarrowed = await browseFacetTracks(field, value);
+    } catch (e) {
+      pushActivityLog("error", "ブラウズに失敗しました", String(e));
+    }
+  }
+
+  function clearFacet() {
+    facetValue = null;
+    facetNarrowed = null;
+  }
+
+  /** タグとブラウズの絞り込みをまとめて外す。プレイリストの選択は残す。 */
+  function clearNarrowing() {
+    activeTagIds = [];
+    tagNarrowed = null;
+    clearFacet();
   }
 
   function rekordboxLockUnchanged(
@@ -450,6 +688,9 @@
     appSession.activeTab = activeTab;
     appSession.selectedRekordboxId = selectedRekordboxId;
     appSession.consoleOpen = consolePanel.open;
+    appSession.library.browseMode = browseMode;
+    appSession.library.selectedPlaylistId = selectedPlaylistId;
+    appSession.library.expandedPlaylistIds = expandedPlaylistIds;
     persistAppSession();
   });
 
@@ -578,6 +819,7 @@
     void loadTracks(false);
     void loadTrashed(true);
     void loadRekordbox(true);
+    void loadClassification().then(() => loadPlaylistItems());
 
     let rekordboxPollInFlight = false;
     const rekordboxPollId = window.setInterval(() => {
@@ -634,6 +876,9 @@
     void listen("library-updated", () => {
       void loadTracks();
       void loadTrashed();
+      void loadClassification();
+      void loadPlaylistItems();
+      void reloadNarrowing();
     }).then((unlisten) => {
       unlistenUpdated = unlisten;
     });
@@ -891,10 +1136,45 @@
         inert={activeTab !== "library" ? true : undefined}
         aria-hidden={activeTab !== "library"}
       >
+        <aside class="side">
+          <PlaylistTree
+            nodes={playlistNodes}
+            axes={tagAxes}
+            selectedId={selectedPlaylistId}
+            expandedIds={expandedPlaylistIds}
+            busy={classifyBusy}
+            onselect={selectPlaylist}
+            ontoggleexpand={togglePlaylistExpanded}
+            onchanged={handlePlaylistChanged}
+            onerror={(message) => pushActivityLog("error", message)}
+            ondroptracks={handleDropTracksOnPlaylist}
+          />
+          <TagPanel
+            axes={tagAxes}
+            selectedTracks={tagTargets}
+            {activeTagIds}
+            busy={classifyBusy}
+            onchanged={handleTagsChanged}
+            onfilterchange={(tagIds) => void handleTagFilterChange(tagIds)}
+            onerror={(message) => pushActivityLog("error", message)}
+          />
+          <FacetBrowser
+            field={facetField}
+            value={facetValue}
+            active={facetNarrowed != null}
+            onselect={(field, value) => void handleFacetSelect(field, value)}
+            onclear={clearFacet}
+            onchanged={handlePlaylistChanged}
+            onerror={(message) => pushActivityLog("error", message)}
+          />
+        </aside>
         <TrackList
-          {tracks}
+          tracks={libraryTracks}
+          entries={libraryEntries}
           selectedId={selectedTrack?.id ?? null}
           sessionScope="library"
+          emptyTitle={libraryEmptyTitle}
+          emptyHint={libraryEmptyHint}
           {rekordboxPathIndex}
           {rekordboxContentIds}
           {rekordboxWritable}
@@ -907,8 +1187,17 @@
           onRemoveFromRekordbox={handleRemoveFromRekordbox}
           onconvert={handleOpenConvert}
           convertBusy={converting || scanning}
+          onreorder={canReorder ? handleReorderEntries : undefined}
+          onremoveentries={selectedPlaylist?.kind === "static" ? handleRemoveEntries : undefined}
+          ontagtracks={(selected) => (tagTargets = selected)}
         >
           {#snippet headerExtra()}
+            {#if selectedPlaylist}
+              <span class="scope-name">{selectedPlaylist.name}</span>
+            {/if}
+            {#if narrowIds}
+              <button type="button" onclick={clearNarrowing}>絞り込みを外す</button>
+            {/if}
             <button
               type="button"
               onclick={handleHealthCheck}
@@ -1134,6 +1423,27 @@
 
   .tab-panel[hidden] {
     display: none;
+  }
+
+  .side {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    width: 15rem;
+    min-height: 0;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+    background: var(--surface-raised);
+  }
+
+  .scope-name {
+    max-width: 12rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent);
   }
 
   .drop-overlay {
