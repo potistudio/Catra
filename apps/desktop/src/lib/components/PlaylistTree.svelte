@@ -253,6 +253,16 @@
   }}
   ondrop={handleRootDrop}
 >
+  <button
+    type="button"
+    class="all-btn"
+    class:active={selectedId === null}
+    onclick={() => onselect(null)}
+  >
+    <span class="kind-icon" aria-hidden="true">◎</span>
+    <span class="node-name">全て</span>
+  </button>
+
   <div class="tree-actions">
     <button type="button" class="side-btn" disabled={busy} onclick={() => startCreate("static")}>
       ＋ リスト
@@ -399,6 +409,30 @@
     flex-direction: column;
     min-height: 0;
     flex: 1;
+  }
+
+  .all-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: calc(100% - 1rem);
+    margin: 0.5rem 0.5rem 0;
+    padding: 0.3rem 0.4rem;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text);
+    font-size: 0.8rem;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .all-btn:hover {
+    background: var(--surface-hover);
+  }
+
+  .all-btn.active {
+    background: var(--surface-selected);
   }
 
   .tree-actions {
