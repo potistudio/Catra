@@ -13,27 +13,25 @@
   interface Props {
     rows: TrackListRow[];
     selectedId: number | null;
-    checkedKeys: Set<number>;
     readonly?: boolean;
     rekordboxPathIndex?: Map<string, string>;
     rekordboxContentIds?: Set<string>;
     showRowRemove?: boolean;
     onselect: (row: TrackListRow) => void;
     onremove?: (track: Track) => void;
-    ontogglecheck?: (row: TrackListRow) => void;
+    onplay?: (track: Track) => void;
   }
 
   let {
     rows,
     selectedId,
-    checkedKeys,
     readonly = false,
     rekordboxPathIndex,
     rekordboxContentIds,
     showRowRemove = true,
     onselect,
     onremove,
-    ontogglecheck,
+    onplay,
   }: Props = $props();
 
   let scrollTop = $state(0);
@@ -90,7 +88,6 @@
         <TrackCard
           track={row.track}
           selected={selectedId === row.track.id}
-          checked={checkedKeys.has(row.key)}
           {readonly}
           inRekordbox={rekordboxPathIndex
             ? isInRekordbox(row.track, rekordboxPathIndex, rekordboxContentIds)
@@ -98,7 +95,7 @@
           {showRowRemove}
           onselect={() => onselect(row)}
           {onremove}
-          ontogglecheck={ontogglecheck ? () => ontogglecheck(row) : undefined}
+          {onplay}
         />
       {/each}
     </div>

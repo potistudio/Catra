@@ -1,5 +1,4 @@
 <script lang="ts">
-  import SelectionCheckbox from "$lib/components/SelectionCheckbox.svelte";
   import TrackArtwork from "$lib/components/TrackArtwork.svelte";
   import TrackConvertedBadge from "$lib/components/TrackConvertedBadge.svelte";
   import TrackSourceBadge from "$lib/components/TrackSourceBadge.svelte";
@@ -10,25 +9,23 @@
   interface Props {
     track: Track;
     selected: boolean;
-    checked: boolean;
     readonly?: boolean;
     inRekordbox?: boolean;
     showRowRemove?: boolean;
     onselect: (track: Track) => void;
     onremove?: (track: Track) => void;
-    ontogglecheck?: (track: Track) => void;
+    onplay?: (track: Track) => void;
   }
 
   let {
     track,
     selected,
-    checked,
     readonly = false,
     inRekordbox = false,
     showRowRemove = true,
     onselect,
     onremove,
-    ontogglecheck,
+    onplay,
   }: Props = $props();
 
   function handleKeydown(event: KeyboardEvent) {
@@ -42,7 +39,6 @@
 <div
   class="track-card"
   class:selected
-  class:checked
   role="button"
   tabindex="0"
   onclick={() => onselect(track)}
@@ -71,16 +67,19 @@
         <span class="rb-badge" title="Rekordbox に登録済み">Rekordbox</span>
       {/if}
     </div>
-    {#if !readonly && ontogglecheck}
-      <div class="checkbox-wrap" class:visible={checked}>
-        <SelectionCheckbox
-          {checked}
-          variant="overlay"
-          label={`${displayTitle(track)} を選択`}
-          title="選択"
-          onToggle={() => ontogglecheck(track)}
-        />
-      </div>
+    {#if onplay}
+      <button
+        type="button"
+        class="play-btn"
+        onclick={(e) => {
+          e.stopPropagation();
+          onplay(track);
+        }}
+        aria-label={`${displayTitle(track)} を再生`}
+        title="再生"
+      >
+        ▶
+      </button>
     {/if}
     {#if showRowRemove && !readonly && onremove}
       <button
@@ -126,9 +125,10 @@
     background: var(--surface-hover);
   }
 
-  /* Preview: left accent bar. Checked: surface fill. */
+  /* Preview: left accent bar + surface fill. */
   .track-card.selected {
     border-color: transparent;
+    background: var(--surface-selected);
   }
 
   .track-card.selected::before {
@@ -143,20 +143,7 @@
     pointer-events: none;
   }
 
-  .track-card.checked {
-    background: var(--surface-selected);
-  }
-
-  .track-card.selected.checked {
-    background: var(--surface-selected);
-  }
-
   .track-card.selected:hover {
-    background: var(--surface-hover);
-  }
-
-  .track-card.checked:hover,
-  .track-card.selected.checked:hover {
     background: var(--surface-selected-hover);
   }
 
@@ -220,26 +207,38 @@
     line-height: 1.3;
   }
 
-  .checkbox-wrap {
+  .play-btn {
     position: absolute;
-    top: 0.35rem;
-    left: 0.35rem;
+    top: 50%;
+    left: 50%;
     z-index: 2;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    background: var(--overlay);
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: 1rem;
+    cursor: pointer;
     opacity: 0;
-    transition: opacity 0.15s;
+    transform: translate(-50%, -50%) scale(0.85);
+    transition:
+      opacity 0.15s,
+      transform 0.15s,
+      background-color 0.12s ease;
   }
 
-  .track-card:hover .checkbox-wrap,
-  .track-card:focus-within .checkbox-wrap,
-  .checkbox-wrap.visible {
+  .track-card:hover .play-btn,
+  .track-card:focus-within .play-btn {
     opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .play-btn:hover {
+    background: var(--accent-hover);
   }
 
   .remove-btn {

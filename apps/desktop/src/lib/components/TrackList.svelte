@@ -64,6 +64,7 @@
     rekordboxLockedHint?: string | null;
     sessionScope?: ListSessionScope;
     onselect: (track: Track) => void;
+    onplay?: (track: Track) => void;
     onremove?: (track: Track) => void;
     onbulkremove?: (ids: number[]) => void | Promise<void>;
     onbulkpermanent?: (ids: number[]) => void | Promise<void>;
@@ -103,6 +104,7 @@
     rekordboxLockedHint = null,
     sessionScope,
     onselect,
+    onplay,
     onremove,
     onbulkremove,
     onbulkpermanent,
@@ -678,14 +680,13 @@
     <TrackGrid
       rows={sorted}
       selectedId={selectedId}
-      {checkedKeys}
       {readonly}
       {rekordboxPathIndex}
       {rekordboxContentIds}
       {showRowRemove}
       onselect={selectRow}
       onremove={showRowRemove ? onremove : undefined}
-      ontogglecheck={readonly ? undefined : toggleCheck}
+      {onplay}
     />
   {:else}
     <div

@@ -684,6 +684,13 @@
     persistAppSession();
   }
 
+  let playToken = $state(0);
+
+  function handlePlayTrack(track: Track) {
+    handleSelect(track);
+    playToken += 1;
+  }
+
   $effect(() => {
     appSession.activeTab = activeTab;
     appSession.selectedRekordboxId = selectedRekordboxId;
@@ -1181,6 +1188,7 @@
           {rekordboxBusy}
           {rekordboxLockedHint}
           onselect={handleSelect}
+          onplay={handlePlayTrack}
           onremove={handleRemove}
           onbulkremove={handleBulkRemove}
           onAddToRekordbox={handleAddToRekordbox}
@@ -1240,6 +1248,7 @@
           bulkRemoveLabel="復元"
           bulkRemoveConfirmMessage="曲をライブラリに戻しますか？"
           onselect={handleSelect}
+          onplay={handlePlayTrack}
           onremove={handleRestore}
           onbulkremove={handleBulkRestore}
           onbulkpermanent={handlePermanentDelete}
@@ -1251,7 +1260,7 @@
   </div>
 
   <StatusBar />
-  <PreviewPlayer track={previewTrack} />
+  <PreviewPlayer track={previewTrack} autoplayToken={playToken} />
 
   {#if fileDropActive}
     <div class="drop-overlay" aria-live="polite">

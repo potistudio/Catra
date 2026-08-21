@@ -14,15 +14,19 @@
 
   interface Props {
     track: PreviewableTrack | null;
+    /** 変わるたびに、選択中のトラックをすぐ再生する合図。 */
+    autoplayToken?: number;
   }
 
-  let { track }: Props = $props();
+  let { track, autoplayToken = 0 }: Props = $props();
 
   let audioEl: HTMLAudioElement | undefined = $state();
   let isPlaying = $state(false);
   let currentTime = $state(0);
   let duration = $state(0);
   let audioSrc = $state<string | null>(null);
+  let pendingAutoplay = $state(false);
+  let lastAutoplayToken = 0;
 
   $effect(() => {
     if (!track) {
@@ -30,6 +34,7 @@
       isPlaying = false;
       currentTime = 0;
       duration = 0;
+      pendingAutoplay = false;
       return;
     }
 
@@ -37,6 +42,8 @@
     isPlaying = false;
     currentTime = 0;
     duration = track.durationMs ? track.durationMs / 1000 : 0;
+    pendingAutoplay = autoplayToken !== lastAutoplayToken;
+    lastAutoplayToken = autoplayToken;
   });
 
   function togglePlay() {
@@ -58,6 +65,10 @@
     if (!audioEl) return;
     if (Number.isFinite(audioEl.duration)) {
       duration = audioEl.duration;
+    }
+    if (pendingAutoplay) {
+      pendingAutoplay = false;
+      void audioEl.play();
     }
   }
 
