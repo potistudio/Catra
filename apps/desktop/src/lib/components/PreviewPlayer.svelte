@@ -27,6 +27,7 @@
   let audioSrc = $state<string | null>(null);
   let pendingAutoplay = $state(false);
   let lastAutoplayToken = 0;
+  let lastPath: string | null = null;
 
   $effect(() => {
     if (!track) {
@@ -35,15 +36,33 @@
       currentTime = 0;
       duration = 0;
       pendingAutoplay = false;
+      lastPath = null;
       return;
     }
 
-    audioSrc = convertFileSrc(track.path);
-    isPlaying = false;
-    currentTime = 0;
-    duration = track.durationMs ? track.durationMs / 1000 : 0;
-    pendingAutoplay = autoplayToken !== lastAutoplayToken;
+    const trackChanged = track.path !== lastPath;
+    lastPath = track.path;
+
+    const shouldAutoplay = autoplayToken !== lastAutoplayToken;
     lastAutoplayToken = autoplayToken;
+
+    if (trackChanged) {
+      // 曲そのものが変わるときだけ src を入れ替える。同じ曲なら src は
+      // 文字列として同一なので DOM は更新されず、loadedmetadata も
+      // 発火しない。だから即再生できるケースはここを通さない。
+      audioSrc = convertFileSrc(track.path);
+      isPlaying = false;
+      currentTime = 0;
+      duration = track.durationMs ? track.durationMs / 1000 : 0;
+      pendingAutoplay = shouldAutoplay;
+      return;
+    }
+
+    if (shouldAutoplay && audioEl) {
+      currentTime = 0;
+      audioEl.currentTime = 0;
+      void audioEl.play();
+    }
   });
 
   function togglePlay() {
