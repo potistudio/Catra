@@ -13,6 +13,7 @@
   interface Props {
     rows: TrackListRow[];
     selectedId: number | null;
+    checkedKeys?: Set<number>;
     readonly?: boolean;
     rekordboxPathIndex?: Map<string, string>;
     rekordboxContentIds?: Set<string>;
@@ -25,6 +26,7 @@
   let {
     rows,
     selectedId,
+    checkedKeys = new Set(),
     readonly = false,
     rekordboxPathIndex,
     rekordboxContentIds,
@@ -88,6 +90,7 @@
         <TrackCard
           track={row.track}
           selected={selectedId === row.track.id}
+          checked={checkedKeys.has(row.key)}
           {readonly}
           inRekordbox={rekordboxPathIndex
             ? isInRekordbox(row.track, rekordboxPathIndex, rekordboxContentIds)

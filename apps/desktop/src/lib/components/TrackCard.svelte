@@ -8,7 +8,10 @@
 
   interface Props {
     track: Track;
+    /** プレビュー中の1曲だけに付く目印（再生ボタンで押した曲）。 */
     selected: boolean;
+    /** 一括操作（タグ付け・変換・Rekordbox 追加など）の対象かどうか。 */
+    checked: boolean;
     readonly?: boolean;
     inRekordbox?: boolean;
     showRowRemove?: boolean;
@@ -20,6 +23,7 @@
   let {
     track,
     selected,
+    checked,
     readonly = false,
     inRekordbox = false,
     showRowRemove = true,
@@ -39,6 +43,7 @@
 <div
   class="track-card"
   class:selected
+  class:checked
   role="button"
   tabindex="0"
   onclick={() => onselect(track)}
@@ -125,10 +130,9 @@
     background: var(--surface-hover);
   }
 
-  /* Preview: left accent bar + surface fill. */
+  /* Preview focus (再生ボタンで再生中): 左の帯だけ。一括選択: 塗りつぶし。 */
   .track-card.selected {
     border-color: transparent;
-    background: var(--surface-selected);
   }
 
   .track-card.selected::before {
@@ -143,7 +147,20 @@
     pointer-events: none;
   }
 
+  .track-card.checked {
+    background: var(--surface-selected);
+  }
+
+  .track-card.selected.checked {
+    background: var(--surface-selected);
+  }
+
   .track-card.selected:hover {
+    background: var(--surface-hover);
+  }
+
+  .track-card.checked:hover,
+  .track-card.selected.checked:hover {
     background: var(--surface-selected-hover);
   }
 

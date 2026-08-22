@@ -332,6 +332,15 @@
     onselect(row.track);
   }
 
+  /**
+   * グリッドはチェックボックスを持たないので、カードの本体クリックが
+   * 一括操作の対象選択（旧チェックボックスの仕事）を兼ねる。
+   */
+  function selectAndToggleCheck(row: TrackListRow) {
+    selectRow(row);
+    if (!readonly) toggleCheck(row);
+  }
+
   async function handleLibraryRemove() {
     if (targetTracks.length === 0) return;
     const ids = targetTracks.map((track) => track.id);
@@ -680,11 +689,12 @@
     <TrackGrid
       rows={sorted}
       selectedId={selectedId}
+      {checkedKeys}
       {readonly}
       {rekordboxPathIndex}
       {rekordboxContentIds}
       {showRowRemove}
-      onselect={selectRow}
+      onselect={selectAndToggleCheck}
       onremove={showRowRemove ? onremove : undefined}
       {onplay}
     />
