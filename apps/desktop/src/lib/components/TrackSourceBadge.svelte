@@ -1,14 +1,14 @@
 <script lang="ts">
-  import type { TrackSource } from "$lib/types";
+import type { TrackSource } from "$lib/types";
 
-  interface Props {
-    source: TrackSource;
-    size?: number;
-  }
+interface Props {
+	source: TrackSource;
+	size?: number;
+}
 
-  let { source, size = 16 }: Props = $props();
+let { source, size = 16 }: Props = $props();
 
-  const label = $derived(source === "soundcloud" ? "SoundCloud" : "Bandcamp");
+const _label = $derived(source === "soundcloud" ? "SoundCloud" : "Bandcamp");
 </script>
 
 <span class="source-badge source-{source}" title={label} aria-label={label}>

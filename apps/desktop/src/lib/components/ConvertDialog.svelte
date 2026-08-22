@@ -1,67 +1,67 @@
 <script lang="ts">
-  import type { ConvertFormat, ConvertOptions } from "$lib/types";
+import type { ConvertFormat, ConvertOptions } from "$lib/types";
 
-  const FORMATS: { value: ConvertFormat; label: string }[] = [
-    { value: "mp3", label: "MP3" },
-    { value: "aac", label: "AAC (M4A)" },
-    { value: "flac", label: "FLAC" },
-    { value: "wav", label: "WAV" },
-    { value: "aiff", label: "AIFF" },
-    { value: "ogg", label: "OGG Vorbis" },
-    { value: "opus", label: "Opus" },
-  ];
+const _FORMATS: { value: ConvertFormat; label: string }[] = [
+	{ value: "mp3", label: "MP3" },
+	{ value: "aac", label: "AAC (M4A)" },
+	{ value: "flac", label: "FLAC" },
+	{ value: "wav", label: "WAV" },
+	{ value: "aiff", label: "AIFF" },
+	{ value: "ogg", label: "OGG Vorbis" },
+	{ value: "opus", label: "Opus" },
+];
 
-  const BITRATES = [128, 192, 256, 320];
-  const LOSSY_FORMATS = new Set<ConvertFormat>(["mp3", "aac", "ogg", "opus"]);
+const _BITRATES = [128, 192, 256, 320];
+const LOSSY_FORMATS = new Set<ConvertFormat>(["mp3", "aac", "ogg", "opus"]);
 
-  interface Props {
-    trackCount: number;
-    rekordboxWritable?: boolean;
-    rekordboxLockedHint?: string | null;
-    oncancel: () => void;
-    onconfirm: (options: ConvertOptions) => void | Promise<void>;
-  }
+interface Props {
+	trackCount: number;
+	rekordboxWritable?: boolean;
+	rekordboxLockedHint?: string | null;
+	oncancel: () => void;
+	onconfirm: (options: ConvertOptions) => void | Promise<void>;
+}
 
-  let {
-    trackCount,
-    rekordboxWritable = false,
-    rekordboxLockedHint = null,
-    oncancel,
-    onconfirm,
-  }: Props = $props();
+let {
+	trackCount,
+	rekordboxWritable = false,
+	rekordboxLockedHint = null,
+	oncancel,
+	onconfirm,
+}: Props = $props();
 
-  let format = $state<ConvertFormat>("mp3");
-  let bitrateKbps = $state("320");
-  let bitDepth = $state("16");
-  let sampleRate = $state("keep");
-  let channels = $state("keep");
-  let addToRekordbox = $state(true);
-  let backdropDismissArmed = $state(false);
+let format = $state<ConvertFormat>("mp3");
+let bitrateKbps = $state("320");
+let bitDepth = $state("16");
+let sampleRate = $state("keep");
+let channels = $state("keep");
+let addToRekordbox = $state(true);
+let backdropDismissArmed = $state(false);
 
-  let lossy = $derived(LOSSY_FORMATS.has(format));
+let lossy = $derived(LOSSY_FORMATS.has(format));
 
-  function onBackdropPointerDown(event: PointerEvent) {
-    backdropDismissArmed = event.target === event.currentTarget;
-  }
+function _onBackdropPointerDown(event: PointerEvent) {
+	backdropDismissArmed = event.target === event.currentTarget;
+}
 
-  function onBackdropPointerUp(event: PointerEvent) {
-    if (backdropDismissArmed && event.target === event.currentTarget) {
-      oncancel();
-    }
-    backdropDismissArmed = false;
-  }
+function _onBackdropPointerUp(event: PointerEvent) {
+	if (backdropDismissArmed && event.target === event.currentTarget) {
+		oncancel();
+	}
+	backdropDismissArmed = false;
+}
 
-  function submit() {
-    const options: ConvertOptions = {
-      format,
-      bitrateKbps: lossy ? Number(bitrateKbps) : null,
-      bitDepth: lossy ? null : Number(bitDepth),
-      sampleRate: sampleRate === "keep" ? null : Number(sampleRate),
-      channels: channels === "keep" ? null : Number(channels),
-      addToRekordbox: rekordboxWritable && addToRekordbox,
-    };
-    void onconfirm(options);
-  }
+function _submit() {
+	const options: ConvertOptions = {
+		format,
+		bitrateKbps: lossy ? Number(bitrateKbps) : null,
+		bitDepth: lossy ? null : Number(bitDepth),
+		sampleRate: sampleRate === "keep" ? null : Number(sampleRate),
+		channels: channels === "keep" ? null : Number(channels),
+		addToRekordbox: rekordboxWritable && addToRekordbox,
+	};
+	void onconfirm(options);
+}
 </script>
 
 <div

@@ -1,275 +1,293 @@
 <script lang="ts">
-  import { ask } from "@tauri-apps/plugin-dialog";
-  import {
-    playlistCreate,
-    playlistSetRule,
-    tagAssign,
-    tagAxisConflicts,
-    tagCreate,
-    tagCreateAxis,
-    tagDelete,
-    tagDeleteAxis,
-    tagOfTracks,
-    tagRename,
-    tagUnassign,
-    tagUpdateAxis,
-  } from "$lib/api";
-  import { hasTrackDrag, readTrackDrag } from "$lib/trackDrag";
-  import type { Rule, Tag, TagAxis, Track } from "$lib/types";
+import { ask } from "@tauri-apps/plugin-dialog";
+import {
+	playlistCreate,
+	playlistSetRule,
+	tagAssign,
+	tagAxisConflicts,
+	tagCreate,
+	tagCreateAxis,
+	tagDelete,
+	tagDeleteAxis,
+	tagOfTracks,
+	tagRename,
+	tagUnassign,
+	tagUpdateAxis,
+} from "$lib/api";
+import { hasTrackDrag, readTrackDrag } from "$lib/trackDrag";
+import type { Rule, Tag, TagAxis, Track } from "$lib/types";
 
-  interface Props {
-    axes: TagAxis[];
-    /** いまチェックが入っている曲。ここへの付け外しは一括で効く。 */
-    selectedTracks: Track[];
-    activeTagIds: number[];
-    busy?: boolean;
-    onchanged: () => void | Promise<void>;
-    onfilterchange: (tagIds: number[]) => void;
-    onerror?: (message: string) => void;
-  }
+interface Props {
+	axes: TagAxis[];
+	/** いまチェックが入っている曲。ここへの付け外しは一括で効く。 */
+	selectedTracks: Track[];
+	activeTagIds: number[];
+	busy?: boolean;
+	onchanged: () => void | Promise<void>;
+	onfilterchange: (tagIds: number[]) => void;
+	onerror?: (message: string) => void;
+}
 
-  let {
-    axes,
-    selectedTracks,
-    activeTagIds,
-    busy = false,
-    onchanged,
-    onfilterchange,
-    onerror,
-  }: Props = $props();
+let {
+	axes,
+	selectedTracks,
+	activeTagIds,
+	busy = false,
+	onchanged,
+	onfilterchange,
+	onerror,
+}: Props = $props();
 
-  function fail(error: unknown) {
-    onerror?.(error instanceof Error ? error.message : String(error));
-  }
+function fail(error: unknown) {
+	onerror?.(error instanceof Error ? error.message : String(error));
+}
 
-  // ---- 選択中の曲が持っているタグ
+// ---- 選択中の曲が持っているタグ
 
-  let assigned = $state<Map<number, number>>(new Map());
+let assigned = $state<Map<number, number>>(new Map());
 
-  $effect(() => {
-    const ids = selectedTracks.map((track) => track.id);
-    if (ids.length === 0) {
-      assigned = new Map();
-      return;
-    }
+$effect(() => {
+	const ids = selectedTracks.map((track) => track.id);
+	if (ids.length === 0) {
+		assigned = new Map();
+		return;
+	}
 
-    let alive = true;
-    void tagOfTracks(ids)
-      .then((rows) => {
-        if (!alive) return;
-        const counts = new Map<number, number>();
-        for (const row of rows) {
-          for (const tagId of row.tagIds) {
-            counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
-          }
-        }
-        assigned = counts;
-      })
-      .catch(fail);
+	let alive = true;
+	void tagOfTracks(ids)
+		.then((rows) => {
+			if (!alive) return;
+			const counts = new Map<number, number>();
+			for (const row of rows) {
+				for (const tagId of row.tagIds) {
+					counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
+				}
+			}
+			assigned = counts;
+		})
+		.catch(fail);
 
-    return () => {
-      alive = false;
-    };
-  });
+	return () => {
+		alive = false;
+	};
+});
 
-  type TagState = "none" | "some" | "all";
+type TagState = "none" | "some" | "all";
 
-  function stateOf(tag: Tag): TagState {
-    const count = assigned.get(tag.id) ?? 0;
-    if (count === 0) return "none";
-    return count === selectedTracks.length ? "all" : "some";
-  }
+function stateOf(tag: Tag): TagState {
+	const count = assigned.get(tag.id) ?? 0;
+	if (count === 0) return "none";
+	return count === selectedTracks.length ? "all" : "some";
+}
 
-  async function toggleAssign(axis: TagAxis, tag: Tag) {
-    if (selectedTracks.length === 0) return;
-    const ids = selectedTracks.map((track) => track.id);
-    try {
-      if (stateOf(tag) === "all") {
-        await tagUnassign(ids, [tag.id]);
-      } else {
-        // 単一選択の軸では、同じ軸の別のタグはバックエンド側で外れる。
-        await tagAssign(ids, [tag.id]);
-      }
-      const rows = await tagOfTracks(ids);
-      const counts = new Map<number, number>();
-      for (const row of rows) {
-        for (const tagId of row.tagIds) counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
-      }
-      assigned = counts;
-      await onchanged();
-    } catch (error) {
-      fail(error);
-    }
-  }
+async function _toggleAssign(_axis: TagAxis, tag: Tag) {
+	if (selectedTracks.length === 0) return;
+	const ids = selectedTracks.map((track) => track.id);
+	try {
+		if (stateOf(tag) === "all") {
+			await tagUnassign(ids, [tag.id]);
+		} else {
+			// 単一選択の軸では、同じ軸の別のタグはバックエンド側で外れる。
+			await tagAssign(ids, [tag.id]);
+		}
+		const rows = await tagOfTracks(ids);
+		const counts = new Map<number, number>();
+		for (const row of rows) {
+			for (const tagId of row.tagIds)
+				counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
+		}
+		assigned = counts;
+		await onchanged();
+	} catch (error) {
+		fail(error);
+	}
+}
 
-  // ---- 絞り込み
+// ---- 絞り込み
 
-  let activeSet = $derived(new Set(activeTagIds));
+let _activeSet = $derived(new Set(activeTagIds));
 
-  function toggleFilter(tag: Tag) {
-    const next = new Set(activeTagIds);
-    if (next.has(tag.id)) next.delete(tag.id);
-    else next.add(tag.id);
-    onfilterchange([...next]);
-  }
+function _toggleFilter(tag: Tag) {
+	const next = new Set(activeTagIds);
+	if (next.has(tag.id)) next.delete(tag.id);
+	else next.add(tag.id);
+	onfilterchange([...next]);
+}
 
-  /** 絞り込みを集合層へ上げる。軸をまたいだ選択は AND で効く。 */
-  async function promoteFilter() {
-    if (activeTagIds.length === 0) return;
-    const names = activeTagIds
-      .map((id) => axes.flatMap((axis) => axis.tags).find((tag) => tag.id === id)?.name)
-      .filter((name): name is string => !!name);
-    try {
-      const created = await playlistCreate(names.join(" / ") || "タグ", null, "smart");
-      const rule: Rule =
-        activeTagIds.length === 1
-          ? { tag: activeTagIds[0] }
-          : { all: activeTagIds.map((id) => ({ tag: id })) };
-      await playlistSetRule(created.id, rule, null);
-      await onchanged();
-    } catch (error) {
-      fail(error);
-    }
-  }
+/** 絞り込みを集合層へ上げる。軸をまたいだ選択は AND で効く。 */
+async function _promoteFilter() {
+	if (activeTagIds.length === 0) return;
+	const names = activeTagIds
+		.map(
+			(id) =>
+				axes.flatMap((axis) => axis.tags).find((tag) => tag.id === id)?.name,
+		)
+		.filter((name): name is string => !!name);
+	try {
+		const created = await playlistCreate(
+			names.join(" / ") || "タグ",
+			null,
+			"smart",
+		);
+		const rule: Rule =
+			activeTagIds.length === 1
+				? { tag: activeTagIds[0] }
+				: { all: activeTagIds.map((id) => ({ tag: id })) };
+		await playlistSetRule(created.id, rule, null);
+		await onchanged();
+	} catch (error) {
+		fail(error);
+	}
+}
 
-  // ---- 軸とタグの手入れ
+// ---- 軸とタグの手入れ
 
-  let promptOpen = $state(false);
-  let promptTitle = $state("");
-  let promptValue = $state("");
-  let promptAction: ((name: string) => Promise<void>) | null = null;
+let _promptOpen = $state(false);
+let _promptTitle = $state("");
+let promptValue = $state("");
+let promptAction: ((name: string) => Promise<void>) | null = null;
 
-  function openPrompt(title: string, initial: string, action: (name: string) => Promise<void>) {
-    promptTitle = title;
-    promptValue = initial;
-    promptAction = action;
-    promptOpen = true;
-  }
+function openPrompt(
+	title: string,
+	initial: string,
+	action: (name: string) => Promise<void>,
+) {
+	_promptTitle = title;
+	promptValue = initial;
+	promptAction = action;
+	_promptOpen = true;
+}
 
-  async function submitPrompt() {
-    const name = promptValue.trim();
-    if (!name || !promptAction) return;
-    const action = promptAction;
-    promptOpen = false;
-    promptAction = null;
-    try {
-      await action(name);
-      await onchanged();
-    } catch (error) {
-      fail(error);
-    }
-  }
+async function _submitPrompt() {
+	const name = promptValue.trim();
+	if (!name || !promptAction) return;
+	const action = promptAction;
+	_promptOpen = false;
+	promptAction = null;
+	try {
+		await action(name);
+		await onchanged();
+	} catch (error) {
+		fail(error);
+	}
+}
 
-  function startCreateAxis() {
-    openPrompt("新しい軸", "", async (name) => {
-      await tagCreateAxis(name, "multi");
-    });
-  }
+function _startCreateAxis() {
+	openPrompt("新しい軸", "", async (name) => {
+		await tagCreateAxis(name, "multi");
+	});
+}
 
-  function startRenameAxis(axis: TagAxis) {
-    openPrompt("軸の名前を変更", axis.name, async (name) => {
-      await tagUpdateAxis(axis.id, name, null);
-    });
-  }
+function _startRenameAxis(axis: TagAxis) {
+	openPrompt("軸の名前を変更", axis.name, async (name) => {
+		await tagUpdateAxis(axis.id, name, null);
+	});
+}
 
-  function startCreateTag(axis: TagAxis) {
-    openPrompt(`${axis.name} に新しいタグ`, "", async (name) => {
-      await tagCreate(axis.id, name);
-    });
-  }
+function _startCreateTag(axis: TagAxis) {
+	openPrompt(`${axis.name} に新しいタグ`, "", async (name) => {
+		await tagCreate(axis.id, name);
+	});
+}
 
-  function startRenameTag(tag: Tag) {
-    openPrompt("タグの名前を変更", tag.name, async (name) => {
-      await tagRename(tag.id, name);
-    });
-  }
+function _startRenameTag(tag: Tag) {
+	openPrompt("タグの名前を変更", tag.name, async (name) => {
+		await tagRename(tag.id, name);
+	});
+}
 
-  /** multi から single に落とすときだけ、はみ出す曲の数を先に見せる。 */
-  async function changeSelection(axis: TagAxis, selection: "single" | "multi") {
-    if (selection === axis.selection) return;
-    try {
-      if (selection === "single") {
-        const conflicts = await tagAxisConflicts(axis.id);
-        if (conflicts > 0) {
-          await ask(
-            `${conflicts} 曲がこの軸のタグを2つ以上持っている。単一選択にする前に減らす必要がある。`,
-            { title: "単一選択にできない", kind: "warning" },
-          );
-          return;
-        }
-      }
-      await tagUpdateAxis(axis.id, null, selection);
-      await onchanged();
-    } catch (error) {
-      fail(error);
-    }
-  }
+/** multi から single に落とすときだけ、はみ出す曲の数を先に見せる。 */
+async function _changeSelection(axis: TagAxis, selection: "single" | "multi") {
+	if (selection === axis.selection) return;
+	try {
+		if (selection === "single") {
+			const conflicts = await tagAxisConflicts(axis.id);
+			if (conflicts > 0) {
+				await ask(
+					`${conflicts} 曲がこの軸のタグを2つ以上持っている。単一選択にする前に減らす必要がある。`,
+					{ title: "単一選択にできない", kind: "warning" },
+				);
+				return;
+			}
+		}
+		await tagUpdateAxis(axis.id, null, selection);
+		await onchanged();
+	} catch (error) {
+		fail(error);
+	}
+}
 
-  async function deleteAxis(axis: TagAxis) {
-    const confirmed = await ask(
-      `軸「${axis.name}」と、その中の ${axis.tags.length} 個のタグを消しますか？曲は消えません。`,
-      { title: "軸の削除", kind: "warning" },
-    );
-    if (!confirmed) return;
-    try {
-      await tagDeleteAxis(axis.id);
-      onfilterchange(activeTagIds.filter((id) => !axis.tags.some((tag) => tag.id === id)));
-      await onchanged();
-    } catch (error) {
-      fail(error);
-    }
-  }
+async function _deleteAxis(axis: TagAxis) {
+	const confirmed = await ask(
+		`軸「${axis.name}」と、その中の ${axis.tags.length} 個のタグを消しますか？曲は消えません。`,
+		{ title: "軸の削除", kind: "warning" },
+	);
+	if (!confirmed) return;
+	try {
+		await tagDeleteAxis(axis.id);
+		onfilterchange(
+			activeTagIds.filter((id) => !axis.tags.some((tag) => tag.id === id)),
+		);
+		await onchanged();
+	} catch (error) {
+		fail(error);
+	}
+}
 
-  async function deleteTag(tag: Tag) {
-    const confirmed = await ask(`タグ「${tag.name}」を消しますか？曲は消えません。`, {
-      title: "タグの削除",
-      kind: "warning",
-    });
-    if (!confirmed) return;
-    try {
-      await tagDelete(tag.id);
-      onfilterchange(activeTagIds.filter((id) => id !== tag.id));
-      await onchanged();
-    } catch (error) {
-      fail(error);
-    }
-  }
+async function _deleteTag(tag: Tag) {
+	const confirmed = await ask(
+		`タグ「${tag.name}」を消しますか？曲は消えません。`,
+		{
+			title: "タグの削除",
+			kind: "warning",
+		},
+	);
+	if (!confirmed) return;
+	try {
+		await tagDelete(tag.id);
+		onfilterchange(activeTagIds.filter((id) => id !== tag.id));
+		await onchanged();
+	} catch (error) {
+		fail(error);
+	}
+}
 
-  // ---- 曲をタグに落とす
+// ---- 曲をタグに落とす
 
-  let dropTagId = $state<number | null>(null);
+let _dropTagId = $state<number | null>(null);
 
-  function handleTagDragOver(tag: Tag, event: DragEvent) {
-    if (!hasTrackDrag(event)) return;
-    event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
-    dropTagId = tag.id;
-  }
+function _handleTagDragOver(tag: Tag, event: DragEvent) {
+	if (!hasTrackDrag(event)) return;
+	event.preventDefault();
+	if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+	_dropTagId = tag.id;
+}
 
-  async function handleTagDrop(tag: Tag, event: DragEvent) {
-    if (!hasTrackDrag(event)) return;
-    event.preventDefault();
-    const trackIds = [...new Set(readTrackDrag(event))];
-    dropTagId = null;
-    if (trackIds.length === 0) return;
-    try {
-      await tagAssign(trackIds, [tag.id]);
-      await onchanged();
-    } catch (error) {
-      fail(error);
-    }
-  }
+async function _handleTagDrop(tag: Tag, event: DragEvent) {
+	if (!hasTrackDrag(event)) return;
+	event.preventDefault();
+	const trackIds = [...new Set(readTrackDrag(event))];
+	_dropTagId = null;
+	if (trackIds.length === 0) return;
+	try {
+		await tagAssign(trackIds, [tag.id]);
+		await onchanged();
+	} catch (error) {
+		fail(error);
+	}
+}
 
-  let backdropDismissArmed = false;
+let backdropDismissArmed = false;
 
-  function onBackdropPointerDown(event: PointerEvent) {
-    backdropDismissArmed = event.target === event.currentTarget;
-  }
+function _onBackdropPointerDown(event: PointerEvent) {
+	backdropDismissArmed = event.target === event.currentTarget;
+}
 
-  function onBackdropPointerUp(event: PointerEvent) {
-    if (backdropDismissArmed && event.target === event.currentTarget) promptOpen = false;
-    backdropDismissArmed = false;
-  }
+function _onBackdropPointerUp(event: PointerEvent) {
+	if (backdropDismissArmed && event.target === event.currentTarget)
+		_promptOpen = false;
+	backdropDismissArmed = false;
+}
 </script>
 
 <div class="tag-panel">

@@ -1,120 +1,122 @@
 .catra-sc-download-btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
 }
 
 .catra-sc-download-btn svg {
-  display: block;
-  width: 24px;
-  height: 24px;
-  fill: currentColor;
+	display: block;
+	width: 24px;
+	height: 24px;
+	fill: currentColor;
 }
 
 .MuiIconButton-root.catra-sc-download-btn,
 .mui-16ytee5 .catra-sc-download-btn {
-  color: inherit;
-  opacity: 1;
-  min-width: 40px;
-  min-height: 40px;
+	color: inherit;
+	opacity: 1;
+	min-width: 40px;
+	min-height: 40px;
 }
 
 .catra-sc-download-btn.is-loading {
-  opacity: 0.65;
-  cursor: wait;
-  pointer-events: none;
+	opacity: 0.65;
+	cursor: wait;
+	pointer-events: none;
 }
 
 .catra-sc-download-btn.is-loading svg,
 .catra-sc-download-btn.is-loading .catra-sc-download-icon svg {
-  visibility: hidden;
+	visibility: hidden;
 }
 
 .catra-sc-progress-label {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.58rem;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.02em;
-  color: currentColor;
-  pointer-events: none;
-  font-variant-numeric: tabular-nums;
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 0.58rem;
+	font-weight: 700;
+	line-height: 1;
+	letter-spacing: -0.02em;
+	color: currentColor;
+	pointer-events: none;
+	font-variant-numeric: tabular-nums;
 }
 
 .catra-sc-playlist-download-btn .catra-sc-progress-label {
-  font-size: 0.72rem;
+	font-size: 0.72rem;
 }
 
-.catra-sc-download-btn.is-loading:has(.catra-sc-progress-label:not([hidden]))::after {
-  display: none;
+.catra-sc-download-btn.is-loading:has(
+	.catra-sc-progress-label:not([hidden])
+)::after {
+	display: none;
 }
 
 .catra-sc-progress-label:not([hidden]) {
-  z-index: 1;
+	z-index: 1;
 }
 
 .catra-sc-download-btn.is-loading::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  margin: auto;
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.25);
-  border-top-color: currentColor;
-  border-radius: 50%;
-  animation: catra-sc-spin 0.8s linear infinite;
+	content: "";
+	position: absolute;
+	inset: 0;
+	margin: auto;
+	width: 18px;
+	height: 18px;
+	border: 2px solid rgba(255, 255, 255, 0.25);
+	border-top-color: currentColor;
+	border-radius: 50%;
+	animation: catra-sc-spin 0.8s linear infinite;
 }
 
 .catra-sc-download-btn.is-success,
 .catra-sc-download-btn.is-error {
-  opacity: 0.55;
+	opacity: 0.55;
 }
 
 .catra-sc-list-download--floating {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 2;
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	z-index: 2;
 }
 
 .catra-sc-playlist-download-btn {
-  color: inherit;
+	color: inherit;
 }
 
 .catra-sc-classic-download.catra-sc-download-btn {
-  position: relative;
-  overflow: hidden;
-  box-sizing: border-box;
+	position: relative;
+	overflow: hidden;
+	box-sizing: border-box;
 }
 
 .catra-sc-classic-download .catra-sc-download-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 0;
 }
 
 .catra-sc-classic-download.catra-sc-download-btn svg,
 .catra-sc-classic-download .catra-sc-download-icon svg {
-  width: unset;
-  height: unset;
-  display: block;
-  fill: currentColor;
+	width: unset;
+	height: unset;
+	display: block;
+	fill: currentColor;
 }
 
 .catra-sc-classic-download .catra-sc-progress-label {
-  font-size: 0.55rem;
+	font-size: 0.55rem;
 }
 
 @keyframes catra-sc-spin {
-  to {
-    transform: rotate(360deg);
-  }
+	to {
+		transform: rotate(360deg);
+	}
 }

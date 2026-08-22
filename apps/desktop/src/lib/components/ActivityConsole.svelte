@@ -1,48 +1,49 @@
 <script lang="ts">
-  import {
-    activityLogs,
-    clearActivityLogs,
-    consolePanel,
-    pushActivityLog,
-    setConsoleOpen,
-  } from "$lib/activityLog.svelte";
-  import type { ActivityLogLevel } from "$lib/types";
+import {
+	activityLogs,
+	clearActivityLogs,
+	consolePanel,
+	pushActivityLog,
+} from "$lib/activityLog.svelte";
+import type { ActivityLogLevel } from "$lib/types";
 
-  let logContainer: HTMLDivElement | undefined = $state();
+let logContainer: HTMLDivElement | undefined = $state();
 
-  const logs = $derived(activityLogs);
-  const errorCount = $derived(logs.filter((entry) => entry.level === "error").length);
+const logs = $derived(activityLogs);
+const _errorCount = $derived(
+	logs.filter((entry) => entry.level === "error").length,
+);
 
-  $effect(() => {
-    if (!logContainer || !consolePanel.open) return;
-    logContainer.scrollTop = logContainer.scrollHeight;
-  });
+$effect(() => {
+	if (!logContainer || !consolePanel.open) return;
+	logContainer.scrollTop = logContainer.scrollHeight;
+});
 
-  function formatTime(timestamp: number): string {
-    return new Date(timestamp).toLocaleTimeString("ja-JP", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  }
+function _formatTime(timestamp: number): string {
+	return new Date(timestamp).toLocaleTimeString("ja-JP", {
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+	});
+}
 
-  function levelLabel(level: ActivityLogLevel): string {
-    switch (level) {
-      case "success":
-        return "SUCCESS";
-      case "warning":
-        return "WARN";
-      case "error":
-        return "ERROR";
-      default:
-        return "INFO";
-    }
-  }
+function _levelLabel(level: ActivityLogLevel): string {
+	switch (level) {
+		case "success":
+			return "SUCCESS";
+		case "warning":
+			return "WARN";
+		case "error":
+			return "ERROR";
+		default:
+			return "INFO";
+	}
+}
 
-  function handleClear() {
-    clearActivityLogs();
-    pushActivityLog("info", "コンソールをクリアしました");
-  }
+function _handleClear() {
+	clearActivityLogs();
+	pushActivityLog("info", "コンソールをクリアしました");
+}
 </script>
 
 {#if consolePanel.open}

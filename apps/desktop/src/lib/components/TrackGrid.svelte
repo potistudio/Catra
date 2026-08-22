@@ -1,75 +1,72 @@
 <script lang="ts">
-  import TrackCard from "$lib/components/TrackCard.svelte";
-  import type { Track } from "$lib/types";
-  import { isInRekordbox } from "$lib/rekordboxMembership";
-  import {
-    getGridColumnCount,
-    getVisibleGridRange,
-    TRACK_GRID_GAP,
-    TRACK_GRID_ROW_HEIGHT,
-    type TrackListRow,
-  } from "$lib/trackListView";
+import {
+	getGridColumnCount,
+	getVisibleGridRange,
+	TRACK_GRID_ROW_HEIGHT,
+	type TrackListRow,
+} from "$lib/trackListView";
+import type { Track } from "$lib/types";
 
-  interface Props {
-    rows: TrackListRow[];
-    selectedId: number | null;
-    checkedKeys?: Set<number>;
-    readonly?: boolean;
-    rekordboxPathIndex?: Map<string, string>;
-    rekordboxContentIds?: Set<string>;
-    showRowRemove?: boolean;
-    onselect: (row: TrackListRow) => void;
-    onremove?: (track: Track) => void;
-    onplay?: (track: Track) => void;
-  }
+interface Props {
+	rows: TrackListRow[];
+	selectedId: number | null;
+	checkedKeys?: Set<number>;
+	readonly?: boolean;
+	rekordboxPathIndex?: Map<string, string>;
+	rekordboxContentIds?: Set<string>;
+	showRowRemove?: boolean;
+	onselect: (row: TrackListRow) => void;
+	onremove?: (track: Track) => void;
+	onplay?: (track: Track) => void;
+}
 
-  let {
-    rows,
-    selectedId,
-    checkedKeys = new Set(),
-    readonly = false,
-    rekordboxPathIndex,
-    rekordboxContentIds,
-    showRowRemove = true,
-    onselect,
-    onremove,
-    onplay,
-  }: Props = $props();
+let {
+	rows,
+	selectedId,
+	checkedKeys = new Set(),
+	readonly = false,
+	rekordboxPathIndex,
+	rekordboxContentIds,
+	showRowRemove = true,
+	onselect,
+	onremove,
+	onplay,
+}: Props = $props();
 
-  let scrollTop = $state(0);
-  let viewportHeight = $state(0);
-  let containerWidth = $state(0);
+let scrollTop = $state(0);
+let viewportHeight = $state(0);
+let containerWidth = $state(0);
 
-  let gridWrap = $state<HTMLDivElement | null>(null);
+let gridWrap = $state<HTMLDivElement | null>(null);
 
-  $effect(() => {
-    const element = gridWrap;
-    if (!element) return;
+$effect(() => {
+	const element = gridWrap;
+	if (!element) return;
 
-    const observer = new ResizeObserver(([entry]) => {
-      viewportHeight = entry.contentRect.height;
-      containerWidth = entry.contentRect.width;
-    });
+	const observer = new ResizeObserver(([entry]) => {
+		viewportHeight = entry.contentRect.height;
+		containerWidth = entry.contentRect.width;
+	});
 
-    observer.observe(element);
-    viewportHeight = element.clientHeight;
-    containerWidth = element.clientWidth;
+	observer.observe(element);
+	viewportHeight = element.clientHeight;
+	containerWidth = element.clientWidth;
 
-    return () => observer.disconnect();
-  });
+	return () => observer.disconnect();
+});
 
-  let columnCount = $derived(getGridColumnCount(containerWidth));
-  let visibleRange = $derived(
-    getVisibleGridRange(scrollTop, viewportHeight, columnCount, rows.length),
-  );
-  let visibleRows = $derived(rows.slice(visibleRange.start, visibleRange.end));
-  let rowCount = $derived(Math.ceil(rows.length / columnCount));
-  let totalBodyHeight = $derived(rowCount * TRACK_GRID_ROW_HEIGHT);
-  let bodyOffsetY = $derived(visibleRange.startRow * TRACK_GRID_ROW_HEIGHT);
+let columnCount = $derived(getGridColumnCount(containerWidth));
+let visibleRange = $derived(
+	getVisibleGridRange(scrollTop, viewportHeight, columnCount, rows.length),
+);
+let _visibleRows = $derived(rows.slice(visibleRange.start, visibleRange.end));
+let rowCount = $derived(Math.ceil(rows.length / columnCount));
+let _totalBodyHeight = $derived(rowCount * TRACK_GRID_ROW_HEIGHT);
+let _bodyOffsetY = $derived(visibleRange.startRow * TRACK_GRID_ROW_HEIGHT);
 
-  function handleScroll(event: Event) {
-    scrollTop = (event.currentTarget as HTMLDivElement).scrollTop;
-  }
+function _handleScroll(event: Event) {
+	scrollTop = (event.currentTarget as HTMLDivElement).scrollTop;
+}
 </script>
 
 <div

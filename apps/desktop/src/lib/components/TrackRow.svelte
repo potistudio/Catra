@@ -1,56 +1,41 @@
 <script lang="ts">
-  import SelectionCheckbox from "$lib/components/SelectionCheckbox.svelte";
-  import TrackArtwork from "$lib/components/TrackArtwork.svelte";
-  import TrackConvertedBadge from "$lib/components/TrackConvertedBadge.svelte";
-  import TrackSourceBadge from "$lib/components/TrackSourceBadge.svelte";
-  import type { Track } from "$lib/types";
-  import { isTrackSource } from "$lib/trackSource";
-  import {
-    displayArtist,
-    displayTitle,
-    displayValue,
-    formatAddedAt,
-    formatBitrate,
-    formatBpm,
-    formatDuration,
-    formatRating,
-  } from "$lib/format";
+import type { Track } from "$lib/types";
 
-  interface Props {
-    track: Track;
-    /** 列の中の何番目か。列でない一覧では null で、番号の列そのものが出ない。 */
-    position?: number | null;
-    selected: boolean;
-    checked: boolean;
-    readonly?: boolean;
-    removeTitle?: string;
-    inRekordbox?: boolean;
-    showActions?: boolean;
-    onselect: (track: Track) => void;
-    onremove?: (track: Track) => void;
-    ontogglecheck?: (track: Track) => void;
-  }
+interface Props {
+	track: Track;
+	/** 列の中の何番目か。列でない一覧では null で、番号の列そのものが出ない。 */
+	position?: number | null;
+	selected: boolean;
+	checked: boolean;
+	readonly?: boolean;
+	removeTitle?: string;
+	inRekordbox?: boolean;
+	showActions?: boolean;
+	onselect: (track: Track) => void;
+	onremove?: (track: Track) => void;
+	ontogglecheck?: (track: Track) => void;
+}
 
-  let {
-    track,
-    position = null,
-    selected,
-    checked,
-    readonly = false,
-    removeTitle = "ライブラリから外す",
-    inRekordbox = false,
-    showActions = true,
-    onselect,
-    onremove,
-    ontogglecheck,
-  }: Props = $props();
+let {
+	track,
+	position = null,
+	selected,
+	checked,
+	readonly = false,
+	removeTitle = "ライブラリから外す",
+	inRekordbox = false,
+	showActions = true,
+	onselect,
+	onremove,
+	ontogglecheck,
+}: Props = $props();
 
-  function handleKeydown(event: KeyboardEvent) {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onselect(track);
-    }
-  }
+function _handleKeydown(event: KeyboardEvent) {
+	if (event.key === "Enter" || event.key === " ") {
+		event.preventDefault();
+		onselect(track);
+	}
+}
 </script>
 
 <div

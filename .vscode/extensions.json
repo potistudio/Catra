@@ -5,6 +5,6 @@
 		"streetsidesoftware.code-spell-checker",
 		"svelte.svelte-vscode",
 		"tauri-apps.tauri-vscode",
-		"vadimcn.vscode-lldb",
+		"vadimcn.vscode-lldb"
 	]
 }

@@ -1,22 +1,24 @@
 <script lang="ts">
-  import { activityLogs, consolePanel, toggleConsole } from "$lib/activityLog.svelte";
-  import type { ActivityLogLevel } from "$lib/types";
+import { activityLogs } from "$lib/activityLog.svelte";
+import type { ActivityLogLevel } from "$lib/types";
 
-  const latest = $derived(activityLogs.at(-1) ?? null);
-  const errorCount = $derived(activityLogs.filter((entry) => entry.level === "error").length);
+const _latest = $derived(activityLogs.at(-1) ?? null);
+const _errorCount = $derived(
+	activityLogs.filter((entry) => entry.level === "error").length,
+);
 
-  function levelLabel(level: ActivityLogLevel): string {
-    switch (level) {
-      case "success":
-        return "OK";
-      case "warning":
-        return "WARN";
-      case "error":
-        return "ERR";
-      default:
-        return "INFO";
-    }
-  }
+function _levelLabel(level: ActivityLogLevel): string {
+	switch (level) {
+		case "success":
+			return "OK";
+		case "warning":
+			return "WARN";
+		case "error":
+			return "ERR";
+		default:
+			return "INFO";
+	}
+}
 </script>
 
 <div class="status-bar" role="status">

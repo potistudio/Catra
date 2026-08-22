@@ -1,110 +1,100 @@
 <script lang="ts">
-  import { convertFileSrc } from "@tauri-apps/api/core";
-  import TrackArtwork from "$lib/components/TrackArtwork.svelte";
-  import type { PreviewableTrack } from "$lib/types";
-  import {
-    displayArtist,
-    displayTitle,
-    displayValue,
-    formatBitrate,
-    formatBpm,
-    formatDuration,
-    formatRating,
-  } from "$lib/format";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import type { PreviewableTrack } from "$lib/types";
 
-  interface Props {
-    track: PreviewableTrack | null;
-    /** 変わるたびに、選択中のトラックをすぐ再生する合図。 */
-    autoplayToken?: number;
-  }
+interface Props {
+	track: PreviewableTrack | null;
+	/** 変わるたびに、選択中のトラックをすぐ再生する合図。 */
+	autoplayToken?: number;
+}
 
-  let { track, autoplayToken = 0 }: Props = $props();
+let { track, autoplayToken = 0 }: Props = $props();
 
-  let audioEl: HTMLAudioElement | undefined = $state();
-  let isPlaying = $state(false);
-  let currentTime = $state(0);
-  let duration = $state(0);
-  let audioSrc = $state<string | null>(null);
-  let pendingAutoplay = $state(false);
-  let lastAutoplayToken = 0;
-  let lastPath: string | null = null;
+let audioEl: HTMLAudioElement | undefined = $state();
+let isPlaying = $state(false);
+let _currentTime = $state(0);
+let _duration = $state(0);
+let audioSrc = $state<string | null>(null);
+let pendingAutoplay = $state(false);
+let lastAutoplayToken = 0;
+let lastPath: string | null = null;
 
-  $effect(() => {
-    if (!track) {
-      audioSrc = null;
-      isPlaying = false;
-      currentTime = 0;
-      duration = 0;
-      pendingAutoplay = false;
-      lastPath = null;
-      return;
-    }
+$effect(() => {
+	if (!track) {
+		audioSrc = null;
+		isPlaying = false;
+		_currentTime = 0;
+		_duration = 0;
+		pendingAutoplay = false;
+		lastPath = null;
+		return;
+	}
 
-    const trackChanged = track.path !== lastPath;
-    lastPath = track.path;
+	const trackChanged = track.path !== lastPath;
+	lastPath = track.path;
 
-    const shouldAutoplay = autoplayToken !== lastAutoplayToken;
-    lastAutoplayToken = autoplayToken;
+	const shouldAutoplay = autoplayToken !== lastAutoplayToken;
+	lastAutoplayToken = autoplayToken;
 
-    if (trackChanged) {
-      // 曲そのものが変わるときだけ src を入れ替える。同じ曲なら src は
-      // 文字列として同一なので DOM は更新されず、loadedmetadata も
-      // 発火しない。だから即再生できるケースはここを通さない。
-      audioSrc = convertFileSrc(track.path);
-      isPlaying = false;
-      currentTime = 0;
-      duration = track.durationMs ? track.durationMs / 1000 : 0;
-      pendingAutoplay = shouldAutoplay;
-      return;
-    }
+	if (trackChanged) {
+		// 曲そのものが変わるときだけ src を入れ替える。同じ曲なら src は
+		// 文字列として同一なので DOM は更新されず、loadedmetadata も
+		// 発火しない。だから即再生できるケースはここを通さない。
+		audioSrc = convertFileSrc(track.path);
+		isPlaying = false;
+		_currentTime = 0;
+		_duration = track.durationMs ? track.durationMs / 1000 : 0;
+		pendingAutoplay = shouldAutoplay;
+		return;
+	}
 
-    if (shouldAutoplay && audioEl) {
-      currentTime = 0;
-      audioEl.currentTime = 0;
-      void audioEl.play();
-    }
-  });
+	if (shouldAutoplay && audioEl) {
+		_currentTime = 0;
+		audioEl.currentTime = 0;
+		void audioEl.play();
+	}
+});
 
-  function togglePlay() {
-    if (!audioEl || !audioSrc) return;
+function _togglePlay() {
+	if (!audioEl || !audioSrc) return;
 
-    if (isPlaying) {
-      audioEl.pause();
-    } else {
-      void audioEl.play();
-    }
-  }
+	if (isPlaying) {
+		audioEl.pause();
+	} else {
+		void audioEl.play();
+	}
+}
 
-  function handleTimeUpdate() {
-    if (!audioEl) return;
-    currentTime = audioEl.currentTime;
-  }
+function _handleTimeUpdate() {
+	if (!audioEl) return;
+	_currentTime = audioEl.currentTime;
+}
 
-  function handleLoadedMetadata() {
-    if (!audioEl) return;
-    if (Number.isFinite(audioEl.duration)) {
-      duration = audioEl.duration;
-    }
-    if (pendingAutoplay) {
-      pendingAutoplay = false;
-      void audioEl.play();
-    }
-  }
+function _handleLoadedMetadata() {
+	if (!audioEl) return;
+	if (Number.isFinite(audioEl.duration)) {
+		_duration = audioEl.duration;
+	}
+	if (pendingAutoplay) {
+		pendingAutoplay = false;
+		void audioEl.play();
+	}
+}
 
-  function handleSeek(event: Event) {
-    if (!audioEl) return;
-    const input = event.target as HTMLInputElement;
-    audioEl.currentTime = Number(input.value);
-    currentTime = audioEl.currentTime;
-  }
+function _handleSeek(event: Event) {
+	if (!audioEl) return;
+	const input = event.target as HTMLInputElement;
+	audioEl.currentTime = Number(input.value);
+	_currentTime = audioEl.currentTime;
+}
 
-  function handleEnded() {
-    isPlaying = false;
-    currentTime = 0;
-    if (audioEl) {
-      audioEl.currentTime = 0;
-    }
-  }
+function _handleEnded() {
+	isPlaying = false;
+	_currentTime = 0;
+	if (audioEl) {
+		audioEl.currentTime = 0;
+	}
+}
 </script>
 
 <footer class="preview">

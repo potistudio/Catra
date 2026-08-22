@@ -1,67 +1,70 @@
 <script lang="ts">
-  import { browseFacet, playlistCreate, playlistSetRule } from "$lib/api";
-  import type { FacetField, FacetValue, Rule, RuleField } from "$lib/types";
+import { browseFacet, playlistCreate, playlistSetRule } from "$lib/api";
+import type { FacetField, FacetValue, Rule, RuleField } from "$lib/types";
 
-  interface Props {
-    field: FacetField;
-    value: string | null;
-    /** 「未設定」も1つの束なので、選ばれていないことと区別する。 */
-    active: boolean;
-    onselect: (field: FacetField, value: string | null) => void;
-    onclear: () => void;
-    onchanged: () => void | Promise<void>;
-    onerror?: (message: string) => void;
-  }
+interface Props {
+	field: FacetField;
+	value: string | null;
+	/** 「未設定」も1つの束なので、選ばれていないことと区別する。 */
+	active: boolean;
+	onselect: (field: FacetField, value: string | null) => void;
+	onclear: () => void;
+	onchanged: () => void | Promise<void>;
+	onerror?: (message: string) => void;
+}
 
-  let { field, value, active, onselect, onclear, onchanged, onerror }: Props = $props();
+let { field, value, active, onselect, onclear, onchanged, onerror }: Props =
+	$props();
 
-  const FIELDS: Array<{ value: FacetField; label: string }> = [
-    { value: "album", label: "アルバム" },
-    { value: "artist", label: "アーティスト" },
-    { value: "genre", label: "ジャンル" },
-    { value: "key", label: "キー" },
-    { value: "source", label: "入手元" },
-  ];
+const _FIELDS: Array<{ value: FacetField; label: string }> = [
+	{ value: "album", label: "アルバム" },
+	{ value: "artist", label: "アーティスト" },
+	{ value: "genre", label: "ジャンル" },
+	{ value: "key", label: "キー" },
+	{ value: "source", label: "入手元" },
+];
 
-  let values = $state<FacetValue[]>([]);
-  let loading = $state(false);
+let _values = $state<FacetValue[]>([]);
+let _loading = $state(false);
 
-  $effect(() => {
-    const target = field;
-    loading = true;
-    let alive = true;
-    void browseFacet(target)
-      .then((rows) => {
-        if (alive) values = rows;
-      })
-      .catch((error) => onerror?.(error instanceof Error ? error.message : String(error)))
-      .finally(() => {
-        if (alive) loading = false;
-      });
+$effect(() => {
+	const target = field;
+	_loading = true;
+	let alive = true;
+	void browseFacet(target)
+		.then((rows) => {
+			if (alive) _values = rows;
+		})
+		.catch((error) =>
+			onerror?.(error instanceof Error ? error.message : String(error)),
+		)
+		.finally(() => {
+			if (alive) _loading = false;
+		});
 
-    return () => {
-      alive = false;
-    };
-  });
+	return () => {
+		alive = false;
+	};
+});
 
-  function label(item: FacetValue): string {
-    return item.value ?? "未設定";
-  }
+function label(item: FacetValue): string {
+	return item.value ?? "未設定";
+}
 
-  /** 眺めるための束を、持ち物としての集合に上げる。 */
-  async function promote(item: FacetValue) {
-    const rule: Rule =
-      item.value == null
-        ? { field: field as RuleField, op: "isNull" }
-        : { field: field as RuleField, op: "eq", value: item.value };
-    try {
-      const created = await playlistCreate(label(item), null, "smart");
-      await playlistSetRule(created.id, rule, null);
-      await onchanged();
-    } catch (error) {
-      onerror?.(error instanceof Error ? error.message : String(error));
-    }
-  }
+/** 眺めるための束を、持ち物としての集合に上げる。 */
+async function _promote(item: FacetValue) {
+	const rule: Rule =
+		item.value == null
+			? { field: field as RuleField, op: "isNull" }
+			: { field: field as RuleField, op: "eq", value: item.value };
+	try {
+		const created = await playlistCreate(label(item), null, "smart");
+		await playlistSetRule(created.id, rule, null);
+		await onchanged();
+	} catch (error) {
+		onerror?.(error instanceof Error ? error.message : String(error));
+	}
+}
 </script>
 
 <div class="facets">

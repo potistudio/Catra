@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
-  interface Props {
-    artworkPath: string | null;
-    title: string;
-    size?: number;
-  }
+interface Props {
+	artworkPath: string | null;
+	title: string;
+	size?: number;
+}
 
-  let { artworkPath, title, size = 40 }: Props = $props();
+let { artworkPath, title, size = 40 }: Props = $props();
 
-  let src = $derived(artworkPath ? convertFileSrc(artworkPath) : null);
+let _src = $derived(artworkPath ? convertFileSrc(artworkPath) : null);
 </script>
 
 <div class="artwork" style:width="{size}px" style:height="{size}px">

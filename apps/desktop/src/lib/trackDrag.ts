@@ -6,21 +6,23 @@
 export const TRACK_DRAG_MIME = "application/x-catra-track-ids";
 
 export function writeTrackDrag(event: DragEvent, trackIds: number[]) {
-  event.dataTransfer?.setData(TRACK_DRAG_MIME, JSON.stringify(trackIds));
+	event.dataTransfer?.setData(TRACK_DRAG_MIME, JSON.stringify(trackIds));
 }
 
 export function hasTrackDrag(event: DragEvent): boolean {
-  return !!event.dataTransfer?.types.includes(TRACK_DRAG_MIME);
+	return !!event.dataTransfer?.types.includes(TRACK_DRAG_MIME);
 }
 
 export function readTrackDrag(event: DragEvent): number[] {
-  const raw = event.dataTransfer?.getData(TRACK_DRAG_MIME);
-  if (!raw) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((id): id is number => typeof id === "number" && Number.isInteger(id));
-  } catch {
-    return [];
-  }
+	const raw = event.dataTransfer?.getData(TRACK_DRAG_MIME);
+	if (!raw) return [];
+	try {
+		const parsed: unknown = JSON.parse(raw);
+		if (!Array.isArray(parsed)) return [];
+		return parsed.filter(
+			(id): id is number => typeof id === "number" && Number.isInteger(id),
+		);
+	} catch {
+		return [];
+	}
 }

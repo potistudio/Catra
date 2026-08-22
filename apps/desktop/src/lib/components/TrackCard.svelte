@@ -1,43 +1,38 @@
 <script lang="ts">
-  import TrackArtwork from "$lib/components/TrackArtwork.svelte";
-  import TrackConvertedBadge from "$lib/components/TrackConvertedBadge.svelte";
-  import TrackSourceBadge from "$lib/components/TrackSourceBadge.svelte";
-  import type { Track } from "$lib/types";
-  import { isTrackSource } from "$lib/trackSource";
-  import { displayArtist, displayTitle, formatDuration } from "$lib/format";
+import type { Track } from "$lib/types";
 
-  interface Props {
-    track: Track;
-    /** プレビュー中の1曲だけに付く目印（再生ボタンで押した曲）。 */
-    selected: boolean;
-    /** 一括操作（タグ付け・変換・Rekordbox 追加など）の対象かどうか。 */
-    checked: boolean;
-    readonly?: boolean;
-    inRekordbox?: boolean;
-    showRowRemove?: boolean;
-    onselect: (track: Track) => void;
-    onremove?: (track: Track) => void;
-    onplay?: (track: Track) => void;
-  }
+interface Props {
+	track: Track;
+	/** プレビュー中の1曲だけに付く目印（再生ボタンで押した曲）。 */
+	selected: boolean;
+	/** 一括操作（タグ付け・変換・Rekordbox 追加など）の対象かどうか。 */
+	checked: boolean;
+	readonly?: boolean;
+	inRekordbox?: boolean;
+	showRowRemove?: boolean;
+	onselect: (track: Track) => void;
+	onremove?: (track: Track) => void;
+	onplay?: (track: Track) => void;
+}
 
-  let {
-    track,
-    selected,
-    checked,
-    readonly = false,
-    inRekordbox = false,
-    showRowRemove = true,
-    onselect,
-    onremove,
-    onplay,
-  }: Props = $props();
+let {
+	track,
+	selected,
+	checked,
+	readonly = false,
+	inRekordbox = false,
+	showRowRemove = true,
+	onselect,
+	onremove,
+	onplay,
+}: Props = $props();
 
-  function handleKeydown(event: KeyboardEvent) {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onselect(track);
-    }
-  }
+function _handleKeydown(event: KeyboardEvent) {
+	if (event.key === "Enter" || event.key === " ") {
+		event.preventDefault();
+		onselect(track);
+	}
+}
 </script>
 
 <div

@@ -1,493 +1,504 @@
 <script lang="ts">
-  import { ask, open } from "@tauri-apps/plugin-dialog";
-  import {
-    rekordboxAddContent,
-    rekordboxAddToPlaylist,
-    rekordboxCreatePlaylist,
-    rekordboxCreatePlaylistFolder,
-    rekordboxDeleteContent,
-    rekordboxDeletePlaylist,
-    rekordboxGetPlaylistContent,
-    rekordboxListPlaylists,
-    rekordboxMoveSongInPlaylist,
-    rekordboxRemoveFromPlaylist,
-    rekordboxRenamePlaylist,
-    rekordboxUpdateContent,
-  } from "$lib/api";
-  import TrackList from "$lib/components/TrackList.svelte";
-  import {
-    isPlaylistFolder,
-    playlistTreeRows,
-    rekordboxContentToTrack,
-  } from "$lib/rekordboxListView";
-  import type {
-    RekordboxCheck,
-    RekordboxContent,
-    RekordboxContentUpdate,
-    RekordboxPlaylist,
-    Track,
-  } from "$lib/types";
-  import { appSession, persistAppSession } from "$lib/appSession.svelte";
+import { ask, open } from "@tauri-apps/plugin-dialog";
+import {
+	rekordboxAddContent,
+	rekordboxAddToPlaylist,
+	rekordboxCreatePlaylist,
+	rekordboxCreatePlaylistFolder,
+	rekordboxDeleteContent,
+	rekordboxDeletePlaylist,
+	rekordboxGetPlaylistContent,
+	rekordboxListPlaylists,
+	rekordboxMoveSongInPlaylist,
+	rekordboxRemoveFromPlaylist,
+	rekordboxRenamePlaylist,
+	rekordboxUpdateContent,
+} from "$lib/api";
+import { appSession, persistAppSession } from "$lib/appSession.svelte";
+import {
+	isPlaylistFolder,
+	playlistTreeRows,
+	rekordboxContentToTrack,
+} from "$lib/rekordboxListView";
+import type {
+	RekordboxCheck,
+	RekordboxContent,
+	RekordboxContentUpdate,
+	RekordboxPlaylist,
+	Track,
+} from "$lib/types";
 
-  type BrowseMode = "all" | "playlist";
-  type TextPromptKind = "playlist" | "folder" | "rename";
+type BrowseMode = "all" | "playlist";
+type TextPromptKind = "playlist" | "folder" | "rename";
 
-  async function confirmDanger(message: string, title = "確認"): Promise<boolean> {
-    return ask(message, { title, kind: "warning" });
-  }
+async function confirmDanger(
+	message: string,
+	title = "確認",
+): Promise<boolean> {
+	return ask(message, { title, kind: "warning" });
+}
 
-  interface Props {
-    tracks: RekordboxContent[];
-    selectedId: string | null;
-    loading: boolean;
-    status: RekordboxCheck | null;
-    onselect: (track: RekordboxContent) => void;
-    onrefresh: () => void | Promise<void>;
-    onensurewritable?: () => Promise<boolean>;
-  }
+interface Props {
+	tracks: RekordboxContent[];
+	selectedId: string | null;
+	loading: boolean;
+	status: RekordboxCheck | null;
+	onselect: (track: RekordboxContent) => void;
+	onrefresh: () => void | Promise<void>;
+	onensurewritable?: () => Promise<boolean>;
+}
 
-  let {
-    tracks,
-    selectedId,
-    loading,
-    status,
-    onselect,
-    onrefresh,
-    onensurewritable,
-  }: Props = $props();
+let {
+	tracks,
+	selectedId,
+	loading,
+	status,
+	onselect,
+	onrefresh,
+	onensurewritable,
+}: Props = $props();
 
-  let browseMode = $state<BrowseMode>(appSession.rekordbox.browseMode);
-  let playlists = $state<RekordboxPlaylist[]>([]);
-  let selectedPlaylistId = $state<string | null>(appSession.rekordbox.selectedPlaylistId);
-  let selectedFolderId = $state<string | null>(appSession.rekordbox.selectedFolderId);
-  let playlistTracks = $state<RekordboxContent[]>([]);
-  let playlistLoading = $state(false);
-  let actionError = $state<string | null>(null);
-  let busy = $state(false);
+let browseMode = $state<BrowseMode>(appSession.rekordbox.browseMode);
+let playlists = $state<RekordboxPlaylist[]>([]);
+let selectedPlaylistId = $state<string | null>(
+	appSession.rekordbox.selectedPlaylistId,
+);
+let selectedFolderId = $state<string | null>(
+	appSession.rekordbox.selectedFolderId,
+);
+let playlistTracks = $state<RekordboxContent[]>([]);
+let playlistLoading = $state(false);
+let _actionError = $state<string | null>(null);
+let busy = $state(false);
 
-  let editOpen = $state(false);
-  let editTarget = $state<RekordboxContent | null>(null);
-  let editForm = $state({
-    title: "",
-    artist: "",
-    album: "",
-    genre: "",
-    comment: "",
-    bpm: "",
-    key: "",
-    rating: "",
-  });
+let _editOpen = $state(false);
+let editTarget = $state<RekordboxContent | null>(null);
+let editForm = $state({
+	title: "",
+	artist: "",
+	album: "",
+	genre: "",
+	comment: "",
+	bpm: "",
+	key: "",
+	rating: "",
+});
 
-  let textPromptOpen = $state(false);
-  let textPromptKind = $state<TextPromptKind>("playlist");
-  let textPromptTitle = $state("");
-  let textPromptValue = $state("");
-  let textPromptTarget = $state<RekordboxPlaylist | null>(null);
+let _textPromptOpen = $state(false);
+let textPromptKind = $state<TextPromptKind>("playlist");
+let _textPromptTitle = $state("");
+let textPromptValue = $state("");
+let textPromptTarget = $state<RekordboxPlaylist | null>(null);
 
-  let addToPlaylistOpen = $state(false);
-  let addToPlaylistTarget = $state<RekordboxContent | null>(null);
+let _addToPlaylistOpen = $state(false);
+let addToPlaylistTarget = $state<RekordboxContent | null>(null);
 
-  /** Only dismiss when pointer down and up both land on the backdrop (not drag-out from modal). */
-  let backdropDismissArmed = false;
+/** Only dismiss when pointer down and up both land on the backdrop (not drag-out from modal). */
+let backdropDismissArmed = false;
 
-  function onBackdropPointerDown(event: PointerEvent) {
-    backdropDismissArmed = event.target === event.currentTarget;
-  }
+function _onBackdropPointerDown(event: PointerEvent) {
+	backdropDismissArmed = event.target === event.currentTarget;
+}
 
-  function onBackdropPointerUp(event: PointerEvent, close: () => void) {
-    if (backdropDismissArmed && event.target === event.currentTarget) {
-      close();
-    }
-    backdropDismissArmed = false;
-  }
+function _onBackdropPointerUp(event: PointerEvent, close: () => void) {
+	if (backdropDismissArmed && event.target === event.currentTarget) {
+		close();
+	}
+	backdropDismissArmed = false;
+}
 
-  let playlistRows = $derived(playlistTreeRows(playlists));
-  let activeTracks = $derived(browseMode === "all" ? tracks : playlistTracks);
-  let displayTracks = $derived(activeTracks.map(rekordboxContentToTrack));
-  let selectedDisplayId = $derived(
-    selectedId == null
-      ? null
-      : activeTracks.findIndex((track) => track.id === selectedId),
-  );
-  let selectedListId = $derived(
-    selectedDisplayId != null && selectedDisplayId >= 0
-      ? selectedDisplayId
-      : null,
-  );
-  let listLoading = $derived(
-    browseMode === "playlist" ? playlistLoading || loading : loading,
-  );
-  let writable = $derived(!!status?.dbPath && !status.rekordboxRunning);
-  let normalPlaylists = $derived(
-    playlists.filter((playlist) => playlist.attribute === 0),
-  );
+let _playlistRows = $derived(playlistTreeRows(playlists));
+let activeTracks = $derived(browseMode === "all" ? tracks : playlistTracks);
+let _displayTracks = $derived(activeTracks.map(rekordboxContentToTrack));
+let selectedDisplayId = $derived(
+	selectedId == null
+		? null
+		: activeTracks.findIndex((track) => track.id === selectedId),
+);
+let _selectedListId = $derived(
+	selectedDisplayId != null && selectedDisplayId >= 0
+		? selectedDisplayId
+		: null,
+);
+let _listLoading = $derived(
+	browseMode === "playlist" ? playlistLoading || loading : loading,
+);
+let writable = $derived(!!status?.dbPath && !status.rekordboxRunning);
+let normalPlaylists = $derived(
+	playlists.filter((playlist) => playlist.attribute === 0),
+);
 
-  $effect(() => {
-    if (status == null) return;
-    if (status.dbPath) {
-      void loadPlaylists();
-    } else {
-      playlists = [];
-      selectedPlaylistId = null;
-      selectedFolderId = null;
-      playlistTracks = [];
-    }
-  });
+$effect(() => {
+	if (status == null) return;
+	if (status.dbPath) {
+		void loadPlaylists();
+	} else {
+		playlists = [];
+		selectedPlaylistId = null;
+		selectedFolderId = null;
+		playlistTracks = [];
+	}
+});
 
-  $effect(() => {
-    appSession.rekordbox.browseMode = browseMode;
-    appSession.rekordbox.selectedPlaylistId = selectedPlaylistId;
-    appSession.rekordbox.selectedFolderId = selectedFolderId;
-    persistAppSession();
-  });
+$effect(() => {
+	appSession.rekordbox.browseMode = browseMode;
+	appSession.rekordbox.selectedPlaylistId = selectedPlaylistId;
+	appSession.rekordbox.selectedFolderId = selectedFolderId;
+	persistAppSession();
+});
 
-  async function loadPlaylists() {
-    try {
-      playlists = await rekordboxListPlaylists();
-      if (
-        selectedPlaylistId &&
-        !playlists.some((playlist) => playlist.id === selectedPlaylistId)
-      ) {
-        selectedPlaylistId = null;
-        playlistTracks = [];
-      }
-      if (
-        selectedFolderId &&
-        !playlists.some(
-          (playlist) =>
-            playlist.id === selectedFolderId && isPlaylistFolder(playlist),
-        )
-      ) {
-        selectedFolderId = null;
-      }
-      if (browseMode === "playlist" && selectedPlaylistId) {
-        void loadPlaylistTracks(selectedPlaylistId);
-      }
-    } catch {
-      playlists = [];
-    }
-  }
+async function loadPlaylists() {
+	try {
+		playlists = await rekordboxListPlaylists();
+		if (
+			selectedPlaylistId &&
+			!playlists.some((playlist) => playlist.id === selectedPlaylistId)
+		) {
+			selectedPlaylistId = null;
+			playlistTracks = [];
+		}
+		if (
+			selectedFolderId &&
+			!playlists.some(
+				(playlist) =>
+					playlist.id === selectedFolderId && isPlaylistFolder(playlist),
+			)
+		) {
+			selectedFolderId = null;
+		}
+		if (browseMode === "playlist" && selectedPlaylistId) {
+			void loadPlaylistTracks(selectedPlaylistId);
+		}
+	} catch {
+		playlists = [];
+	}
+}
 
-  async function loadPlaylistTracks(playlistId: string) {
-    playlistLoading = true;
-    try {
-      playlistTracks = await rekordboxGetPlaylistContent(playlistId);
-    } catch {
-      playlistTracks = [];
-    } finally {
-      playlistLoading = false;
-    }
-  }
+async function loadPlaylistTracks(playlistId: string) {
+	playlistLoading = true;
+	try {
+		playlistTracks = await rekordboxGetPlaylistContent(playlistId);
+	} catch {
+		playlistTracks = [];
+	} finally {
+		playlistLoading = false;
+	}
+}
 
-  function setBrowseMode(mode: BrowseMode) {
-    browseMode = mode;
-    if (mode === "all") {
-      selectedPlaylistId = null;
-      playlistTracks = [];
-      return;
-    }
-    if (selectedPlaylistId) {
-      void loadPlaylistTracks(selectedPlaylistId);
-    }
-  }
+function _setBrowseMode(mode: BrowseMode) {
+	browseMode = mode;
+	if (mode === "all") {
+		selectedPlaylistId = null;
+		playlistTracks = [];
+		return;
+	}
+	if (selectedPlaylistId) {
+		void loadPlaylistTracks(selectedPlaylistId);
+	}
+}
 
-  function selectPlaylist(playlist: RekordboxPlaylist) {
-    if (isPlaylistFolder(playlist)) {
-      selectedFolderId = playlist.id;
-      return;
-    }
-    browseMode = "playlist";
-    selectedPlaylistId = playlist.id;
-    selectedFolderId = playlist.parentId;
-    void loadPlaylistTracks(playlist.id);
-  }
+function selectPlaylist(playlist: RekordboxPlaylist) {
+	if (isPlaylistFolder(playlist)) {
+		selectedFolderId = playlist.id;
+		return;
+	}
+	browseMode = "playlist";
+	selectedPlaylistId = playlist.id;
+	selectedFolderId = playlist.parentId;
+	void loadPlaylistTracks(playlist.id);
+}
 
-  async function handleRefresh() {
-    actionError = null;
-    await onrefresh();
-    await loadPlaylists();
-    if (browseMode === "playlist" && selectedPlaylistId) {
-      await loadPlaylistTracks(selectedPlaylistId);
-    }
-  }
+async function handleRefresh() {
+	_actionError = null;
+	await onrefresh();
+	await loadPlaylists();
+	if (browseMode === "playlist" && selectedPlaylistId) {
+		await loadPlaylistTracks(selectedPlaylistId);
+	}
+}
 
-  function handleSelect(track: Track) {
-    const content = activeTracks[track.id];
-    if (content) onselect(content);
-  }
+function _handleSelect(track: Track) {
+	const content = activeTracks[track.id];
+	if (content) onselect(content);
+}
 
-  function contentAt(index: number): RekordboxContent | null {
-    return activeTracks[index] ?? null;
-  }
+function contentAt(index: number): RekordboxContent | null {
+	return activeTracks[index] ?? null;
+}
 
-  async function runAction(action: () => Promise<void>) {
-    if (busy) return;
-    if (onensurewritable) {
-      if (!(await onensurewritable())) return;
-    } else if (!writable) {
-      return;
-    }
-    if (busy) return;
-    busy = true;
-    actionError = null;
-    try {
-      await action();
-    } catch (error) {
-      actionError = error instanceof Error ? error.message : String(error);
-    } finally {
-      busy = false;
-    }
-  }
+async function runAction(action: () => Promise<void>) {
+	if (busy) return;
+	if (onensurewritable) {
+		if (!(await onensurewritable())) return;
+	} else if (!writable) {
+		return;
+	}
+	if (busy) return;
+	busy = true;
+	_actionError = null;
+	try {
+		await action();
+	} catch (error) {
+		_actionError = error instanceof Error ? error.message : String(error);
+	} finally {
+		busy = false;
+	}
+}
 
-  function parentForCreate(): string | null {
-    return selectedFolderId;
-  }
+function parentForCreate(): string | null {
+	return selectedFolderId;
+}
 
-  function openCreatePlaylistPrompt() {
-    textPromptKind = "playlist";
-    textPromptTitle = "プレイリスト名";
-    textPromptValue = "";
-    textPromptTarget = null;
-    textPromptOpen = true;
-  }
+function _openCreatePlaylistPrompt() {
+	textPromptKind = "playlist";
+	_textPromptTitle = "プレイリスト名";
+	textPromptValue = "";
+	textPromptTarget = null;
+	_textPromptOpen = true;
+}
 
-  function openCreateFolderPrompt() {
-    textPromptKind = "folder";
-    textPromptTitle = "フォルダ名";
-    textPromptValue = "";
-    textPromptTarget = null;
-    textPromptOpen = true;
-  }
+function _openCreateFolderPrompt() {
+	textPromptKind = "folder";
+	_textPromptTitle = "フォルダ名";
+	textPromptValue = "";
+	textPromptTarget = null;
+	_textPromptOpen = true;
+}
 
-  function openRenamePlaylistPrompt(playlist: RekordboxPlaylist) {
-    textPromptKind = "rename";
-    textPromptTitle = "新しい名前";
-    textPromptValue = playlist.name;
-    textPromptTarget = playlist;
-    textPromptOpen = true;
-  }
+function _openRenamePlaylistPrompt(playlist: RekordboxPlaylist) {
+	textPromptKind = "rename";
+	_textPromptTitle = "新しい名前";
+	textPromptValue = playlist.name;
+	textPromptTarget = playlist;
+	_textPromptOpen = true;
+}
 
-  async function submitTextPrompt() {
-    const name = textPromptValue.trim();
-    if (!name) return;
-    textPromptOpen = false;
+async function _submitTextPrompt() {
+	const name = textPromptValue.trim();
+	if (!name) return;
+	_textPromptOpen = false;
 
-    if (textPromptKind === "playlist") {
-      await runAction(async () => {
-        const created = await rekordboxCreatePlaylist(name, parentForCreate());
-        await loadPlaylists();
-        selectPlaylist(created);
-      });
-      return;
-    }
+	if (textPromptKind === "playlist") {
+		await runAction(async () => {
+			const created = await rekordboxCreatePlaylist(name, parentForCreate());
+			await loadPlaylists();
+			selectPlaylist(created);
+		});
+		return;
+	}
 
-    if (textPromptKind === "folder") {
-      await runAction(async () => {
-        const created = await rekordboxCreatePlaylistFolder(
-          name,
-          parentForCreate(),
-        );
-        await loadPlaylists();
-        selectedFolderId = created.id;
-      });
-      return;
-    }
+	if (textPromptKind === "folder") {
+		await runAction(async () => {
+			const created = await rekordboxCreatePlaylistFolder(
+				name,
+				parentForCreate(),
+			);
+			await loadPlaylists();
+			selectedFolderId = created.id;
+		});
+		return;
+	}
 
-    if (textPromptKind === "rename" && textPromptTarget) {
-      if (name === textPromptTarget.name) return;
-      const targetId = textPromptTarget.id;
-      await runAction(async () => {
-        await rekordboxRenamePlaylist(targetId, name);
-        await loadPlaylists();
-      });
-    }
-  }
+	if (textPromptKind === "rename" && textPromptTarget) {
+		if (name === textPromptTarget.name) return;
+		const targetId = textPromptTarget.id;
+		await runAction(async () => {
+			await rekordboxRenamePlaylist(targetId, name);
+			await loadPlaylists();
+		});
+	}
+}
 
-  async function handleDeletePlaylist(playlist: RekordboxPlaylist) {
-    const label = isPlaylistFolder(playlist) ? "フォルダ" : "プレイリスト";
-    const confirmed = await confirmDanger(
-      `${label}「${playlist.name}」を削除しますか？子要素もすべて削除されます。`,
-      `${label}の削除`,
-    );
-    if (!confirmed) return;
+async function _handleDeletePlaylist(playlist: RekordboxPlaylist) {
+	const label = isPlaylistFolder(playlist) ? "フォルダ" : "プレイリスト";
+	const confirmed = await confirmDanger(
+		`${label}「${playlist.name}」を削除しますか？子要素もすべて削除されます。`,
+		`${label}の削除`,
+	);
+	if (!confirmed) return;
 
-    await runAction(async () => {
-      await rekordboxDeletePlaylist(playlist.id);
-      if (selectedPlaylistId === playlist.id) {
-        selectedPlaylistId = null;
-        playlistTracks = [];
-        browseMode = "all";
-      }
-      if (selectedFolderId === playlist.id) {
-        selectedFolderId = null;
-      }
-      await loadPlaylists();
-    });
-  }
+	await runAction(async () => {
+		await rekordboxDeletePlaylist(playlist.id);
+		if (selectedPlaylistId === playlist.id) {
+			selectedPlaylistId = null;
+			playlistTracks = [];
+			browseMode = "all";
+		}
+		if (selectedFolderId === playlist.id) {
+			selectedFolderId = null;
+		}
+		await loadPlaylists();
+	});
+}
 
-  async function handleAddFiles() {
-    const selected = await open({
-      multiple: true,
-      filters: [
-        {
-          name: "Audio",
-          extensions: ["mp3", "wav", "flac", "aiff", "aif", "m4a", "aac"],
-        },
-      ],
-    });
-    if (!selected) return;
-    const paths = Array.isArray(selected) ? selected : [selected];
-    await runAction(async () => {
-      for (const path of paths) {
-        await rekordboxAddContent(path);
-      }
-      await handleRefresh();
-    });
-  }
+async function _handleAddFiles() {
+	const selected = await open({
+		multiple: true,
+		filters: [
+			{
+				name: "Audio",
+				extensions: ["mp3", "wav", "flac", "aiff", "aif", "m4a", "aac"],
+			},
+		],
+	});
+	if (!selected) return;
+	const paths = Array.isArray(selected) ? selected : [selected];
+	await runAction(async () => {
+		for (const path of paths) {
+			await rekordboxAddContent(path);
+		}
+		await handleRefresh();
+	});
+}
 
-  async function handleRemoveTrack(track: Track) {
-    const content = contentAt(track.id);
-    if (!content) return;
+async function _handleRemoveTrack(track: Track) {
+	const content = contentAt(track.id);
+	if (!content) return;
 
-    if (browseMode === "playlist" && selectedPlaylistId) {
-      const songId = content.songPlaylistId;
-      if (!songId) {
-        actionError = "プレイリスト会員IDが見つかりません";
-        return;
-      }
-      const confirmed = await confirmDanger(
-        "このプレイリストから除外しますか？",
-        "プレイリストから除外",
-      );
-      if (!confirmed) return;
-      await runAction(async () => {
-        await rekordboxRemoveFromPlaylist(selectedPlaylistId!, songId);
-        await loadPlaylistTracks(selectedPlaylistId!);
-      });
-      return;
-    }
+	if (browseMode === "playlist" && selectedPlaylistId) {
+		const songId = content.songPlaylistId;
+		if (!songId) {
+			_actionError = "プレイリスト会員IDが見つかりません";
+			return;
+		}
+		const confirmed = await confirmDanger(
+			"このプレイリストから除外しますか？",
+			"プレイリストから除外",
+		);
+		if (!confirmed) return;
+		await runAction(async () => {
+			await rekordboxRemoveFromPlaylist(selectedPlaylistId!, songId);
+			await loadPlaylistTracks(selectedPlaylistId!);
+		});
+		return;
+	}
 
-    const label = content.title ?? content.fileName ?? content.id;
-    const confirmed = await confirmDanger(
-      `「${label}」をコレクションから削除しますか？`,
-      "トラックの削除",
-    );
-    if (!confirmed) return;
-    await runAction(async () => {
-      await rekordboxDeleteContent(content.id);
-      await handleRefresh();
-    });
-  }
+	const label = content.title ?? content.fileName ?? content.id;
+	const confirmed = await confirmDanger(
+		`「${label}」をコレクションから削除しますか？`,
+		"トラックの削除",
+	);
+	if (!confirmed) return;
+	await runAction(async () => {
+		await rekordboxDeleteContent(content.id);
+		await handleRefresh();
+	});
+}
 
-  async function handleBulkRemove(indices: number[]) {
-    await runAction(async () => {
-      if (browseMode === "playlist" && selectedPlaylistId) {
-        for (const index of indices) {
-          const content = contentAt(index);
-          if (!content?.songPlaylistId) continue;
-          await rekordboxRemoveFromPlaylist(
-            selectedPlaylistId,
-            content.songPlaylistId,
-          );
-        }
-        await loadPlaylistTracks(selectedPlaylistId);
-        return;
-      }
+async function _handleBulkRemove(indices: number[]) {
+	await runAction(async () => {
+		if (browseMode === "playlist" && selectedPlaylistId) {
+			for (const index of indices) {
+				const content = contentAt(index);
+				if (!content?.songPlaylistId) continue;
+				await rekordboxRemoveFromPlaylist(
+					selectedPlaylistId,
+					content.songPlaylistId,
+				);
+			}
+			await loadPlaylistTracks(selectedPlaylistId);
+			return;
+		}
 
-      for (const index of indices) {
-        const content = contentAt(index);
-        if (!content) continue;
-        await rekordboxDeleteContent(content.id);
-      }
-      await handleRefresh();
-    });
-  }
+		for (const index of indices) {
+			const content = contentAt(index);
+			if (!content) continue;
+			await rekordboxDeleteContent(content.id);
+		}
+		await handleRefresh();
+	});
+}
 
-  function openAddToPlaylist(content: RekordboxContent) {
-    if (normalPlaylists.length === 0) {
-      actionError = "追加先のプレイリストがありません";
-      return;
-    }
-    addToPlaylistTarget = content;
-    addToPlaylistOpen = true;
-  }
+function _openAddToPlaylist(content: RekordboxContent) {
+	if (normalPlaylists.length === 0) {
+		_actionError = "追加先のプレイリストがありません";
+		return;
+	}
+	addToPlaylistTarget = content;
+	_addToPlaylistOpen = true;
+}
 
-  async function confirmAddToPlaylist(playlist: RekordboxPlaylist) {
-    const content = addToPlaylistTarget;
-    addToPlaylistOpen = false;
-    addToPlaylistTarget = null;
-    if (!content) return;
-    await runAction(async () => {
-      await rekordboxAddToPlaylist(playlist.id, content.id);
-      if (selectedPlaylistId === playlist.id) {
-        await loadPlaylistTracks(playlist.id);
-      }
-    });
-  }
+async function _confirmAddToPlaylist(playlist: RekordboxPlaylist) {
+	const content = addToPlaylistTarget;
+	_addToPlaylistOpen = false;
+	addToPlaylistTarget = null;
+	if (!content) return;
+	await runAction(async () => {
+		await rekordboxAddToPlaylist(playlist.id, content.id);
+		if (selectedPlaylistId === playlist.id) {
+			await loadPlaylistTracks(playlist.id);
+		}
+	});
+}
 
-  async function handleMoveSong(delta: -1 | 1) {
-    if (!selectedPlaylistId || selectedDisplayId == null || selectedDisplayId < 0) {
-      return;
-    }
-    const content = contentAt(selectedDisplayId);
-    if (!content?.songPlaylistId) return;
-    const newTrackNo = selectedDisplayId + 1 + delta;
-    if (newTrackNo < 1 || newTrackNo > playlistTracks.length) return;
-    await runAction(async () => {
-      await rekordboxMoveSongInPlaylist(
-        selectedPlaylistId!,
-        content.songPlaylistId!,
-        newTrackNo,
-      );
-      await loadPlaylistTracks(selectedPlaylistId!);
-    });
-  }
+async function _handleMoveSong(delta: -1 | 1) {
+	if (
+		!selectedPlaylistId ||
+		selectedDisplayId == null ||
+		selectedDisplayId < 0
+	) {
+		return;
+	}
+	const content = contentAt(selectedDisplayId);
+	if (!content?.songPlaylistId) return;
+	const newTrackNo = selectedDisplayId + 1 + delta;
+	if (newTrackNo < 1 || newTrackNo > playlistTracks.length) return;
+	await runAction(async () => {
+		await rekordboxMoveSongInPlaylist(
+			selectedPlaylistId!,
+			content.songPlaylistId!,
+			newTrackNo,
+		);
+		await loadPlaylistTracks(selectedPlaylistId!);
+	});
+}
 
-  function openEdit(content: RekordboxContent) {
-    editTarget = content;
-    editForm = {
-      title: content.title ?? "",
-      artist: content.artist ?? "",
-      album: content.album ?? "",
-      genre: content.genre ?? "",
-      comment: content.comment ?? "",
-      bpm: content.bpm != null ? String(content.bpm) : "",
-      key: content.key ?? "",
-      rating: content.rating != null ? String(Math.round(content.rating / 51)) : "",
-    };
-    editOpen = true;
-  }
+function _openEdit(content: RekordboxContent) {
+	editTarget = content;
+	editForm = {
+		title: content.title ?? "",
+		artist: content.artist ?? "",
+		album: content.album ?? "",
+		genre: content.genre ?? "",
+		comment: content.comment ?? "",
+		bpm: content.bpm != null ? String(content.bpm) : "",
+		key: content.key ?? "",
+		rating:
+			content.rating != null ? String(Math.round(content.rating / 51)) : "",
+	};
+	_editOpen = true;
+}
 
-  async function saveEdit() {
-    if (!editTarget) return;
-    const fields: RekordboxContentUpdate = {
-      title: editForm.title,
-      artist: editForm.artist,
-      album: editForm.album,
-      genre: editForm.genre,
-      comment: editForm.comment,
-      key: editForm.key,
-    };
-    if (editForm.bpm.trim()) {
-      const bpm = Number.parseFloat(editForm.bpm);
-      if (!Number.isNaN(bpm)) fields.bpm = bpm;
-    }
-    if (editForm.rating.trim()) {
-      const rating = Number.parseInt(editForm.rating, 10);
-      if (!Number.isNaN(rating)) fields.rating = rating;
-    }
-    await runAction(async () => {
-      await rekordboxUpdateContent(editTarget!.id, fields);
-      editOpen = false;
-      editTarget = null;
-      await handleRefresh();
-    });
-  }
+async function _saveEdit() {
+	if (!editTarget) return;
+	const fields: RekordboxContentUpdate = {
+		title: editForm.title,
+		artist: editForm.artist,
+		album: editForm.album,
+		genre: editForm.genre,
+		comment: editForm.comment,
+		key: editForm.key,
+	};
+	if (editForm.bpm.trim()) {
+		const bpm = Number.parseFloat(editForm.bpm);
+		if (!Number.isNaN(bpm)) fields.bpm = bpm;
+	}
+	if (editForm.rating.trim()) {
+		const rating = Number.parseInt(editForm.rating, 10);
+		if (!Number.isNaN(rating)) fields.rating = rating;
+	}
+	await runAction(async () => {
+		await rekordboxUpdateContent(editTarget?.id, fields);
+		_editOpen = false;
+		editTarget = null;
+		await handleRefresh();
+	});
+}
 
-  function selectedContent(): RekordboxContent | null {
-    if (selectedDisplayId == null || selectedDisplayId < 0) return null;
-    return contentAt(selectedDisplayId);
-  }
+function _selectedContent(): RekordboxContent | null {
+	if (selectedDisplayId == null || selectedDisplayId < 0) return null;
+	return contentAt(selectedDisplayId);
+}
 </script>
 
 <div class="rekordbox-list">

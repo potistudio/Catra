@@ -1,269 +1,317 @@
 <script lang="ts">
-  import { playlistSetRule } from "$lib/api";
-  import type {
-    PlaylistNode,
-    Rule,
-    RuleField,
-    RuleOp,
-    SortRule,
-    TagAxis,
-  } from "$lib/types";
+import { playlistSetRule } from "$lib/api";
+import type {
+	PlaylistNode,
+	Rule,
+	RuleField,
+	RuleOp,
+	SortRule,
+	TagAxis,
+} from "$lib/types";
 
-  interface Props {
-    node: PlaylistNode;
-    nodes: PlaylistNode[];
-    axes: TagAxis[];
-    onclose: () => void;
-    onsaved: () => void;
-    onerror?: (message: string) => void;
-  }
+interface Props {
+	node: PlaylistNode;
+	nodes: PlaylistNode[];
+	axes: TagAxis[];
+	onclose: () => void;
+	onsaved: () => void;
+	onerror?: (message: string) => void;
+}
 
-  let { node, nodes, axes, onclose, onsaved, onerror }: Props = $props();
+let { node, nodes, axes, onclose, onsaved, onerror }: Props = $props();
 
-  type FieldType = "text" | "number" | "bool";
+type FieldType = "text" | "number" | "bool";
 
-  const FIELDS: Array<{ value: RuleField; label: string; type: FieldType }> = [
-    { value: "title", label: "タイトル", type: "text" },
-    { value: "artist", label: "アーティスト", type: "text" },
-    { value: "album", label: "アルバム", type: "text" },
-    { value: "genre", label: "ジャンル", type: "text" },
-    { value: "key", label: "キー", type: "text" },
-    { value: "source", label: "入手元", type: "text" },
-    { value: "path", label: "パス", type: "text" },
-    { value: "bpm", label: "BPM", type: "number" },
-    { value: "rating", label: "レート", type: "number" },
-    { value: "bitrateKbps", label: "ビットレート", type: "number" },
-    { value: "durationMs", label: "長さ (ミリ秒)", type: "number" },
-    { value: "addedAt", label: "追加時刻", type: "number" },
-    { value: "converted", label: "変換済み", type: "bool" },
-  ];
+const FIELDS: Array<{ value: RuleField; label: string; type: FieldType }> = [
+	{ value: "title", label: "タイトル", type: "text" },
+	{ value: "artist", label: "アーティスト", type: "text" },
+	{ value: "album", label: "アルバム", type: "text" },
+	{ value: "genre", label: "ジャンル", type: "text" },
+	{ value: "key", label: "キー", type: "text" },
+	{ value: "source", label: "入手元", type: "text" },
+	{ value: "path", label: "パス", type: "text" },
+	{ value: "bpm", label: "BPM", type: "number" },
+	{ value: "rating", label: "レート", type: "number" },
+	{ value: "bitrateKbps", label: "ビットレート", type: "number" },
+	{ value: "durationMs", label: "長さ (ミリ秒)", type: "number" },
+	{ value: "addedAt", label: "追加時刻", type: "number" },
+	{ value: "converted", label: "変換済み", type: "bool" },
+];
 
-  const OP_LABELS: Record<RuleOp, string> = {
-    eq: "が次と等しい",
-    ne: "が次と違う",
-    contains: "が次を含む",
-    startsWith: "が次で始まる",
-    endsWith: "が次で終わる",
-    between: "が次の範囲",
-    gt: "が次より大きい",
-    gte: "が次以上",
-    lt: "が次より小さい",
-    lte: "が次以下",
-    isNull: "が未設定",
-    isNotNull: "が設定済み",
-  };
+const _OP_LABELS: Record<RuleOp, string> = {
+	eq: "が次と等しい",
+	ne: "が次と違う",
+	contains: "が次を含む",
+	startsWith: "が次で始まる",
+	endsWith: "が次で終わる",
+	between: "が次の範囲",
+	gt: "が次より大きい",
+	gte: "が次以上",
+	lt: "が次より小さい",
+	lte: "が次以下",
+	isNull: "が未設定",
+	isNotNull: "が設定済み",
+};
 
-  const TEXT_OPS: RuleOp[] = [
-    "contains",
-    "eq",
-    "ne",
-    "startsWith",
-    "endsWith",
-    "isNull",
-    "isNotNull",
-  ];
-  const NUMBER_OPS: RuleOp[] = [
-    "eq",
-    "ne",
-    "gt",
-    "gte",
-    "lt",
-    "lte",
-    "between",
-    "isNull",
-    "isNotNull",
-  ];
-  const BOOL_OPS: RuleOp[] = ["eq"];
+const TEXT_OPS: RuleOp[] = [
+	"contains",
+	"eq",
+	"ne",
+	"startsWith",
+	"endsWith",
+	"isNull",
+	"isNotNull",
+];
+const NUMBER_OPS: RuleOp[] = [
+	"eq",
+	"ne",
+	"gt",
+	"gte",
+	"lt",
+	"lte",
+	"between",
+	"isNull",
+	"isNotNull",
+];
+const BOOL_OPS: RuleOp[] = ["eq"];
 
-  function typeOf(field: RuleField): FieldType {
-    return FIELDS.find((item) => item.value === field)?.type ?? "text";
-  }
+function typeOf(field: RuleField): FieldType {
+	return FIELDS.find((item) => item.value === field)?.type ?? "text";
+}
 
-  function opsFor(field: RuleField): RuleOp[] {
-    const type = typeOf(field);
-    if (type === "number") return NUMBER_OPS;
-    if (type === "bool") return BOOL_OPS;
-    return TEXT_OPS;
-  }
+function opsFor(field: RuleField): RuleOp[] {
+	const type = typeOf(field);
+	if (type === "number") return NUMBER_OPS;
+	if (type === "bool") return BOOL_OPS;
+	return TEXT_OPS;
+}
 
-  type TermDraft =
-    | {
-        kind: "field";
-        negate: boolean;
-        field: RuleField;
-        op: RuleOp;
-        value: string;
-        value2: string;
-      }
-    | { kind: "tag"; negate: boolean; tagId: number | null }
-    | { kind: "playlist"; negate: boolean; playlistId: number | null }
-    | { kind: "group"; negate: boolean; combinator: "all" | "any"; terms: TermDraft[] };
+type TermDraft =
+	| {
+			kind: "field";
+			negate: boolean;
+			field: RuleField;
+			op: RuleOp;
+			value: string;
+			value2: string;
+	  }
+	| { kind: "tag"; negate: boolean; tagId: number | null }
+	| { kind: "playlist"; negate: boolean; playlistId: number | null }
+	| {
+			kind: "group";
+			negate: boolean;
+			combinator: "all" | "any";
+			terms: TermDraft[];
+	  };
 
-  function emptyField(): TermDraft {
-    return { kind: "field", negate: false, field: "artist", op: "contains", value: "", value2: "" };
-  }
+function emptyField(): TermDraft {
+	return {
+		kind: "field",
+		negate: false,
+		field: "artist",
+		op: "contains",
+		value: "",
+		value2: "",
+	};
+}
 
-  /** 1つの項を読む。読めない形は捨てず、いちばん近い項にして見せる。 */
-  function parseTerm(rule: Rule, negate = false): TermDraft {
-    if ("not" in rule) return parseTerm(rule.not, !negate);
-    if ("all" in rule) {
-      return { kind: "group", negate, combinator: "all", terms: rule.all.map((r) => parseTerm(r)) };
-    }
-    if ("any" in rule) {
-      return { kind: "group", negate, combinator: "any", terms: rule.any.map((r) => parseTerm(r)) };
-    }
-    if ("tag" in rule) return { kind: "tag", negate, tagId: rule.tag };
-    if ("in_playlist" in rule) {
-      return { kind: "playlist", negate, playlistId: rule.in_playlist };
-    }
+/** 1つの項を読む。読めない形は捨てず、いちばん近い項にして見せる。 */
+function parseTerm(rule: Rule, negate = false): TermDraft {
+	if ("not" in rule) return parseTerm(rule.not, !negate);
+	if ("all" in rule) {
+		return {
+			kind: "group",
+			negate,
+			combinator: "all",
+			terms: rule.all.map((r) => parseTerm(r)),
+		};
+	}
+	if ("any" in rule) {
+		return {
+			kind: "group",
+			negate,
+			combinator: "any",
+			terms: rule.any.map((r) => parseTerm(r)),
+		};
+	}
+	if ("tag" in rule) return { kind: "tag", negate, tagId: rule.tag };
+	if ("in_playlist" in rule) {
+		return { kind: "playlist", negate, playlistId: rule.in_playlist };
+	}
 
-    const pair = Array.isArray(rule.value) ? rule.value : null;
-    return {
-      kind: "field",
-      negate,
-      field: rule.field,
-      op: rule.op,
-      value: pair ? String(pair[0]) : rule.value == null ? "" : String(rule.value),
-      value2: pair ? String(pair[1]) : "",
-    };
-  }
+	const pair = Array.isArray(rule.value) ? rule.value : null;
+	return {
+		kind: "field",
+		negate,
+		field: rule.field,
+		op: rule.op,
+		value: pair
+			? String(pair[0])
+			: rule.value == null
+				? ""
+				: String(rule.value),
+		value2: pair ? String(pair[1]) : "",
+	};
+}
 
-  function initialTerms(): TermDraft[] {
-    const rule = node.rule;
-    if (!rule) return [emptyField()];
-    if ("all" in rule) return rule.all.map((r) => parseTerm(r));
-    if ("any" in rule) return rule.any.map((r) => parseTerm(r));
-    return [parseTerm(rule)];
-  }
+function initialTerms(): TermDraft[] {
+	const rule = node.rule;
+	if (!rule) return [emptyField()];
+	if ("all" in rule) return rule.all.map((r) => parseTerm(r));
+	if ("any" in rule) return rule.any.map((r) => parseTerm(r));
+	return [parseTerm(rule)];
+}
 
-  function initialCombinator(): "all" | "any" {
-    const rule = node.rule;
-    if (rule && "any" in rule) return "any";
-    return "all";
-  }
+function initialCombinator(): "all" | "any" {
+	const rule = node.rule;
+	if (rule && "any" in rule) return "any";
+	return "all";
+}
 
-  /** 開いた時点の並び順。編集中は下書きが正で、node は見に行かない。 */
-  function initialSortColumn(): RuleField | "" {
-    return node.sortRule?.column ?? "";
-  }
+/** 開いた時点の並び順。編集中は下書きが正で、node は見に行かない。 */
+function initialSortColumn(): RuleField | "" {
+	return node.sortRule?.column ?? "";
+}
 
-  function initialSortDirection(): "asc" | "desc" {
-    return node.sortRule?.direction ?? "asc";
-  }
+function initialSortDirection(): "asc" | "desc" {
+	return node.sortRule?.direction ?? "asc";
+}
 
-  let combinator = $state<"all" | "any">(initialCombinator());
-  let terms = $state<TermDraft[]>(initialTerms());
-  let sortColumn = $state<RuleField | "">(initialSortColumn());
-  let sortDirection = $state<"asc" | "desc">(initialSortDirection());
-  let saving = $state(false);
-  let localError = $state<string | null>(null);
+let combinator = $state<"all" | "any">(initialCombinator());
+let terms = $state<TermDraft[]>(initialTerms());
+let sortColumn = $state<RuleField | "">(initialSortColumn());
+let sortDirection = $state<"asc" | "desc">(initialSortDirection());
+let _saving = $state(false);
+let _localError = $state<string | null>(null);
 
-  /** 自分を参照する規則は循環するので、選べる先から自分を外す。 */
-  let playlistOptions = $derived(nodes.filter((item) => item.id !== node.id));
+/** 自分を参照する規則は循環するので、選べる先から自分を外す。 */
+let _playlistOptions = $derived(nodes.filter((item) => item.id !== node.id));
 
-  function wrap(rule: Rule, negate: boolean): Rule {
-    return negate ? { not: rule } : rule;
-  }
+function wrap(rule: Rule, negate: boolean): Rule {
+	return negate ? { not: rule } : rule;
+}
 
-  function buildTerm(draft: TermDraft): Rule | null {
-    if (draft.kind === "group") {
-      const inner = draft.terms.map(buildTerm).filter((rule): rule is Rule => rule != null);
-      if (inner.length === 0) return null;
-      const group: Rule = draft.combinator === "all" ? { all: inner } : { any: inner };
-      return wrap(group, draft.negate);
-    }
+function buildTerm(draft: TermDraft): Rule | null {
+	if (draft.kind === "group") {
+		const inner = draft.terms
+			.map(buildTerm)
+			.filter((rule): rule is Rule => rule != null);
+		if (inner.length === 0) return null;
+		const group: Rule =
+			draft.combinator === "all" ? { all: inner } : { any: inner };
+		return wrap(group, draft.negate);
+	}
 
-    if (draft.kind === "tag") {
-      if (draft.tagId == null) return null;
-      return wrap({ tag: draft.tagId }, draft.negate);
-    }
+	if (draft.kind === "tag") {
+		if (draft.tagId == null) return null;
+		return wrap({ tag: draft.tagId }, draft.negate);
+	}
 
-    if (draft.kind === "playlist") {
-      if (draft.playlistId == null) return null;
-      return wrap({ in_playlist: draft.playlistId }, draft.negate);
-    }
+	if (draft.kind === "playlist") {
+		if (draft.playlistId == null) return null;
+		return wrap({ in_playlist: draft.playlistId }, draft.negate);
+	}
 
-    const type = typeOf(draft.field);
-    if (draft.op === "isNull" || draft.op === "isNotNull") {
-      return wrap({ field: draft.field, op: draft.op }, draft.negate);
-    }
+	const type = typeOf(draft.field);
+	if (draft.op === "isNull" || draft.op === "isNotNull") {
+		return wrap({ field: draft.field, op: draft.op }, draft.negate);
+	}
 
-    if (type === "bool") {
-      return wrap(
-        { field: draft.field, op: draft.op, value: draft.value === "true" },
-        draft.negate,
-      );
-    }
+	if (type === "bool") {
+		return wrap(
+			{ field: draft.field, op: draft.op, value: draft.value === "true" },
+			draft.negate,
+		);
+	}
 
-    if (type === "number") {
-      if (draft.op === "between") {
-        const low = Number(draft.value);
-        const high = Number(draft.value2);
-        if (!Number.isFinite(low) || !Number.isFinite(high)) return null;
-        return wrap({ field: draft.field, op: "between", value: [low, high] }, draft.negate);
-      }
-      const num = Number(draft.value);
-      if (draft.value.trim() === "" || !Number.isFinite(num)) return null;
-      return wrap({ field: draft.field, op: draft.op, value: num }, draft.negate);
-    }
+	if (type === "number") {
+		if (draft.op === "between") {
+			const low = Number(draft.value);
+			const high = Number(draft.value2);
+			if (!Number.isFinite(low) || !Number.isFinite(high)) return null;
+			return wrap(
+				{ field: draft.field, op: "between", value: [low, high] },
+				draft.negate,
+			);
+		}
+		const num = Number(draft.value);
+		if (draft.value.trim() === "" || !Number.isFinite(num)) return null;
+		return wrap({ field: draft.field, op: draft.op, value: num }, draft.negate);
+	}
 
-    if (draft.value.trim() === "") return null;
-    return wrap({ field: draft.field, op: draft.op, value: draft.value }, draft.negate);
-  }
+	if (draft.value.trim() === "") return null;
+	return wrap(
+		{ field: draft.field, op: draft.op, value: draft.value },
+		draft.negate,
+	);
+}
 
-  function buildRule(): Rule | null {
-    const built = terms.map(buildTerm).filter((rule): rule is Rule => rule != null);
-    if (built.length === 0) return null;
-    if (built.length === 1) return built[0];
-    return combinator === "all" ? { all: built } : { any: built };
-  }
+function buildRule(): Rule | null {
+	const built = terms
+		.map(buildTerm)
+		.filter((rule): rule is Rule => rule != null);
+	if (built.length === 0) return null;
+	if (built.length === 1) return built[0];
+	return combinator === "all" ? { all: built } : { any: built };
+}
 
-  function addTerm(list: TermDraft[], kind: TermDraft["kind"]) {
-    if (kind === "field") list.push(emptyField());
-    else if (kind === "tag") list.push({ kind: "tag", negate: false, tagId: null });
-    else if (kind === "playlist") list.push({ kind: "playlist", negate: false, playlistId: null });
-    else list.push({ kind: "group", negate: false, combinator: "any", terms: [emptyField()] });
-  }
+function _addTerm(list: TermDraft[], kind: TermDraft["kind"]) {
+	if (kind === "field") list.push(emptyField());
+	else if (kind === "tag")
+		list.push({ kind: "tag", negate: false, tagId: null });
+	else if (kind === "playlist")
+		list.push({ kind: "playlist", negate: false, playlistId: null });
+	else
+		list.push({
+			kind: "group",
+			negate: false,
+			combinator: "any",
+			terms: [emptyField()],
+		});
+}
 
-  function removeAt(list: TermDraft[], index: number) {
-    list.splice(index, 1);
-  }
+function _removeAt(list: TermDraft[], index: number) {
+	list.splice(index, 1);
+}
 
-  /** 種類を変えたら演算子も合わせる。文字列に「より大きい」は要らない。 */
-  function onFieldChange(draft: TermDraft) {
-    if (draft.kind !== "field") return;
-    const allowed = opsFor(draft.field);
-    if (!allowed.includes(draft.op)) draft.op = allowed[0];
-    if (typeOf(draft.field) === "bool") draft.value = draft.value === "true" ? "true" : "false";
-  }
+/** 種類を変えたら演算子も合わせる。文字列に「より大きい」は要らない。 */
+function _onFieldChange(draft: TermDraft) {
+	if (draft.kind !== "field") return;
+	const allowed = opsFor(draft.field);
+	if (!allowed.includes(draft.op)) draft.op = allowed[0];
+	if (typeOf(draft.field) === "bool")
+		draft.value = draft.value === "true" ? "true" : "false";
+}
 
-  async function save() {
-    saving = true;
-    localError = null;
-    try {
-      const rule = buildRule();
-      const sort: SortRule | null = sortColumn ? { column: sortColumn, direction: sortDirection } : null;
-      await playlistSetRule(node.id, rule, sort);
-      onsaved();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      localError = message;
-      onerror?.(message);
-    } finally {
-      saving = false;
-    }
-  }
+async function _save() {
+	_saving = true;
+	_localError = null;
+	try {
+		const rule = buildRule();
+		const sort: SortRule | null = sortColumn
+			? { column: sortColumn, direction: sortDirection }
+			: null;
+		await playlistSetRule(node.id, rule, sort);
+		onsaved();
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		_localError = message;
+		onerror?.(message);
+	} finally {
+		_saving = false;
+	}
+}
 
-  let backdropDismissArmed = false;
+let backdropDismissArmed = false;
 
-  function onBackdropPointerDown(event: PointerEvent) {
-    backdropDismissArmed = event.target === event.currentTarget;
-  }
+function _onBackdropPointerDown(event: PointerEvent) {
+	backdropDismissArmed = event.target === event.currentTarget;
+}
 
-  function onBackdropPointerUp(event: PointerEvent) {
-    if (backdropDismissArmed && event.target === event.currentTarget) onclose();
-    backdropDismissArmed = false;
-  }
+function _onBackdropPointerUp(event: PointerEvent) {
+	if (backdropDismissArmed && event.target === event.currentTarget) onclose();
+	backdropDismissArmed = false;
+}
 </script>
 
 {#snippet termRow(draft: TermDraft, list: TermDraft[], index: number, nested: boolean)}

@@ -1,35 +1,35 @@
 <script lang="ts">
-  interface Props {
-    checked: boolean;
-    indeterminate?: boolean;
-    label: string;
-    title?: string;
-    variant?: "default" | "overlay";
-    onToggle: () => void;
-  }
+interface Props {
+	checked: boolean;
+	indeterminate?: boolean;
+	label: string;
+	title?: string;
+	variant?: "default" | "overlay";
+	onToggle: () => void;
+}
 
-  let {
-    checked,
-    indeterminate = false,
-    label,
-    title,
-    variant = "default",
-    onToggle,
-  }: Props = $props();
+let {
+	checked,
+	indeterminate = false,
+	label,
+	title,
+	variant = "default",
+	onToggle,
+}: Props = $props();
 
-  let inputEl = $state<HTMLInputElement | null>(null);
+let inputEl = $state<HTMLInputElement | null>(null);
 
-  $effect(() => {
-    if (inputEl) {
-      inputEl.indeterminate = indeterminate && !checked;
-    }
-  });
+$effect(() => {
+	if (inputEl) {
+		inputEl.indeterminate = indeterminate && !checked;
+	}
+});
 
-  function handleClick(event: MouseEvent) {
-    event.preventDefault();
-    event.stopPropagation();
-    onToggle();
-  }
+function _handleClick(event: MouseEvent) {
+	event.preventDefault();
+	event.stopPropagation();
+	onToggle();
+}
 </script>
 
 <label

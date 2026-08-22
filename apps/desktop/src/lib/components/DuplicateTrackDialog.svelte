@@ -1,27 +1,16 @@
 <script lang="ts">
-  import TrackArtwork from "$lib/components/TrackArtwork.svelte";
-  import TrackConvertedBadge from "$lib/components/TrackConvertedBadge.svelte";
-  import TrackSourceBadge from "$lib/components/TrackSourceBadge.svelte";
-  import {
-    displayArtist,
-    displayTitle,
-    displayValue,
-    formatBitrate,
-    formatBpm,
-    formatDuration,
-  } from "$lib/format";
-  import { isTrackSource } from "$lib/trackSource";
-  import type { DuplicateChoice, DuplicateFoundPayload } from "$lib/types";
+import { displayTitle } from "$lib/format";
+import type { DuplicateChoice, DuplicateFoundPayload } from "$lib/types";
 
-  interface Props {
-    payload: DuplicateFoundPayload;
-    onchoose: (choice: DuplicateChoice) => void | Promise<void>;
-  }
+interface Props {
+	payload: DuplicateFoundPayload;
+	onchoose: (choice: DuplicateChoice) => void | Promise<void>;
+}
 
-  let { payload, onchoose }: Props = $props();
+let { payload, onchoose }: Props = $props();
 
-  const existingTitle = $derived(displayTitle(payload.existing));
-  const candidateTitle = $derived(displayTitle(payload.candidate));
+const _existingTitle = $derived(displayTitle(payload.existing));
+const _candidateTitle = $derived(displayTitle(payload.candidate));
 </script>
 
 <div class="backdrop" role="presentation">

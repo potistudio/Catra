@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { audioFormatLabel } from "$lib/format";
+import { audioFormatLabel } from "$lib/format";
 
-  interface Props {
-    path: string;
-  }
+interface Props {
+	path: string;
+}
 
-  let { path }: Props = $props();
+let { path }: Props = $props();
 
-  const format = $derived(audioFormatLabel(path));
-  const label = $derived(format ? `変換済み · ${format}` : "変換済み");
+const format = $derived(audioFormatLabel(path));
+const _label = $derived(format ? `変換済み · ${format}` : "変換済み");
 </script>
 
 <span class="converted-badge" title={label} aria-label={label}>変換済み</span>
