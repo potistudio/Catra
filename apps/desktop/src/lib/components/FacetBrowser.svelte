@@ -16,7 +16,7 @@ interface Props {
 let { field, value, active, onselect, onclear, onchanged, onerror }: Props =
 	$props();
 
-const _FIELDS: Array<{ value: FacetField; label: string }> = [
+const FIELDS: Array<{ value: FacetField; label: string }> = [
 	{ value: "album", label: "アルバム" },
 	{ value: "artist", label: "アーティスト" },
 	{ value: "genre", label: "ジャンル" },
@@ -24,22 +24,22 @@ const _FIELDS: Array<{ value: FacetField; label: string }> = [
 	{ value: "source", label: "入手元" },
 ];
 
-let _values = $state<FacetValue[]>([]);
-let _loading = $state(false);
+let values = $state<FacetValue[]>([]);
+let loading = $state(false);
 
 $effect(() => {
 	const target = field;
-	_loading = true;
+	loading = true;
 	let alive = true;
 	void browseFacet(target)
 		.then((rows) => {
-			if (alive) _values = rows;
+			if (alive) values = rows;
 		})
 		.catch((error) =>
 			onerror?.(error instanceof Error ? error.message : String(error)),
 		)
 		.finally(() => {
-			if (alive) _loading = false;
+			if (alive) loading = false;
 		});
 
 	return () => {
@@ -52,7 +52,7 @@ function label(item: FacetValue): string {
 }
 
 /** 眺めるための束を、持ち物としての集合に上げる。 */
-async function _promote(item: FacetValue) {
+async function promote(item: FacetValue) {
 	const rule: Rule =
 		item.value == null
 			? { field: field as RuleField, op: "isNull" }

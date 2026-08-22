@@ -4,13 +4,14 @@ import {
 	clearActivityLogs,
 	consolePanel,
 	pushActivityLog,
+	setConsoleOpen,
 } from "$lib/activityLog.svelte";
 import type { ActivityLogLevel } from "$lib/types";
 
 let logContainer: HTMLDivElement | undefined = $state();
 
 const logs = $derived(activityLogs);
-const _errorCount = $derived(
+const errorCount = $derived(
 	logs.filter((entry) => entry.level === "error").length,
 );
 
@@ -19,7 +20,7 @@ $effect(() => {
 	logContainer.scrollTop = logContainer.scrollHeight;
 });
 
-function _formatTime(timestamp: number): string {
+function formatTime(timestamp: number): string {
 	return new Date(timestamp).toLocaleTimeString("ja-JP", {
 		hour: "2-digit",
 		minute: "2-digit",
@@ -27,7 +28,7 @@ function _formatTime(timestamp: number): string {
 	});
 }
 
-function _levelLabel(level: ActivityLogLevel): string {
+function levelLabel(level: ActivityLogLevel): string {
 	switch (level) {
 		case "success":
 			return "SUCCESS";
@@ -40,7 +41,7 @@ function _levelLabel(level: ActivityLogLevel): string {
 	}
 }
 
-function _handleClear() {
+function handleClear() {
 	clearActivityLogs();
 	pushActivityLog("info", "コンソールをクリアしました");
 }

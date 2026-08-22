@@ -1,5 +1,6 @@
 <script lang="ts">
 import { ask } from "@tauri-apps/plugin-dialog";
+import RuleEditor from "$lib/components/RuleEditor.svelte";
 import {
 	playlistCreate,
 	playlistDelete,
@@ -41,7 +42,7 @@ let {
 	ondroptracks,
 }: Props = $props();
 
-const _KIND_ICON: Record<PlaylistKind, string> = {
+const KIND_ICON: Record<PlaylistKind, string> = {
 	folder: "🗀",
 	static: "≡",
 	smart: "✦",
@@ -53,7 +54,7 @@ const KIND_LABEL: Record<PlaylistKind, string> = {
 	smart: "スマートプレイリスト",
 };
 
-let _rows = $derived(playlistTreeRows(nodes, expandedIds));
+let rows = $derived(playlistTreeRows(nodes, expandedIds));
 
 function fail(error: unknown) {
 	onerror?.(error instanceof Error ? error.message : String(error));
@@ -61,8 +62,8 @@ function fail(error: unknown) {
 
 // ---- 名前の入力
 
-let _promptOpen = $state(false);
-let _promptTitle = $state("");
+let promptOpen = $state(false);
+let promptTitle = $state("");
 let promptValue = $state("");
 let promptAction: ((name: string) => Promise<void>) | null = null;
 
@@ -71,17 +72,17 @@ function openPrompt(
 	initial: string,
 	action: (name: string) => Promise<void>,
 ) {
-	_promptTitle = title;
+	promptTitle = title;
 	promptValue = initial;
 	promptAction = action;
-	_promptOpen = true;
+	promptOpen = true;
 }
 
-async function _submitPrompt() {
+async function submitPrompt() {
 	const name = promptValue.trim();
 	if (!name || !promptAction) return;
 	const action = promptAction;
-	_promptOpen = false;
+	promptOpen = false;
 	promptAction = null;
 	try {
 		await action(name);
@@ -98,19 +99,19 @@ function parentForNew(): number | null {
 	return selected.kind === "folder" ? selected.id : selected.parentId;
 }
 
-function _startCreate(kind: PlaylistKind) {
+function startCreate(kind: PlaylistKind) {
 	openPrompt(`新しい${KIND_LABEL[kind]}`, "", async (name) => {
 		await playlistCreate(name, parentForNew(), kind);
 	});
 }
 
-function _startRename(node: PlaylistNode) {
+function startRename(node: PlaylistNode) {
 	openPrompt("名前を変更", node.name, async (name) => {
 		await playlistRename(node.id, name);
 	});
 }
 
-async function _startDelete(node: PlaylistNode) {
+async function startDelete(node: PlaylistNode) {
 	try {
 		const impact = await playlistDeleteImpact(node.id);
 		const lines = [`「${node.name}」を削除しますか？`];
@@ -140,24 +141,24 @@ async function _startDelete(node: PlaylistNode) {
 
 // ---- 規則エディタ
 
-let _ruleTarget = $state<PlaylistNode | null>(null);
+let ruleTarget = $state<PlaylistNode | null>(null);
 
 // ---- ドラッグ
 
 type DropSpot = "before" | "into" | "after";
 
 let dragId = $state<number | null>(null);
-let _dropId = $state<number | null>(null);
+let dropId = $state<number | null>(null);
 let dropSpot = $state<DropSpot>("into");
-let _trackDropId = $state<number | null>(null);
+let trackDropId = $state<number | null>(null);
 
 function clearDrag() {
 	dragId = null;
-	_dropId = null;
-	_trackDropId = null;
+	dropId = null;
+	trackDropId = null;
 }
 
-function _handleNodeDragStart(node: PlaylistNode, event: DragEvent) {
+function handleNodeDragStart(node: PlaylistNode, event: DragEvent) {
 	dragId = node.id;
 	if (event.dataTransfer) {
 		event.dataTransfer.effectAllowed = "move";
@@ -174,13 +175,13 @@ function spotFor(node: PlaylistNode, event: DragEvent): DropSpot {
 	return "into";
 }
 
-function _handleRowDragOver(node: PlaylistNode, event: DragEvent) {
+function handleRowDragOver(node: PlaylistNode, event: DragEvent) {
 	if (hasTrackDrag(event)) {
 		// 曲を受けられるのは列だけ。フォルダとスマートは外延を自分で決められない。
 		if (node.kind !== "static") return;
 		event.preventDefault();
 		if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
-		_trackDropId = node.id;
+		trackDropId = node.id;
 		return;
 	}
 
@@ -190,11 +191,11 @@ function _handleRowDragOver(node: PlaylistNode, event: DragEvent) {
 	if (spot !== "into" && !canDropInto(nodes, dragId, node.parentId)) return;
 	event.preventDefault();
 	if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-	_dropId = node.id;
+	dropId = node.id;
 	dropSpot = spot;
 }
 
-async function _handleRowDrop(node: PlaylistNode, event: DragEvent) {
+async function handleRowDrop(node: PlaylistNode, event: DragEvent) {
 	if (hasTrackDrag(event)) {
 		if (node.kind !== "static") return;
 		event.preventDefault();
@@ -235,7 +236,7 @@ async function _handleRowDrop(node: PlaylistNode, event: DragEvent) {
 }
 
 /** 根に落とす。木のいちばん外側へ出す道。 */
-async function _handleRootDrop(event: DragEvent) {
+async function handleRootDrop(event: DragEvent) {
 	if (dragId == null || hasTrackDrag(event)) return;
 	event.preventDefault();
 	const moving = dragId;
@@ -251,11 +252,11 @@ async function _handleRootDrop(event: DragEvent) {
 
 let backdropDismissArmed = false;
 
-function _onBackdropPointerDown(event: PointerEvent) {
+function onBackdropPointerDown(event: PointerEvent) {
 	backdropDismissArmed = event.target === event.currentTarget;
 }
 
-function _onBackdropPointerUp(event: PointerEvent, close: () => void) {
+function onBackdropPointerUp(event: PointerEvent, close: () => void) {
 	if (backdropDismissArmed && event.target === event.currentTarget) close();
 	backdropDismissArmed = false;
 }

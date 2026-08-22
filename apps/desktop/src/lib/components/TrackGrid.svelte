@@ -1,11 +1,14 @@
 <script lang="ts">
+import TrackCard from "$lib/components/TrackCard.svelte";
+import type { Track } from "$lib/types";
+import { isInRekordbox } from "$lib/rekordboxMembership";
 import {
 	getGridColumnCount,
 	getVisibleGridRange,
+	TRACK_GRID_GAP,
 	TRACK_GRID_ROW_HEIGHT,
 	type TrackListRow,
 } from "$lib/trackListView";
-import type { Track } from "$lib/types";
 
 interface Props {
 	rows: TrackListRow[];
@@ -59,12 +62,12 @@ let columnCount = $derived(getGridColumnCount(containerWidth));
 let visibleRange = $derived(
 	getVisibleGridRange(scrollTop, viewportHeight, columnCount, rows.length),
 );
-let _visibleRows = $derived(rows.slice(visibleRange.start, visibleRange.end));
+let visibleRows = $derived(rows.slice(visibleRange.start, visibleRange.end));
 let rowCount = $derived(Math.ceil(rows.length / columnCount));
-let _totalBodyHeight = $derived(rowCount * TRACK_GRID_ROW_HEIGHT);
-let _bodyOffsetY = $derived(visibleRange.startRow * TRACK_GRID_ROW_HEIGHT);
+let totalBodyHeight = $derived(rowCount * TRACK_GRID_ROW_HEIGHT);
+let bodyOffsetY = $derived(visibleRange.startRow * TRACK_GRID_ROW_HEIGHT);
 
-function _handleScroll(event: Event) {
+function handleScroll(event: Event) {
 	scrollTop = (event.currentTarget as HTMLDivElement).scrollTop;
 }
 </script>

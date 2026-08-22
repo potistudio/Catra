@@ -1,13 +1,17 @@
 <script lang="ts">
-import { activityLogs } from "$lib/activityLog.svelte";
+import {
+	activityLogs,
+	consolePanel,
+	toggleConsole,
+} from "$lib/activityLog.svelte";
 import type { ActivityLogLevel } from "$lib/types";
 
-const _latest = $derived(activityLogs.at(-1) ?? null);
-const _errorCount = $derived(
+const latest = $derived(activityLogs.at(-1) ?? null);
+const errorCount = $derived(
 	activityLogs.filter((entry) => entry.level === "error").length,
 );
 
-function _levelLabel(level: ActivityLogLevel): string {
+function levelLabel(level: ActivityLogLevel): string {
 	switch (level) {
 		case "success":
 			return "OK";

@@ -38,7 +38,7 @@ const FIELDS: Array<{ value: RuleField; label: string; type: FieldType }> = [
 	{ value: "converted", label: "変換済み", type: "bool" },
 ];
 
-const _OP_LABELS: Record<RuleOp, string> = {
+const OP_LABELS: Record<RuleOp, string> = {
 	eq: "が次と等しい",
 	ne: "が次と違う",
 	contains: "が次を含む",
@@ -181,11 +181,11 @@ let combinator = $state<"all" | "any">(initialCombinator());
 let terms = $state<TermDraft[]>(initialTerms());
 let sortColumn = $state<RuleField | "">(initialSortColumn());
 let sortDirection = $state<"asc" | "desc">(initialSortDirection());
-let _saving = $state(false);
-let _localError = $state<string | null>(null);
+let saving = $state(false);
+let localError = $state<string | null>(null);
 
 /** 自分を参照する規則は循環するので、選べる先から自分を外す。 */
-let _playlistOptions = $derived(nodes.filter((item) => item.id !== node.id));
+let playlistOptions = $derived(nodes.filter((item) => item.id !== node.id));
 
 function wrap(rule: Rule, negate: boolean): Rule {
 	return negate ? { not: rule } : rule;
@@ -255,7 +255,7 @@ function buildRule(): Rule | null {
 	return combinator === "all" ? { all: built } : { any: built };
 }
 
-function _addTerm(list: TermDraft[], kind: TermDraft["kind"]) {
+function addTerm(list: TermDraft[], kind: TermDraft["kind"]) {
 	if (kind === "field") list.push(emptyField());
 	else if (kind === "tag")
 		list.push({ kind: "tag", negate: false, tagId: null });
@@ -270,12 +270,12 @@ function _addTerm(list: TermDraft[], kind: TermDraft["kind"]) {
 		});
 }
 
-function _removeAt(list: TermDraft[], index: number) {
+function removeAt(list: TermDraft[], index: number) {
 	list.splice(index, 1);
 }
 
 /** 種類を変えたら演算子も合わせる。文字列に「より大きい」は要らない。 */
-function _onFieldChange(draft: TermDraft) {
+function onFieldChange(draft: TermDraft) {
 	if (draft.kind !== "field") return;
 	const allowed = opsFor(draft.field);
 	if (!allowed.includes(draft.op)) draft.op = allowed[0];
@@ -283,9 +283,9 @@ function _onFieldChange(draft: TermDraft) {
 		draft.value = draft.value === "true" ? "true" : "false";
 }
 
-async function _save() {
-	_saving = true;
-	_localError = null;
+async function save() {
+	saving = true;
+	localError = null;
 	try {
 		const rule = buildRule();
 		const sort: SortRule | null = sortColumn
@@ -295,20 +295,20 @@ async function _save() {
 		onsaved();
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
-		_localError = message;
+		localError = message;
 		onerror?.(message);
 	} finally {
-		_saving = false;
+		saving = false;
 	}
 }
 
 let backdropDismissArmed = false;
 
-function _onBackdropPointerDown(event: PointerEvent) {
+function onBackdropPointerDown(event: PointerEvent) {
 	backdropDismissArmed = event.target === event.currentTarget;
 }
 
-function _onBackdropPointerUp(event: PointerEvent) {
+function onBackdropPointerUp(event: PointerEvent) {
 	if (backdropDismissArmed && event.target === event.currentTarget) onclose();
 	backdropDismissArmed = false;
 }

@@ -1,6 +1,16 @@
 <script lang="ts">
 import { convertFileSrc } from "@tauri-apps/api/core";
+import TrackArtwork from "$lib/components/TrackArtwork.svelte";
 import type { PreviewableTrack } from "$lib/types";
+import {
+	displayArtist,
+	displayTitle,
+	displayValue,
+	formatBitrate,
+	formatBpm,
+	formatDuration,
+	formatRating,
+} from "$lib/format";
 
 interface Props {
 	track: PreviewableTrack | null;
@@ -12,8 +22,8 @@ let { track, autoplayToken = 0 }: Props = $props();
 
 let audioEl: HTMLAudioElement | undefined = $state();
 let isPlaying = $state(false);
-let _currentTime = $state(0);
-let _duration = $state(0);
+let currentTime = $state(0);
+let duration = $state(0);
 let audioSrc = $state<string | null>(null);
 let pendingAutoplay = $state(false);
 let lastAutoplayToken = 0;
@@ -23,8 +33,8 @@ $effect(() => {
 	if (!track) {
 		audioSrc = null;
 		isPlaying = false;
-		_currentTime = 0;
-		_duration = 0;
+		currentTime = 0;
+		duration = 0;
 		pendingAutoplay = false;
 		lastPath = null;
 		return;
@@ -42,20 +52,20 @@ $effect(() => {
 		// 発火しない。だから即再生できるケースはここを通さない。
 		audioSrc = convertFileSrc(track.path);
 		isPlaying = false;
-		_currentTime = 0;
-		_duration = track.durationMs ? track.durationMs / 1000 : 0;
+		currentTime = 0;
+		duration = track.durationMs ? track.durationMs / 1000 : 0;
 		pendingAutoplay = shouldAutoplay;
 		return;
 	}
 
 	if (shouldAutoplay && audioEl) {
-		_currentTime = 0;
+		currentTime = 0;
 		audioEl.currentTime = 0;
 		void audioEl.play();
 	}
 });
 
-function _togglePlay() {
+function togglePlay() {
 	if (!audioEl || !audioSrc) return;
 
 	if (isPlaying) {
@@ -65,15 +75,15 @@ function _togglePlay() {
 	}
 }
 
-function _handleTimeUpdate() {
+function handleTimeUpdate() {
 	if (!audioEl) return;
-	_currentTime = audioEl.currentTime;
+	currentTime = audioEl.currentTime;
 }
 
-function _handleLoadedMetadata() {
+function handleLoadedMetadata() {
 	if (!audioEl) return;
 	if (Number.isFinite(audioEl.duration)) {
-		_duration = audioEl.duration;
+		duration = audioEl.duration;
 	}
 	if (pendingAutoplay) {
 		pendingAutoplay = false;
@@ -81,16 +91,16 @@ function _handleLoadedMetadata() {
 	}
 }
 
-function _handleSeek(event: Event) {
+function handleSeek(event: Event) {
 	if (!audioEl) return;
 	const input = event.target as HTMLInputElement;
 	audioEl.currentTime = Number(input.value);
-	_currentTime = audioEl.currentTime;
+	currentTime = audioEl.currentTime;
 }
 
-function _handleEnded() {
+function handleEnded() {
 	isPlaying = false;
-	_currentTime = 0;
+	currentTime = 0;
 	if (audioEl) {
 		audioEl.currentTime = 0;
 	}

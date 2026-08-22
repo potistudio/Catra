@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { ConvertFormat, ConvertOptions } from "$lib/types";
 
-const _FORMATS: { value: ConvertFormat; label: string }[] = [
+const FORMATS: { value: ConvertFormat; label: string }[] = [
 	{ value: "mp3", label: "MP3" },
 	{ value: "aac", label: "AAC (M4A)" },
 	{ value: "flac", label: "FLAC" },
@@ -11,7 +11,7 @@ const _FORMATS: { value: ConvertFormat; label: string }[] = [
 	{ value: "opus", label: "Opus" },
 ];
 
-const _BITRATES = [128, 192, 256, 320];
+const BITRATES = [128, 192, 256, 320];
 const LOSSY_FORMATS = new Set<ConvertFormat>(["mp3", "aac", "ogg", "opus"]);
 
 interface Props {
@@ -40,18 +40,18 @@ let backdropDismissArmed = $state(false);
 
 let lossy = $derived(LOSSY_FORMATS.has(format));
 
-function _onBackdropPointerDown(event: PointerEvent) {
+function onBackdropPointerDown(event: PointerEvent) {
 	backdropDismissArmed = event.target === event.currentTarget;
 }
 
-function _onBackdropPointerUp(event: PointerEvent) {
+function onBackdropPointerUp(event: PointerEvent) {
 	if (backdropDismissArmed && event.target === event.currentTarget) {
 		oncancel();
 	}
 	backdropDismissArmed = false;
 }
 
-function _submit() {
+function submit() {
 	const options: ConvertOptions = {
 		format,
 		bitrateKbps: lossy ? Number(bitrateKbps) : null,

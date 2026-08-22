@@ -80,7 +80,7 @@ function stateOf(tag: Tag): TagState {
 	return count === selectedTracks.length ? "all" : "some";
 }
 
-async function _toggleAssign(_axis: TagAxis, tag: Tag) {
+async function toggleAssign(axis: TagAxis, tag: Tag) {
 	if (selectedTracks.length === 0) return;
 	const ids = selectedTracks.map((track) => track.id);
 	try {
@@ -105,9 +105,9 @@ async function _toggleAssign(_axis: TagAxis, tag: Tag) {
 
 // ---- 絞り込み
 
-let _activeSet = $derived(new Set(activeTagIds));
+let activeSet = $derived(new Set(activeTagIds));
 
-function _toggleFilter(tag: Tag) {
+function toggleFilter(tag: Tag) {
 	const next = new Set(activeTagIds);
 	if (next.has(tag.id)) next.delete(tag.id);
 	else next.add(tag.id);
@@ -115,7 +115,7 @@ function _toggleFilter(tag: Tag) {
 }
 
 /** 絞り込みを集合層へ上げる。軸をまたいだ選択は AND で効く。 */
-async function _promoteFilter() {
+async function promoteFilter() {
 	if (activeTagIds.length === 0) return;
 	const names = activeTagIds
 		.map(
@@ -142,8 +142,8 @@ async function _promoteFilter() {
 
 // ---- 軸とタグの手入れ
 
-let _promptOpen = $state(false);
-let _promptTitle = $state("");
+let promptOpen = $state(false);
+let promptTitle = $state("");
 let promptValue = $state("");
 let promptAction: ((name: string) => Promise<void>) | null = null;
 
@@ -152,17 +152,17 @@ function openPrompt(
 	initial: string,
 	action: (name: string) => Promise<void>,
 ) {
-	_promptTitle = title;
+	promptTitle = title;
 	promptValue = initial;
 	promptAction = action;
-	_promptOpen = true;
+	promptOpen = true;
 }
 
-async function _submitPrompt() {
+async function submitPrompt() {
 	const name = promptValue.trim();
 	if (!name || !promptAction) return;
 	const action = promptAction;
-	_promptOpen = false;
+	promptOpen = false;
 	promptAction = null;
 	try {
 		await action(name);
@@ -172,32 +172,32 @@ async function _submitPrompt() {
 	}
 }
 
-function _startCreateAxis() {
+function startCreateAxis() {
 	openPrompt("新しい軸", "", async (name) => {
 		await tagCreateAxis(name, "multi");
 	});
 }
 
-function _startRenameAxis(axis: TagAxis) {
+function startRenameAxis(axis: TagAxis) {
 	openPrompt("軸の名前を変更", axis.name, async (name) => {
 		await tagUpdateAxis(axis.id, name, null);
 	});
 }
 
-function _startCreateTag(axis: TagAxis) {
+function startCreateTag(axis: TagAxis) {
 	openPrompt(`${axis.name} に新しいタグ`, "", async (name) => {
 		await tagCreate(axis.id, name);
 	});
 }
 
-function _startRenameTag(tag: Tag) {
+function startRenameTag(tag: Tag) {
 	openPrompt("タグの名前を変更", tag.name, async (name) => {
 		await tagRename(tag.id, name);
 	});
 }
 
 /** multi から single に落とすときだけ、はみ出す曲の数を先に見せる。 */
-async function _changeSelection(axis: TagAxis, selection: "single" | "multi") {
+async function changeSelection(axis: TagAxis, selection: "single" | "multi") {
 	if (selection === axis.selection) return;
 	try {
 		if (selection === "single") {
@@ -217,7 +217,7 @@ async function _changeSelection(axis: TagAxis, selection: "single" | "multi") {
 	}
 }
 
-async function _deleteAxis(axis: TagAxis) {
+async function deleteAxis(axis: TagAxis) {
 	const confirmed = await ask(
 		`軸「${axis.name}」と、その中の ${axis.tags.length} 個のタグを消しますか？曲は消えません。`,
 		{ title: "軸の削除", kind: "warning" },
@@ -234,7 +234,7 @@ async function _deleteAxis(axis: TagAxis) {
 	}
 }
 
-async function _deleteTag(tag: Tag) {
+async function deleteTag(tag: Tag) {
 	const confirmed = await ask(
 		`タグ「${tag.name}」を消しますか？曲は消えません。`,
 		{
@@ -254,20 +254,20 @@ async function _deleteTag(tag: Tag) {
 
 // ---- 曲をタグに落とす
 
-let _dropTagId = $state<number | null>(null);
+let dropTagId = $state<number | null>(null);
 
-function _handleTagDragOver(tag: Tag, event: DragEvent) {
+function handleTagDragOver(tag: Tag, event: DragEvent) {
 	if (!hasTrackDrag(event)) return;
 	event.preventDefault();
 	if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
-	_dropTagId = tag.id;
+	dropTagId = tag.id;
 }
 
-async function _handleTagDrop(tag: Tag, event: DragEvent) {
+async function handleTagDrop(tag: Tag, event: DragEvent) {
 	if (!hasTrackDrag(event)) return;
 	event.preventDefault();
 	const trackIds = [...new Set(readTrackDrag(event))];
-	_dropTagId = null;
+	dropTagId = null;
 	if (trackIds.length === 0) return;
 	try {
 		await tagAssign(trackIds, [tag.id]);
@@ -279,13 +279,13 @@ async function _handleTagDrop(tag: Tag, event: DragEvent) {
 
 let backdropDismissArmed = false;
 
-function _onBackdropPointerDown(event: PointerEvent) {
+function onBackdropPointerDown(event: PointerEvent) {
 	backdropDismissArmed = event.target === event.currentTarget;
 }
 
-function _onBackdropPointerUp(event: PointerEvent) {
+function onBackdropPointerUp(event: PointerEvent) {
 	if (backdropDismissArmed && event.target === event.currentTarget)
-		_promptOpen = false;
+		promptOpen = false;
 	backdropDismissArmed = false;
 }
 </script>

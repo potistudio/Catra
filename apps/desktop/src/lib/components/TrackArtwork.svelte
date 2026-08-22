@@ -9,7 +9,7 @@ interface Props {
 
 let { artworkPath, title, size = 40 }: Props = $props();
 
-let _src = $derived(artworkPath ? convertFileSrc(artworkPath) : null);
+let src = $derived(artworkPath ? convertFileSrc(artworkPath) : null);
 </script>
 
 <div class="artwork" style:width="{size}px" style:height="{size}px">

@@ -1,21 +1,24 @@
 <script lang="ts">
-import { ask } from "@tauri-apps/plugin-dialog";
 import type { Snippet } from "svelte";
+import { ask } from "@tauri-apps/plugin-dialog";
+import SelectionCheckbox from "$lib/components/SelectionCheckbox.svelte";
+import TrackGrid from "$lib/components/TrackGrid.svelte";
+import TrackRow from "$lib/components/TrackRow.svelte";
 import { appSession, persistAppSession } from "$lib/appSession.svelte";
+import type { PlaylistEntry, Track } from "$lib/types";
 import { isInRekordbox } from "$lib/rekordboxMembership";
 import { writeTrackDrag } from "$lib/trackDrag";
 import {
 	filterRows,
 	getVisibleTrackRange,
 	rowsFromTracks,
-	type SortColumn,
-	type SortDirection,
 	sortRows,
 	TRACK_ROW_HEIGHT,
+	type SortColumn,
+	type SortDirection,
 	type TrackListRow,
 	type ViewMode,
 } from "$lib/trackListView";
-import type { PlaylistEntry, Track } from "$lib/types";
 
 const SORT_LABELS: Record<SortColumn, string> = {
 	position: "列の順番",
@@ -120,7 +123,7 @@ let {
 let commandBarMode = $derived(
 	!!rekordboxPathIndex && (!!onAddToRekordbox || !!onRemoveFromRekordbox),
 );
-let _showRowRemove = $derived(!commandBarMode && !readonly && !!onremove);
+let showRowRemove = $derived(!commandBarMode && !readonly && !!onremove);
 
 const listSession =
 	sessionScope === "rekordbox"
@@ -194,7 +197,7 @@ let allRows = $derived.by<TrackListRow[]>(() => {
 let isSequence = $derived(
 	!!entries && entries.length > 0 && entries[0].entryId != null,
 );
-let _sourceCount = $derived(entries ? entries.length : tracks.length);
+let sourceCount = $derived(entries ? entries.length : tracks.length);
 
 let searched = $derived(filterRows(allRows, query));
 let membershipFiltered = $derived.by(() => {
@@ -229,9 +232,9 @@ let visibleRange = $derived(
 	getVisibleTrackRange(scrollTop, viewportHeight, sorted.length),
 );
 
-let _visibleRows = $derived(sorted.slice(visibleRange.start, visibleRange.end));
-let _totalBodyHeight = $derived(sorted.length * TRACK_ROW_HEIGHT);
-let _bodyOffsetY = $derived(visibleRange.start * TRACK_ROW_HEIGHT);
+let visibleRows = $derived(sorted.slice(visibleRange.start, visibleRange.end));
+let totalBodyHeight = $derived(sorted.length * TRACK_ROW_HEIGHT);
+let bodyOffsetY = $derived(visibleRange.start * TRACK_ROW_HEIGHT);
 
 let checkedCount = $derived(checkedKeys.size);
 let allVisibleSelected = $derived(
@@ -280,7 +283,7 @@ let targetInRekordbox = $derived(
 		: [],
 );
 
-let _targetSummary = $derived.by(() => {
+let targetSummary = $derived.by(() => {
 	if (targetTracks.length === 0) return "";
 	const parts = [`${targetTracks.length} 曲を選択中`];
 	if (rekordboxPathIndex) {
@@ -290,7 +293,7 @@ let _targetSummary = $derived.by(() => {
 	return parts.join(" · ");
 });
 
-let _showCommandBar = $derived(
+let showCommandBar = $derived(
 	(commandBarMode || !!onremoveentries || !!ontagtracks) && checkedCount > 0,
 );
 
@@ -313,7 +316,7 @@ function toggleCheck(row: TrackListRow) {
 	checkedKeys = next;
 }
 
-function _toggleSelectAll() {
+function toggleSelectAll() {
 	if (allVisibleSelected || someVisibleSelected) {
 		checkedKeys = new Set();
 		return;
@@ -329,7 +332,7 @@ function _toggleSelectAll() {
 /** どの行を今プレビューしているか。同じ曲が2回あっても、押した方だけ光る。 */
 let focusedKey = $state<number | null>(null);
 
-function _isFocused(row: TrackListRow): boolean {
+function isFocused(row: TrackListRow): boolean {
 	if (selectedId !== row.track.id) return false;
 	if (focusedKey == null) return true;
 	if (!allRows.some((candidate) => candidate.key === focusedKey)) return true;
@@ -345,12 +348,12 @@ function selectRow(row: TrackListRow) {
  * グリッドはチェックボックスを持たないので、カードの本体クリックが
  * 一括操作の対象選択（旧チェックボックスの仕事）を兼ねる。
  */
-function _selectAndToggleCheck(row: TrackListRow) {
+function selectAndToggleCheck(row: TrackListRow) {
 	selectRow(row);
 	if (!readonly) toggleCheck(row);
 }
 
-async function _handleLibraryRemove() {
+async function handleLibraryRemove() {
 	if (targetTracks.length === 0) return;
 	const ids = targetTracks.map((track) => track.id);
 	const confirmed = await ask(`${ids.length} ${bulkRemoveConfirmMessage}`, {
@@ -370,7 +373,7 @@ async function _handleLibraryRemove() {
 }
 
 /** Legacy bulk remove for non-command-bar mode (Rekordbox tab). */
-async function _handleBulkRemove() {
+async function handleBulkRemove() {
 	if (!onbulkremove) return;
 	const ids = targetTracks.map((track) => track.id);
 	if (ids.length === 0) return;
@@ -384,7 +387,7 @@ async function _handleBulkRemove() {
 	checkedKeys = new Set();
 }
 
-async function _handlePermanentDelete() {
+async function handlePermanentDelete() {
 	if (!onbulkpermanent) return;
 	const ids = targetTracks.map((track) => track.id);
 	if (ids.length === 0) return;
@@ -397,7 +400,7 @@ async function _handlePermanentDelete() {
 	checkedKeys = new Set();
 }
 
-async function _handleEmptyTrash() {
+async function handleEmptyTrash() {
 	if (!onemptytrash) return;
 	const confirmed = await ask(
 		"ゴミ箱の中身をすべて完全に削除しますか？この操作は取り消せません。",
@@ -411,12 +414,12 @@ async function _handleEmptyTrash() {
 	checkedKeys = new Set();
 }
 
-async function _handleAddToRekordbox() {
+async function handleAddToRekordbox() {
 	if (!onAddToRekordbox || targetNotInRekordbox.length === 0) return;
 	await onAddToRekordbox(targetNotInRekordbox);
 }
 
-async function _handleRemoveFromRekordbox() {
+async function handleRemoveFromRekordbox() {
 	if (!onRemoveFromRekordbox || targetInRekordbox.length === 0) return;
 	const confirmed = await ask(
 		`${targetInRekordbox.length} 曲を Rekordbox から削除しますか？`,
@@ -426,25 +429,25 @@ async function _handleRemoveFromRekordbox() {
 	await onRemoveFromRekordbox(targetInRekordbox);
 }
 
-function _handleConvert() {
+function handleConvert() {
 	if (!onconvert || targetTracks.length === 0 || convertBusy) return;
 	onconvert(targetTracks);
 }
 
-function _handleTag() {
+function handleTag() {
 	if (!ontagtracks || targetTracks.length === 0) return;
 	ontagtracks(targetTracks);
 }
 
 /** 確認は出さない。列から要素を抜くのは、曲を消すことではない。 */
-async function _handleRemoveEntries() {
+async function handleRemoveEntries() {
 	if (!onremoveentries || targetEntryIds.length === 0) return;
 	await onremoveentries(targetEntryIds);
 	checkedKeys = new Set();
 }
 
 let dragKey = $state<number | null>(null);
-let _dropKey = $state<number | null>(null);
+let dropKey = $state<number | null>(null);
 let dropAfter = $state(false);
 
 /**
@@ -458,7 +461,7 @@ function draggedTrackIds(row: TrackListRow): number[] {
 		.map((item) => item.track.id);
 }
 
-function _handleDragStart(row: TrackListRow, event: DragEvent) {
+function handleDragStart(row: TrackListRow, event: DragEvent) {
 	dragKey = reorderable ? row.key : null;
 	if (!event.dataTransfer) return;
 	event.dataTransfer.effectAllowed = reorderable ? "copyMove" : "copy";
@@ -466,22 +469,22 @@ function _handleDragStart(row: TrackListRow, event: DragEvent) {
 	writeTrackDrag(event, draggedTrackIds(row));
 }
 
-function _handleDragOver(row: TrackListRow, event: DragEvent) {
+function handleDragOver(row: TrackListRow, event: DragEvent) {
 	if (!reorderable || dragKey == null) return;
 	event.preventDefault();
 	if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
 	const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
 	dropAfter = event.clientY - rect.top > rect.height / 2;
-	_dropKey = row.key;
+	dropKey = row.key;
 }
 
 function clearDrag() {
 	dragKey = null;
-	_dropKey = null;
+	dropKey = null;
 	dropAfter = false;
 }
 
-async function _handleDrop(row: TrackListRow, event: DragEvent) {
+async function handleDrop(row: TrackListRow, event: DragEvent) {
 	if (!reorderable || !onreorder || dragKey == null) return;
 	event.preventDefault();
 
@@ -505,11 +508,11 @@ async function _handleDrop(row: TrackListRow, event: DragEvent) {
 	await onreorder(entryIds);
 }
 
-function _handleScroll(event: Event) {
+function handleScroll(event: Event) {
 	scrollTop = (event.currentTarget as HTMLDivElement).scrollTop;
 }
 
-function _toggleSort(column: SortColumn) {
+function toggleSort(column: SortColumn) {
 	if (sortColumn === column) {
 		sortDirection = sortDirection === "asc" ? "desc" : "asc";
 		return;
@@ -519,12 +522,12 @@ function _toggleSort(column: SortColumn) {
 	sortDirection = "asc";
 }
 
-function _sortIndicator(column: SortColumn): string {
+function sortIndicator(column: SortColumn): string {
 	if (sortColumn !== column) return "";
 	return sortDirection === "asc" ? " ↑" : " ↓";
 }
 
-let _sortOptions = $derived(
+let sortOptions = $derived(
 	Object.entries(SORT_LABELS).filter(
 		([value]) => value !== "position" || isSequence,
 	),

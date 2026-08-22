@@ -1,5 +1,16 @@
 <script lang="ts">
-import { displayTitle } from "$lib/format";
+import TrackArtwork from "$lib/components/TrackArtwork.svelte";
+import TrackConvertedBadge from "$lib/components/TrackConvertedBadge.svelte";
+import TrackSourceBadge from "$lib/components/TrackSourceBadge.svelte";
+import {
+	displayArtist,
+	displayTitle,
+	displayValue,
+	formatBitrate,
+	formatBpm,
+	formatDuration,
+} from "$lib/format";
+import { isTrackSource } from "$lib/trackSource";
 import type { DuplicateChoice, DuplicateFoundPayload } from "$lib/types";
 
 interface Props {
@@ -9,8 +20,8 @@ interface Props {
 
 let { payload, onchoose }: Props = $props();
 
-const _existingTitle = $derived(displayTitle(payload.existing));
-const _candidateTitle = $derived(displayTitle(payload.candidate));
+const existingTitle = $derived(displayTitle(payload.existing));
+const candidateTitle = $derived(displayTitle(payload.candidate));
 </script>
 
 <div class="backdrop" role="presentation">

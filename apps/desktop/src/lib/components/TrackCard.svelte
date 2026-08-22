@@ -1,5 +1,10 @@
 <script lang="ts">
+import TrackArtwork from "$lib/components/TrackArtwork.svelte";
+import TrackConvertedBadge from "$lib/components/TrackConvertedBadge.svelte";
+import TrackSourceBadge from "$lib/components/TrackSourceBadge.svelte";
 import type { Track } from "$lib/types";
+import { isTrackSource } from "$lib/trackSource";
+import { displayArtist, displayTitle, formatDuration } from "$lib/format";
 
 interface Props {
 	track: Track;
@@ -27,7 +32,7 @@ let {
 	onplay,
 }: Props = $props();
 
-function _handleKeydown(event: KeyboardEvent) {
+function handleKeydown(event: KeyboardEvent) {
 	if (event.key === "Enter" || event.key === " ") {
 		event.preventDefault();
 		onselect(track);

@@ -27,5 +27,19 @@
 		"formatter": {
 			"quoteStyle": "double"
 		}
-	}
+	},
+	"overrides": [
+		{
+			"includes": ["**/*.svelte"],
+			"linter": {
+				"rules": {
+					"correctness": {
+						"noUnusedImports": "off",
+						"noUnusedVariables": "off",
+						"noUnusedFunctionParameters": "off"
+					}
+				}
+			}
+		}
+	]
 }

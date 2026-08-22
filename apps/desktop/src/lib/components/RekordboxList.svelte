@@ -14,7 +14,7 @@ import {
 	rekordboxRenamePlaylist,
 	rekordboxUpdateContent,
 } from "$lib/api";
-import { appSession, persistAppSession } from "$lib/appSession.svelte";
+import TrackList from "$lib/components/TrackList.svelte";
 import {
 	isPlaylistFolder,
 	playlistTreeRows,
@@ -27,6 +27,7 @@ import type {
 	RekordboxPlaylist,
 	Track,
 } from "$lib/types";
+import { appSession, persistAppSession } from "$lib/appSession.svelte";
 
 type BrowseMode = "all" | "playlist";
 type TextPromptKind = "playlist" | "folder" | "rename";
@@ -68,10 +69,10 @@ let selectedFolderId = $state<string | null>(
 );
 let playlistTracks = $state<RekordboxContent[]>([]);
 let playlistLoading = $state(false);
-let _actionError = $state<string | null>(null);
+let actionError = $state<string | null>(null);
 let busy = $state(false);
 
-let _editOpen = $state(false);
+let editOpen = $state(false);
 let editTarget = $state<RekordboxContent | null>(null);
 let editForm = $state({
 	title: "",
@@ -84,43 +85,43 @@ let editForm = $state({
 	rating: "",
 });
 
-let _textPromptOpen = $state(false);
+let textPromptOpen = $state(false);
 let textPromptKind = $state<TextPromptKind>("playlist");
-let _textPromptTitle = $state("");
+let textPromptTitle = $state("");
 let textPromptValue = $state("");
 let textPromptTarget = $state<RekordboxPlaylist | null>(null);
 
-let _addToPlaylistOpen = $state(false);
+let addToPlaylistOpen = $state(false);
 let addToPlaylistTarget = $state<RekordboxContent | null>(null);
 
 /** Only dismiss when pointer down and up both land on the backdrop (not drag-out from modal). */
 let backdropDismissArmed = false;
 
-function _onBackdropPointerDown(event: PointerEvent) {
+function onBackdropPointerDown(event: PointerEvent) {
 	backdropDismissArmed = event.target === event.currentTarget;
 }
 
-function _onBackdropPointerUp(event: PointerEvent, close: () => void) {
+function onBackdropPointerUp(event: PointerEvent, close: () => void) {
 	if (backdropDismissArmed && event.target === event.currentTarget) {
 		close();
 	}
 	backdropDismissArmed = false;
 }
 
-let _playlistRows = $derived(playlistTreeRows(playlists));
+let playlistRows = $derived(playlistTreeRows(playlists));
 let activeTracks = $derived(browseMode === "all" ? tracks : playlistTracks);
-let _displayTracks = $derived(activeTracks.map(rekordboxContentToTrack));
+let displayTracks = $derived(activeTracks.map(rekordboxContentToTrack));
 let selectedDisplayId = $derived(
 	selectedId == null
 		? null
 		: activeTracks.findIndex((track) => track.id === selectedId),
 );
-let _selectedListId = $derived(
+let selectedListId = $derived(
 	selectedDisplayId != null && selectedDisplayId >= 0
 		? selectedDisplayId
 		: null,
 );
-let _listLoading = $derived(
+let listLoading = $derived(
 	browseMode === "playlist" ? playlistLoading || loading : loading,
 );
 let writable = $derived(!!status?.dbPath && !status.rekordboxRunning);
@@ -185,7 +186,7 @@ async function loadPlaylistTracks(playlistId: string) {
 	}
 }
 
-function _setBrowseMode(mode: BrowseMode) {
+function setBrowseMode(mode: BrowseMode) {
 	browseMode = mode;
 	if (mode === "all") {
 		selectedPlaylistId = null;
@@ -209,7 +210,7 @@ function selectPlaylist(playlist: RekordboxPlaylist) {
 }
 
 async function handleRefresh() {
-	_actionError = null;
+	actionError = null;
 	await onrefresh();
 	await loadPlaylists();
 	if (browseMode === "playlist" && selectedPlaylistId) {
@@ -217,7 +218,7 @@ async function handleRefresh() {
 	}
 }
 
-function _handleSelect(track: Track) {
+function handleSelect(track: Track) {
 	const content = activeTracks[track.id];
 	if (content) onselect(content);
 }
@@ -235,11 +236,11 @@ async function runAction(action: () => Promise<void>) {
 	}
 	if (busy) return;
 	busy = true;
-	_actionError = null;
+	actionError = null;
 	try {
 		await action();
 	} catch (error) {
-		_actionError = error instanceof Error ? error.message : String(error);
+		actionError = error instanceof Error ? error.message : String(error);
 	} finally {
 		busy = false;
 	}
@@ -249,34 +250,34 @@ function parentForCreate(): string | null {
 	return selectedFolderId;
 }
 
-function _openCreatePlaylistPrompt() {
+function openCreatePlaylistPrompt() {
 	textPromptKind = "playlist";
-	_textPromptTitle = "プレイリスト名";
+	textPromptTitle = "プレイリスト名";
 	textPromptValue = "";
 	textPromptTarget = null;
-	_textPromptOpen = true;
+	textPromptOpen = true;
 }
 
-function _openCreateFolderPrompt() {
+function openCreateFolderPrompt() {
 	textPromptKind = "folder";
-	_textPromptTitle = "フォルダ名";
+	textPromptTitle = "フォルダ名";
 	textPromptValue = "";
 	textPromptTarget = null;
-	_textPromptOpen = true;
+	textPromptOpen = true;
 }
 
-function _openRenamePlaylistPrompt(playlist: RekordboxPlaylist) {
+function openRenamePlaylistPrompt(playlist: RekordboxPlaylist) {
 	textPromptKind = "rename";
-	_textPromptTitle = "新しい名前";
+	textPromptTitle = "新しい名前";
 	textPromptValue = playlist.name;
 	textPromptTarget = playlist;
-	_textPromptOpen = true;
+	textPromptOpen = true;
 }
 
-async function _submitTextPrompt() {
+async function submitTextPrompt() {
 	const name = textPromptValue.trim();
 	if (!name) return;
-	_textPromptOpen = false;
+	textPromptOpen = false;
 
 	if (textPromptKind === "playlist") {
 		await runAction(async () => {
@@ -309,7 +310,7 @@ async function _submitTextPrompt() {
 	}
 }
 
-async function _handleDeletePlaylist(playlist: RekordboxPlaylist) {
+async function handleDeletePlaylist(playlist: RekordboxPlaylist) {
 	const label = isPlaylistFolder(playlist) ? "フォルダ" : "プレイリスト";
 	const confirmed = await confirmDanger(
 		`${label}「${playlist.name}」を削除しますか？子要素もすべて削除されます。`,
@@ -331,7 +332,7 @@ async function _handleDeletePlaylist(playlist: RekordboxPlaylist) {
 	});
 }
 
-async function _handleAddFiles() {
+async function handleAddFiles() {
 	const selected = await open({
 		multiple: true,
 		filters: [
@@ -351,14 +352,14 @@ async function _handleAddFiles() {
 	});
 }
 
-async function _handleRemoveTrack(track: Track) {
+async function handleRemoveTrack(track: Track) {
 	const content = contentAt(track.id);
 	if (!content) return;
 
 	if (browseMode === "playlist" && selectedPlaylistId) {
 		const songId = content.songPlaylistId;
 		if (!songId) {
-			_actionError = "プレイリスト会員IDが見つかりません";
+			actionError = "プレイリスト会員IDが見つかりません";
 			return;
 		}
 		const confirmed = await confirmDanger(
@@ -385,7 +386,7 @@ async function _handleRemoveTrack(track: Track) {
 	});
 }
 
-async function _handleBulkRemove(indices: number[]) {
+async function handleBulkRemove(indices: number[]) {
 	await runAction(async () => {
 		if (browseMode === "playlist" && selectedPlaylistId) {
 			for (const index of indices) {
@@ -409,18 +410,18 @@ async function _handleBulkRemove(indices: number[]) {
 	});
 }
 
-function _openAddToPlaylist(content: RekordboxContent) {
+function openAddToPlaylist(content: RekordboxContent) {
 	if (normalPlaylists.length === 0) {
-		_actionError = "追加先のプレイリストがありません";
+		actionError = "追加先のプレイリストがありません";
 		return;
 	}
 	addToPlaylistTarget = content;
-	_addToPlaylistOpen = true;
+	addToPlaylistOpen = true;
 }
 
-async function _confirmAddToPlaylist(playlist: RekordboxPlaylist) {
+async function confirmAddToPlaylist(playlist: RekordboxPlaylist) {
 	const content = addToPlaylistTarget;
-	_addToPlaylistOpen = false;
+	addToPlaylistOpen = false;
 	addToPlaylistTarget = null;
 	if (!content) return;
 	await runAction(async () => {
@@ -431,7 +432,7 @@ async function _confirmAddToPlaylist(playlist: RekordboxPlaylist) {
 	});
 }
 
-async function _handleMoveSong(delta: -1 | 1) {
+async function handleMoveSong(delta: -1 | 1) {
 	if (
 		!selectedPlaylistId ||
 		selectedDisplayId == null ||
@@ -453,7 +454,7 @@ async function _handleMoveSong(delta: -1 | 1) {
 	});
 }
 
-function _openEdit(content: RekordboxContent) {
+function openEdit(content: RekordboxContent) {
 	editTarget = content;
 	editForm = {
 		title: content.title ?? "",
@@ -466,10 +467,10 @@ function _openEdit(content: RekordboxContent) {
 		rating:
 			content.rating != null ? String(Math.round(content.rating / 51)) : "",
 	};
-	_editOpen = true;
+	editOpen = true;
 }
 
-async function _saveEdit() {
+async function saveEdit() {
 	if (!editTarget) return;
 	const fields: RekordboxContentUpdate = {
 		title: editForm.title,
@@ -488,14 +489,14 @@ async function _saveEdit() {
 		if (!Number.isNaN(rating)) fields.rating = rating;
 	}
 	await runAction(async () => {
-		await rekordboxUpdateContent(editTarget?.id, fields);
-		_editOpen = false;
+		await rekordboxUpdateContent(editTarget!.id, fields);
+		editOpen = false;
 		editTarget = null;
 		await handleRefresh();
 	});
 }
 
-function _selectedContent(): RekordboxContent | null {
+function selectedContent(): RekordboxContent | null {
 	if (selectedDisplayId == null || selectedDisplayId < 0) return null;
 	return contentAt(selectedDisplayId);
 }

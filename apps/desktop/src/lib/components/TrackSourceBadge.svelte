@@ -8,7 +8,7 @@ interface Props {
 
 let { source, size = 16 }: Props = $props();
 
-const _label = $derived(source === "soundcloud" ? "SoundCloud" : "Bandcamp");
+const label = $derived(source === "soundcloud" ? "SoundCloud" : "Bandcamp");
 </script>
 
 <span class="source-badge source-{source}" title={label} aria-label={label}>

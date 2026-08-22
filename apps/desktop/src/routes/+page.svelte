@@ -35,26 +35,36 @@ import {
 	scanFolder,
 	tagListAxes,
 } from "$lib/api";
+import ActivityConsole from "$lib/components/ActivityConsole.svelte";
+import ConvertDialog from "$lib/components/ConvertDialog.svelte";
+import DuplicateTrackDialog from "$lib/components/DuplicateTrackDialog.svelte";
+import FacetBrowser from "$lib/components/FacetBrowser.svelte";
+import PlaylistTree from "$lib/components/PlaylistTree.svelte";
+import PreviewPlayer from "$lib/components/PreviewPlayer.svelte";
+import RekordboxList from "$lib/components/RekordboxList.svelte";
+import StatusBar from "$lib/components/StatusBar.svelte";
+import TagPanel from "$lib/components/TagPanel.svelte";
+import TrackList from "$lib/components/TrackList.svelte";
 import {
-	type AppTab,
 	appSession,
-	type BrowseMode,
 	persistAppSession,
+	type AppTab,
+	type BrowseMode,
 } from "$lib/appSession.svelte";
-import { ancestorIds } from "$lib/playlistTree";
-import { rekordboxContentToPreview } from "$lib/rekordboxListView";
 import {
 	buildRekordboxIdSet,
 	buildRekordboxPathIndex,
 } from "$lib/rekordboxMembership";
+import { rekordboxContentToPreview } from "$lib/rekordboxListView";
+import { ancestorIds } from "$lib/playlistTree";
 import type {
 	ActivityLogPayload,
 	ConvertOptions,
 	ConvertProgress,
 	ConvertResult,
 	DownloadProgress,
-	DuplicateChoice,
 	DuplicateFoundPayload,
+	DuplicateChoice,
 	FacetField,
 	PlaylistEntry,
 	PlaylistNode,
@@ -79,13 +89,13 @@ let selectedRekordboxId = $state<string | null>(appSession.selectedRekordboxId);
 let rekordboxStatus = $state<RekordboxCheck | null>(null);
 let rekordboxLoading = $state(false);
 let rekordboxBusy = $state(false);
-let _loading = $state(false);
+let loading = $state(false);
 let scanning = $state(false);
 let scanKind = $state<"folder" | "rekordbox" | "drop" | null>(null);
-let _fileDropActive = $state(false);
+let fileDropActive = $state(false);
 let scanProgress = $state<ScanProgress | null>(null);
 let duplicatePayload = $state<DuplicateFoundPayload | null>(null);
-let _downloadProgress = $state<DownloadProgress | null>(null);
+let downloadProgress = $state<DownloadProgress | null>(null);
 let convertProgress = $state<ConvertProgress | null>(null);
 let convertTargets = $state<Track[]>([]);
 let convertDialogOpen = $state(false);
@@ -93,7 +103,7 @@ let converting = $derived(convertProgress != null);
 
 // 分類（集合層と属性層）。ライブラリタブの左側に出る。
 let playlistNodes = $state<PlaylistNode[]>([]);
-let _tagAxes = $state<TagAxis[]>([]);
+let tagAxes = $state<TagAxis[]>([]);
 let browseMode = $state<BrowseMode>(appSession.library.browseMode);
 let selectedPlaylistId = $state<number | null>(
 	appSession.library.selectedPlaylistId,
@@ -103,7 +113,7 @@ let expandedPlaylistIds = $state<number[]>([
 ]);
 /** 選ばれているプレイリストの中身。列なら要素 ID が入っている。 */
 let playlistItems = $state<PlaylistEntry[]>([]);
-let _classifyBusy = $state(false);
+let classifyBusy = $state(false);
 /** タグパネルの操作対象。一覧の「タグ」ボタンで渡ってくる。 */
 let tagTargets = $state<Track[]>([]);
 let activeTagIds = $state<number[]>([]);
@@ -113,7 +123,7 @@ let facetField = $state<FacetField>("album");
 let facetValue = $state<string | null>(null);
 let facetNarrowed = $state<Track[] | null>(null);
 
-let _scanStatusLabel = $derived.by((): string => {
+let scanStatusLabel = $derived.by((): string => {
 	if (duplicatePayload) return "重複の確認待ち";
 	if (!scanning) return "";
 	if (scanKind === "rekordbox") return "Rekordbox からインポート中";
@@ -122,7 +132,7 @@ let _scanStatusLabel = $derived.by((): string => {
 	return "ライブラリ取り込み中";
 });
 
-let _scanStatusCount = $derived.by((): string | null => {
+let scanStatusCount = $derived.by((): string | null => {
 	if (!scanProgress) return null;
 	if (scanProgress.total != null && scanProgress.total > 0) {
 		return `${scanProgress.processed}/${scanProgress.total}`;
@@ -130,17 +140,17 @@ let _scanStatusCount = $derived.by((): string | null => {
 	return `${scanProgress.processed}`;
 });
 
-let _scanStatusDetail = $derived.by((): string | null => {
+let scanStatusDetail = $derived.by((): string | null => {
 	if (!scanProgress) return null;
 	return `追加 ${scanProgress.added} · スキップ ${scanProgress.skipped}`;
 });
 
-let _rekordboxPathIndex = $derived(buildRekordboxPathIndex(rekordboxTracks));
+let rekordboxPathIndex = $derived(buildRekordboxPathIndex(rekordboxTracks));
 let rekordboxContentIds = $derived(buildRekordboxIdSet(rekordboxTracks));
-let _rekordboxWritable = $derived(
+let rekordboxWritable = $derived(
 	!!rekordboxStatus?.dbPath && !rekordboxStatus.rekordboxRunning,
 );
-let _rekordboxLockedHint = $derived.by((): string | null => {
+let rekordboxLockedHint = $derived.by((): string | null => {
 	if (!rekordboxStatus?.dbPath) {
 		return "Rekordbox ライブラリが見つかりません";
 	}
@@ -160,12 +170,12 @@ let selectedPlaylist = $derived(
  * プレイリストが空なのと、ライブラリが空なのは別の状態。
  * 同じ「トラックがありません」を出すと、プレイリストを選んだだけで曲が消えたように見える。
  */
-let _libraryEmptyTitle = $derived(
+let libraryEmptyTitle = $derived(
 	selectedPlaylist
 		? `「${selectedPlaylist.name}」に曲がありません`
 		: "ライブラリにトラックがありません",
 );
-let _libraryEmptyHint = $derived(
+let libraryEmptyHint = $derived(
 	selectedPlaylist
 		? "曲をドラッグして追加してください"
 		: "フォルダを追加するか、ファイルをドロップしてください",
@@ -183,11 +193,11 @@ let narrowIds = $derived.by((): Set<number> | null => {
 	);
 });
 
-let _libraryTracks = $derived(
+let libraryTracks = $derived(
 	narrowIds ? tracks.filter((track) => narrowIds.has(track.id)) : tracks,
 );
 
-let _libraryEntries = $derived.by((): PlaylistEntry[] | null => {
+let libraryEntries = $derived.by((): PlaylistEntry[] | null => {
 	if (selectedPlaylistId == null) return null;
 	if (!narrowIds) return playlistItems;
 	return playlistItems.filter((entry) => narrowIds.has(entry.track.id));
@@ -197,11 +207,11 @@ let _libraryEntries = $derived.by((): PlaylistEntry[] | null => {
  * 並べ替えは列の要素をすべて渡す約束なので、絞り込み中は触らせない。
  * 見えている分だけ渡すと、隠れた要素が消えたことになってしまう。
  */
-let _canReorder = $derived(
+let canReorder = $derived(
 	selectedPlaylist?.kind === "static" && narrowIds == null,
 );
 
-let _previewTrack = $derived.by((): PreviewableTrack | null => {
+let previewTrack = $derived.by((): PreviewableTrack | null => {
 	if (activeTab === "library" || activeTab === "trash") {
 		return selectedTrack;
 	}
@@ -214,7 +224,7 @@ let _previewTrack = $derived.by((): PreviewableTrack | null => {
 });
 
 async function loadTracks(silent = true) {
-	_loading = true;
+	loading = true;
 	try {
 		tracks = await listTracks();
 		const selectedId = selectedTrack?.id ?? appSession.selectedTrackId;
@@ -238,7 +248,7 @@ async function loadTracks(silent = true) {
 	} catch (e) {
 		pushActivityLog("error", "ライブラリの読み込みに失敗しました", String(e));
 	} finally {
-		_loading = false;
+		loading = false;
 	}
 }
 
@@ -263,7 +273,7 @@ async function loadClassification(silent = true) {
 			tagListAxes(),
 		]);
 		playlistNodes = nodes;
-		_tagAxes = axes;
+		tagAxes = axes;
 		if (selectedPlaylistId != null) {
 			if (nodes.some((node) => node.id === selectedPlaylistId)) {
 				expandAncestorsOf(selectedPlaylistId);
@@ -331,22 +341,22 @@ function selectPlaylist(id: number | null) {
 	void loadPlaylistItems();
 }
 
-function _togglePlaylistExpanded(id: number) {
+function togglePlaylistExpanded(id: number) {
 	expandedPlaylistIds = expandedPlaylistIds.includes(id)
 		? expandedPlaylistIds.filter((current) => current !== id)
 		: [...expandedPlaylistIds, id];
 }
 
-async function _handlePlaylistChanged() {
+async function handlePlaylistChanged() {
 	await loadClassification();
 	await loadPlaylistItems();
 }
 
-async function _handleDropTracksOnPlaylist(
+async function handleDropTracksOnPlaylist(
 	playlistId: number,
 	trackIds: number[],
 ) {
-	_classifyBusy = true;
+	classifyBusy = true;
 	try {
 		await playlistAddTracks(playlistId, trackIds);
 		const name =
@@ -361,11 +371,11 @@ async function _handleDropTracksOnPlaylist(
 	} catch (e) {
 		pushActivityLog("error", "プレイリストに追加できませんでした", String(e));
 	} finally {
-		_classifyBusy = false;
+		classifyBusy = false;
 	}
 }
 
-async function _handleReorderEntries(entryIds: number[]) {
+async function handleReorderEntries(entryIds: number[]) {
 	const id = selectedPlaylistId;
 	if (id == null) return;
 	try {
@@ -377,7 +387,7 @@ async function _handleReorderEntries(entryIds: number[]) {
 	}
 }
 
-async function _handleRemoveEntries(entryIds: number[]) {
+async function handleRemoveEntries(entryIds: number[]) {
 	const id = selectedPlaylistId;
 	if (id == null || entryIds.length === 0) return;
 	try {
@@ -390,7 +400,7 @@ async function _handleRemoveEntries(entryIds: number[]) {
 	}
 }
 
-async function _handleTagFilterChange(tagIds: number[]) {
+async function handleTagFilterChange(tagIds: number[]) {
 	activeTagIds = tagIds;
 	try {
 		tagNarrowed = tagIds.length > 0 ? await browseTagTracks(tagIds) : null;
@@ -399,7 +409,7 @@ async function _handleTagFilterChange(tagIds: number[]) {
 	}
 }
 
-async function _handleTagsChanged() {
+async function handleTagsChanged() {
 	await Promise.all([loadClassification(), reloadNarrowing()]);
 	await loadPlaylistItems();
 	if (tagTargets.length > 0) {
@@ -408,7 +418,7 @@ async function _handleTagsChanged() {
 	}
 }
 
-async function _handleFacetSelect(field: FacetField, value: string | null) {
+async function handleFacetSelect(field: FacetField, value: string | null) {
 	if (field !== facetField) {
 		// フィールドを変えただけ。前の絞り込みは外す。
 		facetField = field;
@@ -430,7 +440,7 @@ function clearFacet() {
 }
 
 /** タグとブラウズの絞り込みをまとめて外す。プレイリストの選択は残す。 */
-function _clearNarrowing() {
+function clearNarrowing() {
 	activeTagIds = [];
 	tagNarrowed = null;
 	clearFacet();
@@ -500,7 +510,7 @@ async function loadRekordbox(silent = true) {
 	}
 }
 
-function _switchTab(tab: AppTab) {
+function switchTab(tab: AppTab) {
 	activeTab = tab;
 	if (tab === "library") {
 		void loadTracks(true);
@@ -517,7 +527,7 @@ function _switchTab(tab: AppTab) {
 	}
 }
 
-function _handleSelectRekordbox(track: RekordboxContent) {
+function handleSelectRekordbox(track: RekordboxContent) {
 	selectedRekordboxId = track.id;
 }
 
@@ -537,7 +547,7 @@ async function ensureRekordboxWritable(): Promise<boolean> {
 	return true;
 }
 
-async function _handleAddToRekordbox(selected: Track[]) {
+async function handleAddToRekordbox(selected: Track[]) {
 	if (selected.length === 0 || rekordboxBusy) return;
 	if (!(await ensureRekordboxWritable())) return;
 
@@ -582,7 +592,7 @@ async function _handleAddToRekordbox(selected: Track[]) {
 	}
 }
 
-async function _handleRemoveFromRekordbox(selected: Track[]) {
+async function handleRemoveFromRekordbox(selected: Track[]) {
 	if (selected.length === 0 || rekordboxBusy) return;
 	if (!(await ensureRekordboxWritable())) return;
 
@@ -618,13 +628,13 @@ async function _handleRemoveFromRekordbox(selected: Track[]) {
 	}
 }
 
-function _handleOpenConvert(selected: Track[]) {
+function handleOpenConvert(selected: Track[]) {
 	if (selected.length === 0 || converting || scanning) return;
 	convertTargets = selected;
 	convertDialogOpen = true;
 }
 
-async function _handleConvertConfirm(options: ConvertOptions) {
+async function handleConvertConfirm(options: ConvertOptions) {
 	const ids = convertTargets.map((track) => track.id);
 	convertDialogOpen = false;
 	convertTargets = [];
@@ -649,7 +659,7 @@ async function _handleConvertConfirm(options: ConvertOptions) {
 	}
 }
 
-async function _handleAddFolder() {
+async function handleAddFolder() {
 	const selected = await open({
 		directory: true,
 		multiple: false,
@@ -673,7 +683,7 @@ async function _handleAddFolder() {
 	}
 }
 
-async function _handleImportFromRekordbox() {
+async function handleImportFromRekordbox() {
 	if (!(await ensureRekordboxWritable())) return;
 
 	scanning = true;
@@ -712,7 +722,7 @@ function dropImportBlocked(): boolean {
 }
 
 async function handleDroppedPaths(paths: string[]) {
-	_fileDropActive = false;
+	fileDropActive = false;
 	if (paths.length === 0) return;
 	if (dropImportBlocked()) {
 		pushActivityLog("warning", "取り込み中はドロップできません");
@@ -741,11 +751,11 @@ function handleSelect(track: Track) {
 	persistAppSession();
 }
 
-let _playToken = $state(0);
+let playToken = $state(0);
 
-function _handlePlayTrack(track: Track) {
+function handlePlayTrack(track: Track) {
 	handleSelect(track);
-	_playToken += 1;
+	playToken += 1;
 }
 
 $effect(() => {
@@ -758,7 +768,7 @@ $effect(() => {
 	persistAppSession();
 });
 
-async function _handleRemove(track: Track) {
+async function handleRemove(track: Track) {
 	try {
 		await removeTrack(track.id);
 		if (selectedTrack?.id === track.id) {
@@ -777,7 +787,7 @@ async function _handleRemove(track: Track) {
 	await loadTrashed();
 }
 
-async function _handleBulkRemove(ids: number[]) {
+async function handleBulkRemove(ids: number[]) {
 	try {
 		const count = await removeTracks(ids);
 		if (selectedTrack && ids.includes(selectedTrack.id)) {
@@ -792,7 +802,7 @@ async function _handleBulkRemove(ids: number[]) {
 	await loadTrashed();
 }
 
-async function _handleDuplicateChoice(choice: DuplicateChoice) {
+async function handleDuplicateChoice(choice: DuplicateChoice) {
 	try {
 		await resolveDuplicate(choice);
 		duplicatePayload = null;
@@ -808,7 +818,7 @@ async function _handleDuplicateChoice(choice: DuplicateChoice) {
 	}
 }
 
-async function _handleRestore(track: Track) {
+async function handleRestore(track: Track) {
 	try {
 		await restoreTracks([track.id]);
 		pushActivityLog("success", `復元しました: ${track.title ?? track.path}`);
@@ -819,7 +829,7 @@ async function _handleRestore(track: Track) {
 	await loadTrashed();
 }
 
-async function _handleBulkRestore(ids: number[]) {
+async function handleBulkRestore(ids: number[]) {
 	try {
 		const count = await restoreTracks(ids);
 		pushActivityLog("success", `${count} 曲を復元しました`);
@@ -830,7 +840,7 @@ async function _handleBulkRestore(ids: number[]) {
 	await loadTrashed();
 }
 
-async function _handlePermanentDelete(ids: number[]) {
+async function handlePermanentDelete(ids: number[]) {
 	try {
 		const count = await deleteTracksPermanently(ids);
 		if (selectedTrack && ids.includes(selectedTrack.id)) {
@@ -845,7 +855,7 @@ async function _handlePermanentDelete(ids: number[]) {
 	await loadTrashed();
 }
 
-async function _handleEmptyTrash() {
+async function handleEmptyTrash() {
 	try {
 		const count = await emptyTrash();
 		selectedTrack = null;
@@ -858,7 +868,7 @@ async function _handleEmptyTrash() {
 	await loadTrashed();
 }
 
-async function _handleHealthCheck() {
+async function handleHealthCheck() {
 	try {
 		const report = await checkLibraryHealth();
 		if (!report.missing && !report.hashMismatch) {
@@ -924,14 +934,14 @@ onMount(() => {
 		.onDragDropEvent((event) => {
 			const payload = event.payload;
 			if (payload.type === "enter" || payload.type === "over") {
-				_fileDropActive = true;
+				fileDropActive = true;
 				return;
 			}
 			if (payload.type === "drop") {
 				void handleDroppedPaths(payload.paths);
 				return;
 			}
-			_fileDropActive = false;
+			fileDropActive = false;
 		})
 		.then((unlisten) => {
 			unlistenDragDrop = unlisten;
@@ -1007,11 +1017,11 @@ onMount(() => {
 			progress.percent == null &&
 			!progress.message
 		) {
-			_downloadProgress = null;
+			downloadProgress = null;
 			return;
 		}
 
-		_downloadProgress = progress;
+		downloadProgress = progress;
 	}).then((unlisten) => {
 		unlistenDownloadProgress = unlisten;
 	});
