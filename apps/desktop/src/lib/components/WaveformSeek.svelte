@@ -179,8 +179,7 @@ function handleSeek(event: Event) {
 		top: 0.2rem;
 		bottom: 0.2rem;
 		width: 1px;
-		background: var(--on-accent);
-		box-shadow: 0 0 0 1px rgb(0 0 0 / 18%);
+		background: color-mix(in srgb, var(--accent) 55%, white);
 		pointer-events: none;
 		transform: translateX(-0.5px);
 	}
