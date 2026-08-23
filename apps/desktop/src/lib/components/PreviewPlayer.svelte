@@ -246,13 +246,13 @@ function finishVolumeDrag() {
 function applyVolumeDragDelta(deltaY: number) {
 	if (!volumeDrag || deltaY === 0) return;
 	volumeGripPhase =
-		(((volumeGripPhase + deltaY * VOLUME_GRIP_SCROLL_RATE) %
+		(((volumeGripPhase - deltaY * VOLUME_GRIP_SCROLL_RATE) %
 			VOLUME_GRIP_SPACING) +
 			VOLUME_GRIP_SPACING) %
 		VOLUME_GRIP_SPACING;
 	volumeDrag.rawVolume = Math.min(
 		1,
-		Math.max(0, volumeDrag.rawVolume + deltaY / VOLUME_DRAG_DISTANCE),
+		Math.max(0, volumeDrag.rawVolume - deltaY / VOLUME_DRAG_DISTANCE),
 	);
 	setVolume(volumeDrag.rawVolume);
 }
