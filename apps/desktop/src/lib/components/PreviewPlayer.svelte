@@ -34,7 +34,7 @@ let lastAutoplayToken = 0;
 let lastPath: string | null = null;
 let volumeDrag: {
 	pointerId: number;
-	startX: number;
+	startY: number;
 	startVolume: number;
 } | null = null;
 
@@ -172,7 +172,7 @@ function handleVolumePointerDown(event: PointerEvent) {
 	const input = event.currentTarget as HTMLInputElement;
 	volumeDrag = {
 		pointerId: event.pointerId,
-		startX: event.clientX,
+		startY: event.clientY,
 		startVolume: volume,
 	};
 	input.focus();
@@ -184,7 +184,7 @@ function handleVolumePointerMove(event: PointerEvent) {
 	if (volumeDrag?.pointerId !== event.pointerId) return;
 	setVolume(
 		volumeDrag.startVolume +
-			(event.clientX - volumeDrag.startX) / VOLUME_DRAG_DISTANCE,
+			(volumeDrag.startY - event.clientY) / VOLUME_DRAG_DISTANCE,
 	);
 	event.preventDefault();
 }
@@ -343,7 +343,7 @@ function handleEnded() {
           onpointercancel={handleVolumePointerEnd}
           aria-label="音量"
           aria-valuetext={`${Math.round(volume * 100)}%`}
-          title="左右ドラッグまたは矢印キーで音量調整"
+          title="上下ドラッグまたは矢印キーで音量調整"
         />
         <button
           class="mute-btn"
@@ -673,7 +673,7 @@ function handleEnded() {
     width: 100%;
     height: 100%;
     margin: 0;
-    cursor: ew-resize;
+    cursor: ns-resize;
     opacity: 0;
     touch-action: none;
   }
