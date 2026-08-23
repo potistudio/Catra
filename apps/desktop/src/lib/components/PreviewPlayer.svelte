@@ -578,7 +578,6 @@ onDestroy(() => {
     overflow: hidden;
     border: 1px solid var(--border);
     border-radius: 4px;
-    background: var(--surface);
     color: var(--text-muted);
     font-size: 0.8rem;
     font-variant-numeric: tabular-nums;
