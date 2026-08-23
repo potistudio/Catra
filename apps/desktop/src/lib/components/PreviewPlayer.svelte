@@ -32,9 +32,15 @@ let volume = $state(1);
 let isMuted = $state(false);
 let lastAutoplayToken = 0;
 let lastPath: string | null = null;
+let volumeDrag: {
+	pointerId: number;
+	startX: number;
+	startVolume: number;
+} | null = null;
 
 const MIN_PLAYBACK_RATE = 0.25;
 const MAX_PLAYBACK_RATE = 4;
+const VOLUME_DRAG_DISTANCE = 240;
 
 let playbackBpm = $derived(
 	track?.bpm != null && track.bpm > 0 ? track.bpm * playbackRate : null,
@@ -153,8 +159,43 @@ function handlePlaybackBpmChange(event: Event) {
 
 function handleVolumeChange(event: Event) {
 	const input = event.target as HTMLInputElement;
-	volume = Math.min(1, Math.max(0, Number(input.value)));
+	setVolume(Number(input.value));
+}
+
+function setVolume(nextVolume: number) {
+	volume = Math.min(1, Math.max(0, Math.round(nextVolume * 100) / 100));
 	if (volume > 0) isMuted = false;
+}
+
+function handleVolumePointerDown(event: PointerEvent) {
+	if (event.button !== 0) return;
+	const input = event.currentTarget as HTMLInputElement;
+	volumeDrag = {
+		pointerId: event.pointerId,
+		startX: event.clientX,
+		startVolume: volume,
+	};
+	input.focus();
+	input.setPointerCapture(event.pointerId);
+	event.preventDefault();
+}
+
+function handleVolumePointerMove(event: PointerEvent) {
+	if (volumeDrag?.pointerId !== event.pointerId) return;
+	setVolume(
+		volumeDrag.startVolume +
+			(event.clientX - volumeDrag.startX) / VOLUME_DRAG_DISTANCE,
+	);
+	event.preventDefault();
+}
+
+function handleVolumePointerEnd(event: PointerEvent) {
+	if (volumeDrag?.pointerId !== event.pointerId) return;
+	const input = event.currentTarget as HTMLInputElement;
+	if (input.hasPointerCapture(event.pointerId)) {
+		input.releasePointerCapture(event.pointerId);
+	}
+	volumeDrag = null;
 }
 
 function toggleMute() {
@@ -296,6 +337,10 @@ function handleEnded() {
           step="0.01"
           value={volume}
           oninput={handleVolumeChange}
+          onpointerdown={handleVolumePointerDown}
+          onpointermove={handleVolumePointerMove}
+          onpointerup={handleVolumePointerEnd}
+          onpointercancel={handleVolumePointerEnd}
           aria-label="音量"
           aria-valuetext={`${Math.round(volume * 100)}%`}
           title="左右ドラッグまたは矢印キーで音量調整"
@@ -630,6 +675,7 @@ function handleEnded() {
     margin: 0;
     cursor: ew-resize;
     opacity: 0;
+    touch-action: none;
   }
 
   .volume-knob:focus-within .knob-ring {
