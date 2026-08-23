@@ -232,7 +232,7 @@ function applyVolumeDragDelta(deltaY: number) {
 	if (!volumeDrag || deltaY === 0) return;
 	volumeDrag.rawVolume = Math.min(
 		1,
-		Math.max(0, volumeDrag.rawVolume + deltaY / VOLUME_DRAG_DISTANCE),
+		Math.max(0, volumeDrag.rawVolume - deltaY / VOLUME_DRAG_DISTANCE),
 	);
 	setVolume(volumeDrag.rawVolume);
 }
