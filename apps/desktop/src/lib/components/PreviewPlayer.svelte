@@ -129,6 +129,23 @@ function handlePlaybackRateChange(event: Event) {
 	input.value = String(playbackRate);
 }
 
+function handlePlaybackBpmChange(event: Event) {
+	const input = event.target as HTMLInputElement;
+	const requestedBpm = Number.parseFloat(input.value);
+	const sourceBpm = track?.bpm;
+
+	if (!Number.isFinite(requestedBpm) || sourceBpm == null || sourceBpm <= 0) {
+		input.value = playbackBpm === null ? "" : formatBpm(playbackBpm);
+		return;
+	}
+
+	playbackRate = Math.min(
+		MAX_PLAYBACK_RATE,
+		Math.max(MIN_PLAYBACK_RATE, requestedBpm / sourceBpm),
+	);
+	input.value = formatBpm(sourceBpm * playbackRate);
+}
+
 function handleEnded() {
 	isPlaying = false;
 	currentTime = 0;
@@ -189,25 +206,38 @@ function handleEnded() {
 
       <span class="time">{formatDuration(duration * 1000)}</span>
 
-      <label class="rate-control">
-        <span class="rate-label">速度</span>
-        <input
-          class="rate-input"
-          type="number"
-          min={MIN_PLAYBACK_RATE}
-          max={MAX_PLAYBACK_RATE}
-          step="0.05"
-          value={playbackRate}
-          onchange={handlePlaybackRateChange}
-          aria-label="再生速度"
-        />
-        <span>×</span>
-        {#if playbackBpm !== null}
-          <span class="playback-bpm" title="現在の再生BPM">
-            {formatBpm(playbackBpm)} BPM
-          </span>
-        {/if}
-      </label>
+      <div class="rate-control">
+        <label class="rate-field">
+          <span class="rate-label">速度</span>
+          <input
+            class="rate-input"
+            type="number"
+            min={MIN_PLAYBACK_RATE}
+            max={MAX_PLAYBACK_RATE}
+            step="0.05"
+            value={playbackRate}
+            onchange={handlePlaybackRateChange}
+            aria-label="再生速度"
+          />
+          <span>×</span>
+        </label>
+
+        <label class="bpm-field" title={playbackBpm === null ? "元BPMがないため指定できません" : "再生BPMを直接指定"}>
+          <input
+            class="bpm-input"
+            type="number"
+            min={track.bpm ? track.bpm * MIN_PLAYBACK_RATE : undefined}
+            max={track.bpm ? track.bpm * MAX_PLAYBACK_RATE : undefined}
+            step="0.1"
+            value={playbackBpm === null ? "" : playbackBpm.toFixed(1)}
+            onchange={handlePlaybackBpmChange}
+            placeholder="—"
+            disabled={playbackBpm === null}
+            aria-label="再生BPM"
+          />
+          <span>BPM</span>
+        </label>
+      </div>
 
       <button
         class="master-tempo"
@@ -334,18 +364,26 @@ function handleEnded() {
   .rate-control {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.5rem;
     flex-shrink: 0;
     color: var(--text-muted);
     font-size: 0.8rem;
     font-variant-numeric: tabular-nums;
   }
 
+  .rate-field,
+  .bpm-field {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
   .rate-label {
     font-size: 0.72rem;
   }
 
-  .rate-input {
+  .rate-input,
+  .bpm-input {
     width: 3.75rem;
     padding: 0.25rem 0.3rem;
     border: 1px solid var(--border);
@@ -355,15 +393,19 @@ function handleEnded() {
     font: inherit;
   }
 
-  .rate-input:focus {
+  .bpm-input {
+    width: 4.5rem;
+  }
+
+  .rate-input:focus,
+  .bpm-input:focus {
     border-color: var(--accent);
     outline: none;
   }
 
-  .playback-bpm {
-    min-width: 4.8rem;
-    color: var(--text);
-    text-align: right;
+  .bpm-input:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
   }
 
   .master-tempo {
