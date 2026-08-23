@@ -39,9 +39,6 @@ const MAX_PLAYBACK_RATE = 4;
 let playbackBpm = $derived(
 	track?.bpm != null && track.bpm > 0 ? track.bpm * playbackRate : null,
 );
-let volumeIcon = $derived(
-	isMuted || volume === 0 ? "🔇" : volume < 0.5 ? "🔉" : "🔊",
-);
 
 $effect(() => {
 	if (!track) {
@@ -283,7 +280,18 @@ function handleEnded() {
           aria-pressed={isMuted || volume === 0}
           title={isMuted || volume === 0 ? "ミュート解除" : "ミュート"}
         >
-          {volumeIcon}
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M11 5 6 9H2v6h4l5 4V5Z"></path>
+            {#if isMuted || volume === 0}
+              <path d="m16 9 6 6"></path>
+              <path d="m22 9-6 6"></path>
+            {:else}
+              <path d="M15.5 8.5a5 5 0 0 1 0 7"></path>
+              {#if volume >= 0.5}
+                <path d="M19 5a10 10 0 0 1 0 14"></path>
+              {/if}
+            {/if}
+          </svg>
         </button>
         <div class="volume-slider-wrap">
           <span class="volume-value" aria-hidden="true">{Math.round(volume * 100)}%</span>
@@ -488,12 +496,30 @@ function handleEnded() {
   }
 
   .mute-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 1.75rem;
+    height: 1.75rem;
     padding: 0;
     border: none;
     background: transparent;
-    font-size: 1rem;
+    color: var(--text-muted);
     cursor: pointer;
+  }
+
+  .mute-btn:hover {
+    color: var(--text);
+  }
+
+  .mute-btn svg {
+    width: 1.2rem;
+    height: 1.2rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
   }
 
   .volume-slider-wrap {
