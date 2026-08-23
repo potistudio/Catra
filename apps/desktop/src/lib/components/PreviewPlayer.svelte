@@ -34,7 +34,9 @@ let isMuted = $state(false);
 let lastAutoplayToken = 0;
 let lastPath: string | null = null;
 let volumeDrag: {
+	input: HTMLInputElement;
 	pointerId: number;
+	rawVolume: number;
 	startY: number;
 	startVolume: number;
 } | null = null;
@@ -172,18 +174,34 @@ function handleVolumePointerDown(event: PointerEvent) {
 	if (event.button !== 0) return;
 	const input = event.currentTarget as HTMLInputElement;
 	volumeDrag = {
+		input,
 		pointerId: event.pointerId,
+		rawVolume: volume,
 		startY: event.clientY,
 		startVolume: volume,
 	};
 	input.focus();
 	input.setPointerCapture(event.pointerId);
 	document.documentElement.classList.add("volume-knob-dragging");
+	document.addEventListener("mousemove", handleLockedVolumeMouseMove);
+	document.addEventListener("mouseup", handleLockedVolumeMouseUp);
+	document.addEventListener("pointerlockchange", handleVolumePointerLockChange);
+	void Promise.resolve(input.requestPointerLock())
+		.then(() => {
+			if (
+				volumeDrag?.input !== input &&
+				document.pointerLockElement === input
+			) {
+				document.exitPointerLock();
+			}
+		})
+		.catch(() => undefined);
 	event.preventDefault();
 }
 
 function handleVolumePointerMove(event: PointerEvent) {
 	if (volumeDrag?.pointerId !== event.pointerId) return;
+	if (document.pointerLockElement === volumeDrag.input) return;
 	setVolume(
 		volumeDrag.startVolume +
 			(volumeDrag.startY - event.clientY) / VOLUME_DRAG_DISTANCE,
@@ -193,12 +211,40 @@ function handleVolumePointerMove(event: PointerEvent) {
 
 function handleVolumePointerEnd(event: PointerEvent) {
 	if (volumeDrag?.pointerId !== event.pointerId) return;
-	const input = event.currentTarget as HTMLInputElement;
-	if (input.hasPointerCapture(event.pointerId)) {
-		input.releasePointerCapture(event.pointerId);
+	finishVolumeDrag();
+}
+
+function handleLockedVolumeMouseMove(event: MouseEvent) {
+	if (!volumeDrag || document.pointerLockElement !== volumeDrag.input) return;
+	volumeDrag.rawVolume -= event.movementY / VOLUME_DRAG_DISTANCE;
+	setVolume(volumeDrag.rawVolume);
+}
+
+function handleLockedVolumeMouseUp(event: MouseEvent) {
+	if (event.button === 0) finishVolumeDrag();
+}
+
+function handleVolumePointerLockChange() {
+	if (volumeDrag && document.pointerLockElement !== volumeDrag.input) {
+		finishVolumeDrag();
 	}
+}
+
+function finishVolumeDrag() {
+	if (!volumeDrag) return;
+	const { input, pointerId } = volumeDrag;
 	volumeDrag = null;
+	if (input.hasPointerCapture(pointerId)) {
+		input.releasePointerCapture(pointerId);
+	}
+	document.removeEventListener("mousemove", handleLockedVolumeMouseMove);
+	document.removeEventListener("mouseup", handleLockedVolumeMouseUp);
+	document.removeEventListener(
+		"pointerlockchange",
+		handleVolumePointerLockChange,
+	);
 	document.documentElement.classList.remove("volume-knob-dragging");
+	if (document.pointerLockElement === input) document.exitPointerLock();
 }
 
 function toggleMute() {
@@ -221,6 +267,7 @@ function handleEnded() {
 
 onDestroy(() => {
 	if (typeof document !== "undefined") {
+		finishVolumeDrag();
 		document.documentElement.classList.remove("volume-knob-dragging");
 	}
 });
