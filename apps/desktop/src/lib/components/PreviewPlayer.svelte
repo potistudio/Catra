@@ -252,7 +252,7 @@ function applyVolumeDragDelta(deltaY: number) {
 		VOLUME_GRIP_SPACING;
 	volumeDrag.rawVolume = Math.min(
 		1,
-		Math.max(0, volumeDrag.rawVolume - deltaY / VOLUME_DRAG_DISTANCE),
+		Math.max(0, volumeDrag.rawVolume + deltaY / VOLUME_DRAG_DISTANCE),
 	);
 	setVolume(volumeDrag.rawVolume);
 }
@@ -401,12 +401,12 @@ onDestroy(() => {
           viewBox="0 0 56 56"
           aria-hidden="true"
         >
-          <path class="knob-track" pathLength="100" d="M11.03 44.97A24 24 0 1 1 44.97 44.97"></path>
+          <path class="knob-track" pathLength="100" d="M44.97 44.97A24 24 0 1 0 11.03 44.97"></path>
           <path
             class="knob-level"
             pathLength="100"
             stroke-dasharray={`${volume * 100} 100`}
-            d="M11.03 44.97A24 24 0 1 1 44.97 44.97"
+            d="M44.97 44.97A24 24 0 1 0 11.03 44.97"
           ></path>
         </svg>
         <input
