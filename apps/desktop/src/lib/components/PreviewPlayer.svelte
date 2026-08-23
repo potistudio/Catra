@@ -37,6 +37,7 @@ let lastPath: string | null = null;
 let unlistenNativeVolumeDrag: UnlistenFn | null = null;
 let usesNativeVolumeDrag = false;
 let nextVolumeDragId = 0;
+let volumeGripPhase = $state(0);
 interface VolumeDrag {
 	control: HTMLButtonElement;
 	dragId: number;
@@ -49,6 +50,20 @@ let volumeDrag: VolumeDrag | null = null;
 const MIN_PLAYBACK_RATE = 0.25;
 const MAX_PLAYBACK_RATE = 4;
 const VOLUME_DRAG_DISTANCE = 480;
+const VOLUME_GRIP_SPACING = 5;
+const VOLUME_GRIP_SCROLL_RATE = 0.45;
+
+let volumeGripLines = $derived(
+	Array.from({ length: 7 }, (_, index) => {
+		const y = -3 + index * VOLUME_GRIP_SPACING + volumeGripPhase;
+		const distanceFromCenter = Math.abs(y - 12);
+		const x = Math.max(
+			2,
+			6.5 - distanceFromCenter * 0.1 - distanceFromCenter ** 2 * 0.02,
+		);
+		return { x, y };
+	}),
+);
 
 let playbackBpm = $derived(
 	track?.bpm != null && track.bpm > 0 ? track.bpm * playbackRate : null,
@@ -230,6 +245,11 @@ function finishVolumeDrag() {
 
 function applyVolumeDragDelta(deltaY: number) {
 	if (!volumeDrag || deltaY === 0) return;
+	volumeGripPhase =
+		(((volumeGripPhase - deltaY * VOLUME_GRIP_SCROLL_RATE) %
+			VOLUME_GRIP_SPACING) +
+			VOLUME_GRIP_SPACING) %
+		VOLUME_GRIP_SPACING;
 	volumeDrag.rawVolume = Math.min(
 		1,
 		Math.max(0, volumeDrag.rawVolume - deltaY / VOLUME_DRAG_DISTANCE),
@@ -436,11 +456,9 @@ onDestroy(() => {
           title="上下ドラッグで音量調整"
         >
           <svg viewBox="0 0 16 24" aria-hidden="true">
-            <path d="M3.5 2h6"></path>
-            <path d="M5.5 7h6"></path>
-            <path d="M6.5 12h6"></path>
-            <path d="M5.5 17h6"></path>
-            <path d="M3.5 22h6"></path>
+            {#each volumeGripLines as line}
+              <line x1={line.x} y1={line.y} x2={line.x + 6} y2={line.y}></line>
+            {/each}
           </svg>
         </button>
       </div>
@@ -700,7 +718,7 @@ onDestroy(() => {
   .volume-drag-handle svg {
     width: 0.9rem;
     height: 1.4rem;
-    overflow: visible;
+    overflow: hidden;
     fill: none;
     filter: drop-shadow(0 1px 1px rgb(0 0 0 / 35%));
     stroke: currentColor;
