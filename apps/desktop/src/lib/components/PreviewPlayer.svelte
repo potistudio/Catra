@@ -570,7 +570,12 @@ function handleEnded() {
     pointer-events: none;
     stroke-linecap: round;
     stroke-width: 4;
-    transition: opacity 140ms ease;
+    transform: scale(0.78);
+    transform-box: fill-box;
+    transform-origin: center;
+    transition:
+      opacity 140ms ease,
+      transform 160ms ease;
   }
 
   .knob-track {
@@ -583,6 +588,7 @@ function handleEnded() {
 
   .volume-knob:hover .knob-ring {
     opacity: 1;
+    transform: scale(1);
   }
 
   .volume-knob:hover .knob-ring.muted {
