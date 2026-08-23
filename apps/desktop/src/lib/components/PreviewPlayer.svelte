@@ -1,7 +1,6 @@
 <script lang="ts">
 import { convertFileSrc } from "@tauri-apps/api/core";
 import TrackArtwork from "$lib/components/TrackArtwork.svelte";
-import type { PreviewableTrack } from "$lib/types";
 import {
 	displayArtist,
 	displayTitle,
@@ -11,6 +10,7 @@ import {
 	formatDuration,
 	formatRating,
 } from "$lib/format";
+import type { PreviewableTrack } from "$lib/types";
 
 interface Props {
 	track: PreviewableTrack | null;
@@ -26,8 +26,16 @@ let currentTime = $state(0);
 let duration = $state(0);
 let audioSrc = $state<string | null>(null);
 let pendingAutoplay = $state(false);
+let playbackRate = $state(1);
 let lastAutoplayToken = 0;
 let lastPath: string | null = null;
+
+const MIN_PLAYBACK_RATE = 0.25;
+const MAX_PLAYBACK_RATE = 4;
+
+let playbackBpm = $derived(
+	track?.bpm != null && track.bpm > 0 ? track.bpm * playbackRate : null,
+);
 
 $effect(() => {
 	if (!track) {
@@ -65,6 +73,12 @@ $effect(() => {
 	}
 });
 
+$effect(() => {
+	if (!audioEl) return;
+	audioEl.playbackRate = playbackRate;
+	audioEl.preservesPitch = true;
+});
+
 function togglePlay() {
 	if (!audioEl || !audioSrc) return;
 
@@ -96,6 +110,22 @@ function handleSeek(event: Event) {
 	const input = event.target as HTMLInputElement;
 	audioEl.currentTime = Number(input.value);
 	currentTime = audioEl.currentTime;
+}
+
+function handlePlaybackRateChange(event: Event) {
+	const input = event.target as HTMLInputElement;
+	const requestedRate = Number.parseFloat(input.value);
+
+	if (!Number.isFinite(requestedRate)) {
+		input.value = String(playbackRate);
+		return;
+	}
+
+	playbackRate = Math.min(
+		MAX_PLAYBACK_RATE,
+		Math.max(MIN_PLAYBACK_RATE, requestedRate),
+	);
+	input.value = String(playbackRate);
 }
 
 function handleEnded() {
@@ -157,6 +187,26 @@ function handleEnded() {
       />
 
       <span class="time">{formatDuration(duration * 1000)}</span>
+
+      <label class="rate-control">
+        <span class="rate-label">速度</span>
+        <input
+          class="rate-input"
+          type="number"
+          min={MIN_PLAYBACK_RATE}
+          max={MAX_PLAYBACK_RATE}
+          step="0.05"
+          value={playbackRate}
+          onchange={handlePlaybackRateChange}
+          aria-label="再生速度"
+        />
+        <span>×</span>
+        {#if playbackBpm !== null}
+          <span class="playback-bpm" title="現在の再生BPM">
+            {formatBpm(playbackBpm)} BPM
+          </span>
+        {/if}
+      </label>
     </div>
   {:else}
     <p class="preview-empty">トラックを選択してプレビュー</p>
@@ -266,5 +316,40 @@ function handleEnded() {
     flex: 1;
     accent-color: var(--accent);
     cursor: pointer;
+  }
+
+  .rate-control {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rate-label {
+    font-size: 0.72rem;
+  }
+
+  .rate-input {
+    width: 3.75rem;
+    padding: 0.25rem 0.3rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+  }
+
+  .rate-input:focus {
+    border-color: var(--accent);
+    outline: none;
+  }
+
+  .playback-bpm {
+    min-width: 4.8rem;
+    color: var(--text);
+    text-align: right;
   }
 </style>
