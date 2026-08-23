@@ -436,11 +436,11 @@ onDestroy(() => {
           title="上下ドラッグで音量調整"
         >
           <svg viewBox="0 0 16 20" aria-hidden="true">
-            <path d="M6 3.5h4"></path>
-            <path d="M4.5 6.75h7"></path>
-            <path d="M3.5 10h9"></path>
-            <path d="M4.5 13.25h7"></path>
-            <path d="M6 16.5h4"></path>
+            <path d="M3.5 3.5h6"></path>
+            <path d="M5.5 6.75h6"></path>
+            <path d="M6.5 10h6"></path>
+            <path d="M5.5 13.25h6"></path>
+            <path d="M3.5 16.5h6"></path>
           </svg>
         </button>
       </div>
