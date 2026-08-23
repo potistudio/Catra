@@ -1,5 +1,7 @@
 <script lang="ts">
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { LogicalPosition } from "@tauri-apps/api/dpi";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { onDestroy } from "svelte";
 import TrackArtwork from "$lib/components/TrackArtwork.svelte";
 import {
@@ -36,7 +38,7 @@ let lastPath: string | null = null;
 let volumeDrag: {
 	input: HTMLInputElement;
 	pointerId: number;
-	rawVolume: number;
+	startX: number;
 	startY: number;
 	startVolume: number;
 } | null = null;
@@ -176,32 +178,21 @@ function handleVolumePointerDown(event: PointerEvent) {
 	volumeDrag = {
 		input,
 		pointerId: event.pointerId,
-		rawVolume: volume,
+		startX: event.clientX,
 		startY: event.clientY,
 		startVolume: volume,
 	};
 	input.focus();
 	input.setPointerCapture(event.pointerId);
 	document.documentElement.classList.add("volume-knob-dragging");
-	document.addEventListener("mousemove", handleLockedVolumeMouseMove);
-	document.addEventListener("mouseup", handleLockedVolumeMouseUp);
-	document.addEventListener("pointerlockchange", handleVolumePointerLockChange);
-	void Promise.resolve(input.requestPointerLock())
-		.then(() => {
-			if (
-				volumeDrag?.input !== input &&
-				document.pointerLockElement === input
-			) {
-				document.exitPointerLock();
-			}
-		})
+	void getCurrentWindow()
+		.setCursorGrab(true)
 		.catch(() => undefined);
 	event.preventDefault();
 }
 
 function handleVolumePointerMove(event: PointerEvent) {
 	if (volumeDrag?.pointerId !== event.pointerId) return;
-	if (document.pointerLockElement === volumeDrag.input) return;
 	setVolume(
 		volumeDrag.startVolume +
 			(volumeDrag.startY - event.clientY) / VOLUME_DRAG_DISTANCE,
@@ -214,37 +205,24 @@ function handleVolumePointerEnd(event: PointerEvent) {
 	finishVolumeDrag();
 }
 
-function handleLockedVolumeMouseMove(event: MouseEvent) {
-	if (!volumeDrag || document.pointerLockElement !== volumeDrag.input) return;
-	volumeDrag.rawVolume -= event.movementY / VOLUME_DRAG_DISTANCE;
-	setVolume(volumeDrag.rawVolume);
-}
-
-function handleLockedVolumeMouseUp(event: MouseEvent) {
-	if (event.button === 0) finishVolumeDrag();
-}
-
-function handleVolumePointerLockChange() {
-	if (volumeDrag && document.pointerLockElement !== volumeDrag.input) {
-		finishVolumeDrag();
-	}
-}
-
 function finishVolumeDrag() {
 	if (!volumeDrag) return;
-	const { input, pointerId } = volumeDrag;
+	const { input, pointerId, startX, startY } = volumeDrag;
 	volumeDrag = null;
 	if (input.hasPointerCapture(pointerId)) {
 		input.releasePointerCapture(pointerId);
 	}
-	document.removeEventListener("mousemove", handleLockedVolumeMouseMove);
-	document.removeEventListener("mouseup", handleLockedVolumeMouseUp);
-	document.removeEventListener(
-		"pointerlockchange",
-		handleVolumePointerLockChange,
-	);
-	document.documentElement.classList.remove("volume-knob-dragging");
-	if (document.pointerLockElement === input) document.exitPointerLock();
+	void restoreVolumeCursor(startX, startY);
+}
+
+async function restoreVolumeCursor(x: number, y: number) {
+	const appWindow = getCurrentWindow();
+	try {
+		await appWindow.setCursorPosition(new LogicalPosition(x, y));
+	} finally {
+		await appWindow.setCursorGrab(false).catch(() => undefined);
+		document.documentElement.classList.remove("volume-knob-dragging");
+	}
 }
 
 function toggleMute() {
