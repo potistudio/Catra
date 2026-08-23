@@ -1,5 +1,6 @@
 <script lang="ts">
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { onDestroy } from "svelte";
 import TrackArtwork from "$lib/components/TrackArtwork.svelte";
 import {
 	displayArtist,
@@ -177,6 +178,7 @@ function handleVolumePointerDown(event: PointerEvent) {
 	};
 	input.focus();
 	input.setPointerCapture(event.pointerId);
+	document.documentElement.classList.add("volume-knob-dragging");
 	event.preventDefault();
 }
 
@@ -196,6 +198,7 @@ function handleVolumePointerEnd(event: PointerEvent) {
 		input.releasePointerCapture(event.pointerId);
 	}
 	volumeDrag = null;
+	document.documentElement.classList.remove("volume-knob-dragging");
 }
 
 function toggleMute() {
@@ -215,6 +218,12 @@ function handleEnded() {
 		audioEl.currentTime = 0;
 	}
 }
+
+onDestroy(() => {
+	if (typeof document !== "undefined") {
+		document.documentElement.classList.remove("volume-knob-dragging");
+	}
+});
 </script>
 
 <footer class="preview">
@@ -680,6 +689,11 @@ function handleEnded() {
 
   .volume-knob:focus-within .knob-ring {
     filter: drop-shadow(0 0 2px var(--accent));
+  }
+
+  :global(html.volume-knob-dragging),
+  :global(html.volume-knob-dragging *) {
+    cursor: none !important;
   }
 
   @media (prefers-reduced-motion: reduce) {
