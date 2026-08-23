@@ -272,22 +272,26 @@ function handleEnded() {
         MT
       </button>
 
-      <div class="volume-control">
-        <div class="volume-slider-wrap">
-          <span class="volume-value" aria-hidden="true">{Math.round(volume * 100)}%</span>
-          <input
-            class="volume-slider"
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            oninput={handleVolumeChange}
-            aria-label="音量"
-            aria-valuetext={`${Math.round(volume * 100)}%`}
-            title={`音量 ${Math.round(volume * 100)}%`}
-          />
-        </div>
+      <div class="volume-knob">
+        <span class="volume-value" aria-hidden="true">{Math.round(volume * 100)}%</span>
+        <span
+          class="knob-ring"
+          class:muted={isEffectivelyMuted}
+          style={`--volume-level: ${volume * 270}deg`}
+          aria-hidden="true"
+        ></span>
+        <input
+          class="volume-knob-input"
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={volume}
+          oninput={handleVolumeChange}
+          aria-label="音量"
+          aria-valuetext={`${Math.round(volume * 100)}%`}
+          title="左右ドラッグまたは矢印キーで音量調整"
+        />
         <button
           class="mute-btn"
           type="button"
@@ -492,28 +496,34 @@ function handleEnded() {
     color: var(--on-accent);
   }
 
-  .volume-control {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.1rem;
+  .volume-knob {
+    position: relative;
+    width: 3.5rem;
+    height: 3.5rem;
     flex-shrink: 0;
   }
 
   .mute-btn {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 2;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 1.75rem;
-    height: 1.75rem;
+    width: 2.15rem;
+    height: 2.15rem;
     padding: 0;
-    border: none;
-    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--surface-raised);
     color: var(--text-muted);
     cursor: pointer;
+    transform: translate(-50%, -50%);
   }
 
   .mute-btn:hover {
+    border-color: var(--accent);
     color: var(--text);
   }
 
@@ -557,19 +567,30 @@ function handleEnded() {
     transform: translateX(0) scale(1);
   }
 
-  .volume-slider-wrap {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 3.5rem;
+  .knob-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(
+      from 225deg,
+      var(--accent) 0deg var(--volume-level),
+      var(--border) var(--volume-level) 270deg,
+      transparent 270deg 360deg
+    );
+    mask: radial-gradient(circle, transparent 62%, #000 66%);
+    pointer-events: none;
+    transition: opacity 140ms ease;
+  }
+
+  .knob-ring.muted {
+    opacity: 0.45;
   }
 
   .volume-value {
     position: absolute;
     bottom: calc(100% + 0.35rem);
     left: 50%;
-    z-index: 1;
+    z-index: 3;
     padding: 0.2rem 0.35rem;
     border: 1px solid var(--border);
     border-radius: 4px;
@@ -586,25 +607,31 @@ function handleEnded() {
       transform 100ms ease;
   }
 
-  .volume-slider-wrap:hover .volume-value {
+  .volume-knob:hover .volume-value {
     opacity: 1;
     transform: translate(-50%, 0);
   }
 
-  .volume-slider {
-    width: 1rem;
-    height: 3.5rem;
+  .volume-knob-input {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
     margin: 0;
-    accent-color: var(--accent);
-    cursor: pointer;
-    direction: rtl;
-    writing-mode: vertical-lr;
+    cursor: ew-resize;
+    opacity: 0;
+  }
+
+  .volume-knob:focus-within .knob-ring {
+    filter: drop-shadow(0 0 2px var(--accent));
   }
 
   @media (prefers-reduced-motion: reduce) {
     .mute-btn svg,
     .mute-btn .sound-wave,
-    .mute-btn .mute-mark {
+    .mute-btn .mute-mark,
+    .knob-ring {
       transition: none;
     }
   }
