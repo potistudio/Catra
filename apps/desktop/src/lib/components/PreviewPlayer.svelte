@@ -435,12 +435,12 @@ onDestroy(() => {
           aria-label="音量調整"
           title="上下ドラッグで音量調整"
         >
-          <svg viewBox="0 0 16 20" aria-hidden="true">
-            <path d="M6 3.5h4"></path>
-            <path d="M4.5 6.75h7"></path>
-            <path d="M3.5 10h9"></path>
-            <path d="M4.5 13.25h7"></path>
-            <path d="M6 16.5h4"></path>
+          <svg viewBox="0 0 24 20" aria-hidden="true">
+            <path d="M7 3.5h10"></path>
+            <path d="M5 6.75h14"></path>
+            <path d="M3 10h18"></path>
+            <path d="M5 13.25h14"></path>
+            <path d="M7 16.5h10"></path>
           </svg>
         </button>
       </div>
@@ -682,10 +682,10 @@ onDestroy(() => {
   .volume-drag-handle {
     position: absolute;
     top: 50%;
-    right: -0.05rem;
+    right: -0.2rem;
     z-index: 3;
     display: grid;
-    width: 1.35rem;
+    width: 1.75rem;
     height: 1.35rem;
     padding: 0;
     border: 0;
@@ -698,7 +698,7 @@ onDestroy(() => {
   }
 
   .volume-drag-handle svg {
-    width: 0.9rem;
+    width: 1.35rem;
     height: 1.15rem;
     overflow: visible;
     fill: none;
