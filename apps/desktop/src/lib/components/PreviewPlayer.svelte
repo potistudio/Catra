@@ -285,18 +285,21 @@ function handleEnded() {
         >
           {volumeIcon}
         </button>
-        <input
-          class="volume-slider"
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={volume}
-          oninput={handleVolumeChange}
-          aria-label="音量"
-          aria-valuetext={`${Math.round(volume * 100)}%`}
-          title={`音量 ${Math.round(volume * 100)}%`}
-        />
+        <div class="volume-slider-wrap">
+          <span class="volume-value" aria-hidden="true">{Math.round(volume * 100)}%</span>
+          <input
+            class="volume-slider"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={volume}
+            oninput={handleVolumeChange}
+            aria-label="音量"
+            aria-valuetext={`${Math.round(volume * 100)}%`}
+            title={`音量 ${Math.round(volume * 100)}%`}
+          />
+        </div>
       </div>
     </div>
   {:else}
@@ -491,6 +494,41 @@ function handleEnded() {
     background: transparent;
     font-size: 1rem;
     cursor: pointer;
+  }
+
+  .volume-slider-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .volume-value {
+    position: absolute;
+    bottom: calc(100% + 0.35rem);
+    left: 50%;
+    z-index: 1;
+    padding: 0.2rem 0.35rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface-raised);
+    color: var(--text);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, 0.2rem);
+    transition:
+      opacity 100ms ease,
+      transform 100ms ease;
+    visibility: hidden;
+  }
+
+  .volume-slider-wrap:hover .volume-value,
+  .volume-slider-wrap:focus-within .volume-value {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    visibility: visible;
   }
 
   .volume-slider {
