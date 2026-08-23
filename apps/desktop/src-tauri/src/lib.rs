@@ -3,6 +3,7 @@ mod commands;
 mod download;
 mod extension_server;
 mod library;
+mod native_volume_drag;
 mod rekordbox;
 
 use activity_log::emit_activity_log;
@@ -25,6 +26,7 @@ use commands::{
 };
 use extension_server::start as start_extension_server;
 use library::{check_health_with, init_library, HealthDepth, LibraryState};
+use native_volume_drag::{begin_native_volume_drag, end_native_volume_drag};
 use tauri::{AppHandle, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -96,6 +98,8 @@ pub fn run() {
             rekordbox_add_content,
             rekordbox_update_content,
             rekordbox_delete_content,
+            begin_native_volume_drag,
+            end_native_volume_drag,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

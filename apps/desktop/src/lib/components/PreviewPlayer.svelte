@@ -1,8 +1,7 @@
 <script lang="ts">
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { LogicalPosition } from "@tauri-apps/api/dpi";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { onDestroy } from "svelte";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { onDestroy, onMount } from "svelte";
 import TrackArtwork from "$lib/components/TrackArtwork.svelte";
 import {
 	displayArtist,
@@ -35,13 +34,15 @@ let volume = $state(1);
 let isMuted = $state(false);
 let lastAutoplayToken = 0;
 let lastPath: string | null = null;
+let unlistenNativeVolumeDrag: UnlistenFn | null = null;
+let usesNativeVolumeDrag = false;
+let nextVolumeDragId = 0;
 let volumeDrag: {
+	dragId: number;
 	input: HTMLInputElement;
-	lastY: number;
 	pointerId: number;
 	rawVolume: number;
-	startX: number;
-	startY: number;
+	startPromise: Promise<boolean>;
 } | null = null;
 
 const MIN_PLAYBACK_RATE = 0.25;
@@ -176,20 +177,25 @@ function setVolume(nextVolume: number) {
 function handleVolumePointerDown(event: PointerEvent) {
 	if (event.button !== 0) return;
 	const input = event.currentTarget as HTMLInputElement;
+	const dragId = ++nextVolumeDragId;
+	const startPromise = invoke<boolean>("begin_native_volume_drag", {
+		dragId,
+	}).catch(() => false);
 	volumeDrag = {
+		dragId,
 		input,
-		lastY: event.clientY,
 		pointerId: event.pointerId,
 		rawVolume: volume,
-		startX: event.clientX,
-		startY: event.clientY,
+		startPromise,
 	};
 	input.focus();
 	input.setPointerCapture(event.pointerId);
 	document.documentElement.classList.add("volume-knob-dragging");
-	void getCurrentWindow()
-		.setCursorGrab(true)
-		.catch(() => undefined);
+	void startPromise.then((enabled) => {
+		if (volumeDrag?.dragId === dragId) {
+			usesNativeVolumeDrag = enabled;
+		}
+	});
 	event.preventDefault();
 }
 
@@ -197,27 +203,9 @@ function handleVolumePointerMove(event: PointerEvent) {
 	const drag = volumeDrag;
 	if (drag?.pointerId !== event.pointerId) return;
 	event.preventDefault();
-
-	const returnedToOrigin =
-		Math.abs(event.clientX - drag.startX) < 1 &&
-		Math.abs(event.clientY - drag.startY) < 1;
-	if (returnedToOrigin) {
-		drag.lastY = drag.startY;
-		return;
+	if (!usesNativeVolumeDrag && event.movementY !== 0) {
+		applyVolumeDragDelta(-event.movementY);
 	}
-
-	drag.rawVolume = Math.min(
-		1,
-		Math.max(
-			0,
-			drag.rawVolume + (drag.lastY - event.clientY) / VOLUME_DRAG_DISTANCE,
-		),
-	);
-	drag.lastY = event.clientY;
-	setVolume(drag.rawVolume);
-	void getCurrentWindow()
-		.setCursorPosition(new LogicalPosition(drag.startX, drag.startY))
-		.catch(() => undefined);
 }
 
 function handleVolumePointerEnd(event: PointerEvent) {
@@ -227,22 +215,25 @@ function handleVolumePointerEnd(event: PointerEvent) {
 
 function finishVolumeDrag() {
 	if (!volumeDrag) return;
-	const { input, pointerId, startX, startY } = volumeDrag;
+	const { dragId, input, pointerId, startPromise } = volumeDrag;
 	volumeDrag = null;
+	usesNativeVolumeDrag = false;
 	if (input.hasPointerCapture(pointerId)) {
 		input.releasePointerCapture(pointerId);
 	}
-	void restoreVolumeCursor(startX, startY);
+	document.documentElement.classList.remove("volume-knob-dragging");
+	void startPromise.then(() =>
+		invoke("end_native_volume_drag", { dragId }).catch(() => undefined),
+	);
 }
 
-async function restoreVolumeCursor(x: number, y: number) {
-	const appWindow = getCurrentWindow();
-	try {
-		await appWindow.setCursorPosition(new LogicalPosition(x, y));
-	} finally {
-		await appWindow.setCursorGrab(false).catch(() => undefined);
-		document.documentElement.classList.remove("volume-knob-dragging");
-	}
+function applyVolumeDragDelta(deltaY: number) {
+	if (!volumeDrag) return;
+	volumeDrag.rawVolume = Math.min(
+		1,
+		Math.max(0, volumeDrag.rawVolume + deltaY / VOLUME_DRAG_DISTANCE),
+	);
+	setVolume(volumeDrag.rawVolume);
 }
 
 function toggleMute() {
@@ -263,7 +254,21 @@ function handleEnded() {
 	}
 }
 
+onMount(() => {
+	void listen<{ deltaY: number; dragId: number }>(
+		"native-volume-drag",
+		({ payload }) => {
+			if (volumeDrag?.dragId === payload.dragId) {
+				applyVolumeDragDelta(payload.deltaY);
+			}
+		},
+	).then((unlisten) => {
+		unlistenNativeVolumeDrag = unlisten;
+	});
+});
+
 onDestroy(() => {
+	unlistenNativeVolumeDrag?.();
 	if (typeof document !== "undefined") {
 		finishVolumeDrag();
 		document.documentElement.classList.remove("volume-knob-dragging");

@@ -36,3 +36,11 @@ uuid = { version = "1", features = ["v4"] }
 quick-xml = "0.37"
 getrandom = "0.3"
 xxhash-rust = { version = "0.8", features = ["xxh64"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+] }

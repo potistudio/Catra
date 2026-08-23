@@ -440,6 +440,7 @@ dependencies = [
  "tiny_http",
  "uuid",
  "walkdir",
+ "windows-sys 0.61.2",
  "xxhash-rust",
 ]
 
