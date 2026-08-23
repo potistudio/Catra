@@ -7,11 +7,8 @@ import WaveformSeek from "$lib/components/WaveformSeek.svelte";
 import {
 	displayArtist,
 	displayTitle,
-	displayValue,
-	formatBitrate,
 	formatBpm,
 	formatDuration,
-	formatRating,
 } from "$lib/format";
 import type { PreviewableTrack } from "$lib/types";
 
@@ -325,14 +322,6 @@ onDestroy(() => {
     <div class="preview-info">
       <span class="preview-title">{displayTitle(track)}</span>
       <span class="preview-artist">{displayArtist(track)}</span>
-      <span class="preview-album">{displayValue(track.album)}</span>
-      <div class="preview-meta">
-        <span>BPM {formatBpm(track.bpm)}</span>
-        <span>{formatBitrate(track.bitrateKbps)}</span>
-        <span>Key {displayValue(track.key)}</span>
-        <span>{displayValue(track.genre)}</span>
-        <span class="rating">{formatRating(track.rating)}</span>
-      </div>
     </div>
 
     <div class="preview-controls">
@@ -514,28 +503,6 @@ onDestroy(() => {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .preview-album {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .preview-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem 0.75rem;
-    margin-top: 0.15rem;
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .preview-meta .rating {
-    color: #f0c040;
   }
 
   .preview-controls {
