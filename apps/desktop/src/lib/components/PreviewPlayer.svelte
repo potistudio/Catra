@@ -351,51 +351,53 @@ onDestroy(() => {
 
       <span class="time">{formatDuration(duration * 1000)}</span>
 
-      <div class="rate-control">
-        <label class="rate-field">
-          <span class="rate-label">速度</span>
-          <input
-            class="rate-input"
-            type="number"
-            min={MIN_PLAYBACK_RATE}
-            max={MAX_PLAYBACK_RATE}
-            step="0.05"
-            value={playbackRate}
-            onchange={handlePlaybackRateChange}
-            aria-label="再生速度"
-          />
-          <span>×</span>
-        </label>
+      <div class="playback-settings">
+        <div class="rate-control">
+          <label class="rate-field">
+            <span class="rate-label">速度</span>
+            <input
+              class="rate-input"
+              type="number"
+              min={MIN_PLAYBACK_RATE}
+              max={MAX_PLAYBACK_RATE}
+              step="0.05"
+              value={playbackRate}
+              onchange={handlePlaybackRateChange}
+              aria-label="再生速度"
+            />
+            <span>×</span>
+          </label>
 
-        <label class="bpm-field" title={playbackBpm === null ? "元BPMがないため指定できません" : "再生BPMを直接指定"}>
-          <span class="rate-label">BPM</span>
-          <input
-            class="bpm-input"
-            type="number"
-            min={track.bpm ? track.bpm * MIN_PLAYBACK_RATE : undefined}
-            max={track.bpm ? track.bpm * MAX_PLAYBACK_RATE : undefined}
-            step="0.1"
-            value={playbackBpm === null ? "" : playbackBpm.toFixed(1)}
-            onchange={handlePlaybackBpmChange}
-            placeholder="—"
-            disabled={playbackBpm === null}
-            aria-label="再生BPM"
-          />
-          <span aria-hidden="true"></span>
-        </label>
+          <label class="bpm-field" title={playbackBpm === null ? "元BPMがないため指定できません" : "再生BPMを直接指定"}>
+            <span class="rate-label">BPM</span>
+            <input
+              class="bpm-input"
+              type="number"
+              min={track.bpm ? track.bpm * MIN_PLAYBACK_RATE : undefined}
+              max={track.bpm ? track.bpm * MAX_PLAYBACK_RATE : undefined}
+              step="0.1"
+              value={playbackBpm === null ? "" : playbackBpm.toFixed(1)}
+              onchange={handlePlaybackBpmChange}
+              placeholder="—"
+              disabled={playbackBpm === null}
+              aria-label="再生BPM"
+            />
+            <span aria-hidden="true"></span>
+          </label>
+        </div>
+
+        <button
+          class="master-tempo"
+          class:active={masterTempo}
+          type="button"
+          onclick={() => (masterTempo = !masterTempo)}
+          aria-label="音程維持"
+          aria-pressed={masterTempo}
+          title={masterTempo ? "Master Tempo オン（音程を維持）" : "Master Tempo オフ（速度に応じて音程を変更）"}
+        >
+          MT
+        </button>
       </div>
-
-      <button
-        class="master-tempo"
-        class:active={masterTempo}
-        type="button"
-        onclick={() => (masterTempo = !masterTempo)}
-        aria-label="音程維持"
-        aria-pressed={masterTempo}
-        title={masterTempo ? "Master Tempo オン（音程を維持）" : "Master Tempo オフ（速度に応じて音程を変更）"}
-      >
-        MT
-      </button>
 
       <div class="volume-knob">
         <span class="volume-value" aria-hidden="true">{Math.round(volume * 100)}%</span>
@@ -571,9 +573,8 @@ onDestroy(() => {
     text-align: center;
   }
 
-  .rate-control {
+  .playback-settings {
     display: flex;
-    flex-direction: column;
     flex-shrink: 0;
     overflow: hidden;
     border: 1px solid var(--border);
@@ -582,6 +583,11 @@ onDestroy(() => {
     color: var(--text-muted);
     font-size: 0.8rem;
     font-variant-numeric: tabular-nums;
+  }
+
+  .rate-control {
+    display: flex;
+    flex-direction: column;
   }
 
   .rate-field,
@@ -637,22 +643,28 @@ onDestroy(() => {
   }
 
   .master-tempo {
-    padding: 0.3rem 0.45rem;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    background: var(--surface);
+    align-self: stretch;
+    width: 2rem;
+    padding: 0.25rem;
+    border: 0;
+    border-left: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    background: transparent;
     color: var(--text-muted);
     font-size: 0.72rem;
     font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.08em;
+    writing-mode: vertical-rl;
+    text-orientation: upright;
     cursor: pointer;
   }
 
   .master-tempo:hover {
-    border-color: var(--accent);
+    background: var(--surface-hover);
+    color: var(--text);
   }
 
   .master-tempo.active {
-    border-color: var(--accent);
     background: var(--accent);
     color: var(--on-accent);
   }
