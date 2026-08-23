@@ -3,6 +3,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { onDestroy, onMount } from "svelte";
 import TrackArtwork from "$lib/components/TrackArtwork.svelte";
+import WaveformSeek from "$lib/components/WaveformSeek.svelte";
 import {
 	displayArtist,
 	displayTitle,
@@ -140,10 +141,9 @@ function handleLoadedMetadata() {
 	}
 }
 
-function handleSeek(event: Event) {
+function handleSeek(nextTime: number) {
 	if (!audioEl) return;
-	const input = event.target as HTMLInputElement;
-	audioEl.currentTime = Number(input.value);
+	audioEl.currentTime = nextTime;
 	currentTime = audioEl.currentTime;
 }
 
@@ -335,15 +335,11 @@ onDestroy(() => {
 
       <span class="time">{formatDuration(currentTime * 1000)}</span>
 
-      <input
-        class="seek"
-        type="range"
-        min="0"
-        max={duration || 0}
-        step="0.1"
-        value={currentTime}
-        oninput={handleSeek}
-        disabled={!duration}
+      <WaveformSeek
+        source={audioSrc}
+        {currentTime}
+        {duration}
+        onseek={handleSeek}
       />
 
       <span class="time">{formatDuration(duration * 1000)}</span>
@@ -565,12 +561,6 @@ onDestroy(() => {
     color: var(--text-muted);
     min-width: 2.5rem;
     text-align: center;
-  }
-
-  .seek {
-    flex: 1;
-    accent-color: var(--accent);
-    cursor: pointer;
   }
 
   .rate-control {
