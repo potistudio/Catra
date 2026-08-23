@@ -700,7 +700,7 @@ onDestroy(() => {
   .volume-drag-handle {
     position: absolute;
     top: 50%;
-    right: -0.1rem;
+    right: -0.25rem;
     z-index: 3;
     display: grid;
     width: 1.35rem;
@@ -744,9 +744,9 @@ onDestroy(() => {
 
   .knob-ring {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+    inset: 0.15rem;
+    width: calc(100% - 0.3rem);
+    height: calc(100% - 0.3rem);
     fill: none;
     opacity: 0;
     pointer-events: none;
@@ -814,10 +814,6 @@ onDestroy(() => {
     opacity: 0;
     pointer-events: none;
     touch-action: none;
-  }
-
-  .volume-knob:focus-within .knob-ring {
-    filter: drop-shadow(0 0 2px var(--accent));
   }
 
   :global(html.volume-knob-dragging),
