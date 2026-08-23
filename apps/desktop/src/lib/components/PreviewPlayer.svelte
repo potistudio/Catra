@@ -37,10 +37,11 @@ let lastAutoplayToken = 0;
 let lastPath: string | null = null;
 let volumeDrag: {
 	input: HTMLInputElement;
+	lastY: number;
 	pointerId: number;
+	rawVolume: number;
 	startX: number;
 	startY: number;
-	startVolume: number;
 } | null = null;
 
 const MIN_PLAYBACK_RATE = 0.25;
@@ -177,10 +178,11 @@ function handleVolumePointerDown(event: PointerEvent) {
 	const input = event.currentTarget as HTMLInputElement;
 	volumeDrag = {
 		input,
+		lastY: event.clientY,
 		pointerId: event.pointerId,
+		rawVolume: volume,
 		startX: event.clientX,
 		startY: event.clientY,
-		startVolume: volume,
 	};
 	input.focus();
 	input.setPointerCapture(event.pointerId);
@@ -192,12 +194,30 @@ function handleVolumePointerDown(event: PointerEvent) {
 }
 
 function handleVolumePointerMove(event: PointerEvent) {
-	if (volumeDrag?.pointerId !== event.pointerId) return;
-	setVolume(
-		volumeDrag.startVolume +
-			(volumeDrag.startY - event.clientY) / VOLUME_DRAG_DISTANCE,
-	);
+	const drag = volumeDrag;
+	if (drag?.pointerId !== event.pointerId) return;
 	event.preventDefault();
+
+	const returnedToOrigin =
+		Math.abs(event.clientX - drag.startX) < 1 &&
+		Math.abs(event.clientY - drag.startY) < 1;
+	if (returnedToOrigin) {
+		drag.lastY = drag.startY;
+		return;
+	}
+
+	drag.rawVolume = Math.min(
+		1,
+		Math.max(
+			0,
+			drag.rawVolume + (drag.lastY - event.clientY) / VOLUME_DRAG_DISTANCE,
+		),
+	);
+	drag.lastY = event.clientY;
+	setVolume(drag.rawVolume);
+	void getCurrentWindow()
+		.setCursorPosition(new LogicalPosition(drag.startX, drag.startY))
+		.catch(() => undefined);
 }
 
 function handleVolumePointerEnd(event: PointerEvent) {
