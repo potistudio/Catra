@@ -37,13 +37,16 @@ let lastPath: string | null = null;
 let unlistenNativeVolumeDrag: UnlistenFn | null = null;
 let usesNativeVolumeDrag = false;
 let nextVolumeDragId = 0;
-let volumeDrag: {
+let lastFinishedVolumeDrag: VolumeDrag | null = null;
+interface VolumeDrag {
+	control: HTMLButtonElement;
+	didMove: boolean;
 	dragId: number;
-	input: HTMLInputElement;
 	pointerId: number;
 	rawVolume: number;
 	startPromise: Promise<boolean>;
-} | null = null;
+}
+let volumeDrag: VolumeDrag | null = null;
 
 const MIN_PLAYBACK_RATE = 0.25;
 const MAX_PLAYBACK_RATE = 4;
@@ -176,27 +179,28 @@ function setVolume(nextVolume: number) {
 
 function handleVolumePointerDown(event: PointerEvent) {
 	if (event.button !== 0) return;
-	const input = event.currentTarget as HTMLInputElement;
+	const control = event.currentTarget as HTMLButtonElement;
 	const dragId = ++nextVolumeDragId;
 	const startPromise = invoke<boolean>("begin_native_volume_drag", {
 		dragId,
 	}).catch(() => false);
 	volumeDrag = {
+		control,
+		didMove: false,
 		dragId,
-		input,
 		pointerId: event.pointerId,
 		rawVolume: volume,
 		startPromise,
 	};
-	input.focus();
-	input.setPointerCapture(event.pointerId);
+	lastFinishedVolumeDrag = null;
+	control.focus();
+	control.setPointerCapture(event.pointerId);
 	document.documentElement.classList.add("volume-knob-dragging");
 	void startPromise.then((enabled) => {
 		if (volumeDrag?.dragId === dragId) {
 			usesNativeVolumeDrag = enabled;
 		}
 	});
-	event.preventDefault();
 }
 
 function handleVolumePointerMove(event: PointerEvent) {
@@ -215,11 +219,13 @@ function handleVolumePointerEnd(event: PointerEvent) {
 
 function finishVolumeDrag() {
 	if (!volumeDrag) return;
-	const { dragId, input, pointerId, startPromise } = volumeDrag;
+	const drag = volumeDrag;
+	const { control, dragId, pointerId, startPromise } = drag;
 	volumeDrag = null;
+	lastFinishedVolumeDrag = drag;
 	usesNativeVolumeDrag = false;
-	if (input.hasPointerCapture(pointerId)) {
-		input.releasePointerCapture(pointerId);
+	if (control.hasPointerCapture(pointerId)) {
+		control.releasePointerCapture(pointerId);
 	}
 	document.documentElement.classList.remove("volume-knob-dragging");
 	void startPromise.then(() =>
@@ -227,13 +233,27 @@ function finishVolumeDrag() {
 	);
 }
 
-function applyVolumeDragDelta(deltaY: number) {
-	if (!volumeDrag) return;
-	volumeDrag.rawVolume = Math.min(
+function applyVolumeDragDelta(deltaY: number, drag = volumeDrag) {
+	if (!drag || deltaY === 0) return;
+	drag.didMove = true;
+	drag.rawVolume = Math.min(
 		1,
-		Math.max(0, volumeDrag.rawVolume + deltaY / VOLUME_DRAG_DISTANCE),
+		Math.max(0, drag.rawVolume + deltaY / VOLUME_DRAG_DISTANCE),
 	);
-	setVolume(volumeDrag.rawVolume);
+	setVolume(drag.rawVolume);
+}
+
+function handleMuteClick(event: MouseEvent) {
+	if (event.detail === 0) {
+		toggleMute();
+		return;
+	}
+
+	const drag = lastFinishedVolumeDrag;
+	window.setTimeout(() => {
+		if (!drag?.didMove) toggleMute();
+		if (lastFinishedVolumeDrag === drag) lastFinishedVolumeDrag = null;
+	}, 24);
 }
 
 function toggleMute() {
@@ -258,9 +278,13 @@ onMount(() => {
 	void listen<{ deltaY: number; dragId: number }>(
 		"native-volume-drag",
 		({ payload }) => {
-			if (volumeDrag?.dragId === payload.dragId) {
-				applyVolumeDragDelta(payload.deltaY);
-			}
+			const drag =
+				volumeDrag?.dragId === payload.dragId
+					? volumeDrag
+					: lastFinishedVolumeDrag?.dragId === payload.dragId
+						? lastFinishedVolumeDrag
+						: null;
+			applyVolumeDragDelta(payload.deltaY, drag);
 		},
 	).then((unlisten) => {
 		unlistenNativeVolumeDrag = unlisten;
@@ -396,10 +420,6 @@ onDestroy(() => {
           step="0.01"
           value={volume}
           oninput={handleVolumeChange}
-          onpointerdown={handleVolumePointerDown}
-          onpointermove={handleVolumePointerMove}
-          onpointerup={handleVolumePointerEnd}
-          onpointercancel={handleVolumePointerEnd}
           aria-label="音量"
           aria-valuetext={`${Math.round(volume * 100)}%`}
           title="上下ドラッグまたは矢印キーで音量調整"
@@ -407,10 +427,14 @@ onDestroy(() => {
         <button
           class="mute-btn"
           type="button"
-          onclick={toggleMute}
+          onclick={handleMuteClick}
+          onpointerdown={handleVolumePointerDown}
+          onpointermove={handleVolumePointerMove}
+          onpointerup={handleVolumePointerEnd}
+          onpointercancel={handleVolumePointerEnd}
           aria-label={isEffectivelyMuted ? "ミュート解除" : "ミュート"}
           aria-pressed={isEffectivelyMuted}
-          title={isEffectivelyMuted ? "ミュート解除" : "ミュート"}
+          title={`${isEffectivelyMuted ? "ミュート解除" : "ミュート"}／上下ドラッグで音量調整`}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M11 5 6 9H2v6h4l5 4V5Z"></path>
@@ -631,6 +655,7 @@ onDestroy(() => {
     background: var(--surface-raised);
     color: var(--text-muted);
     cursor: pointer;
+    touch-action: none;
     transform: translate(-50%, -50%);
   }
 
@@ -690,12 +715,12 @@ onDestroy(() => {
     stroke: var(--accent);
   }
 
-  .volume-knob:hover .knob-ring {
+  .volume-knob:has(.mute-btn:hover) .knob-ring {
     opacity: 1;
     transform: scale(1);
   }
 
-  .volume-knob:hover .knob-ring.muted {
+  .volume-knob:has(.mute-btn:hover) .knob-ring.muted {
     opacity: 0.45;
   }
 
@@ -720,7 +745,7 @@ onDestroy(() => {
       transform 100ms ease;
   }
 
-  .volume-knob:hover .volume-value {
+  .volume-knob:has(.mute-btn:hover) .volume-value {
     opacity: 1;
     transform: translate(-50%, 0);
   }
@@ -734,6 +759,7 @@ onDestroy(() => {
     margin: 0;
     cursor: ns-resize;
     opacity: 0;
+    pointer-events: none;
     touch-action: none;
   }
 
