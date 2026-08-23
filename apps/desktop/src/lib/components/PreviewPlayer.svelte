@@ -109,11 +109,16 @@ $effect(() => {
 
 $effect(() => {
 	if (!audioEl) return;
+	applyAudioSettings();
+});
+
+function applyAudioSettings() {
+	if (!audioEl) return;
 	audioEl.playbackRate = playbackRate;
 	audioEl.preservesPitch = masterTempo;
 	audioEl.volume = volume;
 	audioEl.muted = isMuted;
-});
+}
 
 function togglePlay() {
 	if (!audioEl || !audioSrc) return;
@@ -132,6 +137,8 @@ function handleTimeUpdate() {
 
 function handleLoadedMetadata() {
 	if (!audioEl) return;
+	// src の差し替えでブラウザが再生設定を初期化するため、曲ごとに再適用する。
+	applyAudioSettings();
 	if (Number.isFinite(audioEl.duration)) {
 		duration = audioEl.duration;
 	}
