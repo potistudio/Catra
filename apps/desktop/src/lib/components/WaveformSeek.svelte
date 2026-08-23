@@ -133,7 +133,6 @@ function handleSeek(event: Event) {
 		{/each}
 	</svg>
 
-	<div class="playhead" style={`left: ${progress * 100}%`}></div>
 	<input
 		class="waveform-input"
 		type="range"
@@ -172,16 +171,6 @@ function handleSeek(event: Event) {
 
 	.waveform-played {
 		fill: var(--accent);
-	}
-
-	.playhead {
-		position: absolute;
-		top: 0.2rem;
-		bottom: 0.2rem;
-		width: 1px;
-		background: color-mix(in srgb, var(--accent) 55%, white);
-		pointer-events: none;
-		transform: translateX(-0.5px);
 	}
 
 	.waveform-input {
