@@ -744,9 +744,9 @@ onDestroy(() => {
 
   .knob-ring {
     position: absolute;
-    inset: 0.15rem;
-    width: calc(100% - 0.3rem);
-    height: calc(100% - 0.3rem);
+    inset: 0.3rem;
+    width: calc(100% - 0.6rem);
+    height: calc(100% - 0.6rem);
     fill: none;
     opacity: 0;
     pointer-events: none;
