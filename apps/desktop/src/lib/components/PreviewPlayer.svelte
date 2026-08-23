@@ -700,7 +700,7 @@ onDestroy(() => {
   .volume-drag-handle {
     position: absolute;
     top: 50%;
-    right: -0.25rem;
+    right: -0.1rem;
     z-index: 3;
     display: grid;
     width: 1.35rem;
@@ -729,16 +729,12 @@ onDestroy(() => {
     stroke-width: 1.1;
     transition:
       color 120ms ease,
-      filter 120ms ease,
       transform 160ms cubic-bezier(0.2, 1.65, 0.3, 1);
   }
 
   .volume-drag-handle:hover svg,
   .volume-drag-handle:focus-visible svg {
     color: var(--accent);
-    filter:
-      drop-shadow(0 1px 1px rgb(0 0 0 / 35%))
-      drop-shadow(0 0 2px var(--accent));
     transform: scale(1.12);
   }
 
