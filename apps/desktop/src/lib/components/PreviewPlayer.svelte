@@ -28,6 +28,8 @@ let audioSrc = $state<string | null>(null);
 let pendingAutoplay = $state(false);
 let playbackRate = $state(1);
 let masterTempo = $state(true);
+let volume = $state(1);
+let isMuted = $state(false);
 let lastAutoplayToken = 0;
 let lastPath: string | null = null;
 
@@ -36,6 +38,9 @@ const MAX_PLAYBACK_RATE = 4;
 
 let playbackBpm = $derived(
 	track?.bpm != null && track.bpm > 0 ? track.bpm * playbackRate : null,
+);
+let volumeIcon = $derived(
+	isMuted || volume === 0 ? "🔇" : volume < 0.5 ? "🔉" : "🔊",
 );
 
 $effect(() => {
@@ -78,6 +83,8 @@ $effect(() => {
 	if (!audioEl) return;
 	audioEl.playbackRate = playbackRate;
 	audioEl.preservesPitch = masterTempo;
+	audioEl.volume = volume;
+	audioEl.muted = isMuted;
 });
 
 function togglePlay() {
@@ -144,6 +151,22 @@ function handlePlaybackBpmChange(event: Event) {
 		Math.max(MIN_PLAYBACK_RATE, requestedBpm / sourceBpm),
 	);
 	input.value = formatBpm(sourceBpm * playbackRate);
+}
+
+function handleVolumeChange(event: Event) {
+	const input = event.target as HTMLInputElement;
+	volume = Math.min(1, Math.max(0, Number(input.value)));
+	if (volume > 0) isMuted = false;
+}
+
+function toggleMute() {
+	if (isMuted) {
+		isMuted = false;
+	} else if (volume === 0) {
+		volume = 0.5;
+	} else {
+		isMuted = true;
+	}
 }
 
 function handleEnded() {
@@ -250,6 +273,31 @@ function handleEnded() {
       >
         MT
       </button>
+
+      <div class="volume-control">
+        <button
+          class="mute-btn"
+          type="button"
+          onclick={toggleMute}
+          aria-label={isMuted || volume === 0 ? "ミュート解除" : "ミュート"}
+          aria-pressed={isMuted || volume === 0}
+          title={isMuted || volume === 0 ? "ミュート解除" : "ミュート"}
+        >
+          {volumeIcon}
+        </button>
+        <input
+          class="volume-slider"
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={volume}
+          oninput={handleVolumeChange}
+          aria-label="音量"
+          aria-valuetext={`${Math.round(volume * 100)}%`}
+          title={`音量 ${Math.round(volume * 100)}%`}
+        />
+      </div>
     </div>
   {:else}
     <p class="preview-empty">トラックを選択してプレビュー</p>
@@ -427,5 +475,27 @@ function handleEnded() {
     border-color: var(--accent);
     background: var(--accent);
     color: var(--on-accent);
+  }
+
+  .volume-control {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+  }
+
+  .mute-btn {
+    width: 1.75rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+
+  .volume-slider {
+    width: 5rem;
+    accent-color: var(--accent);
+    cursor: pointer;
   }
 </style>
