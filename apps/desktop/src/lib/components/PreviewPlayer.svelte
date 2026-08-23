@@ -57,10 +57,11 @@ let volumeGripLines = $derived(
 	Array.from({ length: 7 }, (_, index) => {
 		const y = -3 + index * VOLUME_GRIP_SPACING + volumeGripPhase;
 		const distanceFromCenter = Math.abs(y - 12);
-		const x = Math.max(
+		const rightCurveX = Math.max(
 			2,
 			6.5 - distanceFromCenter * 0.1 - distanceFromCenter ** 2 * 0.02,
 		);
+		const x = 10 - rightCurveX;
 		return { x, y };
 	}),
 );
@@ -401,12 +402,12 @@ onDestroy(() => {
           viewBox="0 0 56 56"
           aria-hidden="true"
         >
-          <path class="knob-track" pathLength="100" d="M44.97 44.97A24 24 0 1 0 11.03 44.97"></path>
+          <path class="knob-track" pathLength="100" d="M11.03 44.97A24 24 0 1 1 44.97 44.97"></path>
           <path
             class="knob-level"
             pathLength="100"
             stroke-dasharray={`${volume * 100} 100`}
-            d="M44.97 44.97A24 24 0 1 0 11.03 44.97"
+            d="M11.03 44.97A24 24 0 1 1 44.97 44.97"
           ></path>
         </svg>
         <input
@@ -700,7 +701,7 @@ onDestroy(() => {
   .volume-drag-handle {
     position: absolute;
     top: 50%;
-    right: -0.25rem;
+    left: -0.25rem;
     z-index: 3;
     display: grid;
     width: 1.35rem;
