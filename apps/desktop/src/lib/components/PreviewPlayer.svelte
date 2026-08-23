@@ -535,6 +535,8 @@ function handleEnded() {
     stroke-linecap: round;
     stroke-linejoin: round;
     stroke-width: 2;
+    transform-box: fill-box;
+    transform-origin: center;
     transition: transform 120ms ease;
   }
 
