@@ -560,6 +560,8 @@ function handleEnded() {
     position: relative;
     display: flex;
     align-items: center;
+    justify-content: center;
+    height: 3.5rem;
   }
 
   .volume-value {
@@ -589,9 +591,13 @@ function handleEnded() {
   }
 
   .volume-slider {
-    width: 5rem;
+    width: 1rem;
+    height: 3.5rem;
+    margin: 0;
     accent-color: var(--accent);
     cursor: pointer;
+    direction: rtl;
+    writing-mode: vertical-lr;
   }
 
   @media (prefers-reduced-motion: reduce) {
