@@ -603,7 +603,7 @@ onDestroy(() => {
 
   .rate-input,
   .bpm-input {
-    appearance: textfield;
+    color-scheme: dark;
     width: 100%;
     box-sizing: border-box;
     padding: 0;
@@ -612,14 +612,6 @@ onDestroy(() => {
     color: var(--text);
     font: inherit;
     text-align: right;
-  }
-
-  .rate-input::-webkit-inner-spin-button,
-  .rate-input::-webkit-outer-spin-button,
-  .bpm-input::-webkit-inner-spin-button,
-  .bpm-input::-webkit-outer-spin-button {
-    margin: 0;
-    appearance: none;
   }
 
   .rate-input:focus,
