@@ -682,7 +682,7 @@ onDestroy(() => {
   .volume-drag-handle {
     position: absolute;
     top: 50%;
-    right: -0.05rem;
+    right: -0.25rem;
     z-index: 3;
     display: grid;
     width: 1.35rem;
