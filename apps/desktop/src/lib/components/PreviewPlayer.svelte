@@ -274,12 +274,20 @@ function handleEnded() {
 
       <div class="volume-knob">
         <span class="volume-value" aria-hidden="true">{Math.round(volume * 100)}%</span>
-        <span
+        <svg
           class="knob-ring"
           class:muted={isEffectivelyMuted}
-          style={`--volume-level: ${volume * 270}deg`}
+          viewBox="0 0 56 56"
           aria-hidden="true"
-        ></span>
+        >
+          <path class="knob-track" pathLength="100" d="M11.03 44.97A24 24 0 1 1 44.97 44.97"></path>
+          <path
+            class="knob-level"
+            pathLength="100"
+            stroke-dasharray={`${volume * 100} 100`}
+            d="M11.03 44.97A24 24 0 1 1 44.97 44.97"
+          ></path>
+        </svg>
         <input
           class="volume-knob-input"
           type="range"
@@ -555,18 +563,22 @@ function handleEnded() {
   .knob-ring {
     position: absolute;
     inset: 0;
-    border-radius: 50%;
-    background: conic-gradient(
-      from 225deg,
-      var(--accent) 0deg var(--volume-level),
-      var(--border) var(--volume-level) 270deg,
-      transparent 270deg 360deg
-    );
-    -webkit-mask: radial-gradient(circle, transparent 62%, #000 66%);
-    mask: radial-gradient(circle, transparent 62%, #000 66%);
+    width: 100%;
+    height: 100%;
+    fill: none;
     opacity: 0;
     pointer-events: none;
+    stroke-linecap: round;
+    stroke-width: 4;
     transition: opacity 140ms ease;
+  }
+
+  .knob-track {
+    stroke: var(--border);
+  }
+
+  .knob-level {
+    stroke: var(--accent);
   }
 
   .volume-knob:hover .knob-ring {
