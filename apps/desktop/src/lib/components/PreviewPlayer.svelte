@@ -572,9 +572,12 @@ onDestroy(() => {
 
   .rate-control {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    flex-direction: column;
     flex-shrink: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
     color: var(--text-muted);
     font-size: 0.8rem;
     font-variant-numeric: tabular-nums;
@@ -585,6 +588,11 @@ onDestroy(() => {
     display: flex;
     align-items: center;
     gap: 0.25rem;
+    padding: 0.2rem 0.35rem;
+  }
+
+  .bpm-field {
+    border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
   }
 
   .rate-label {
@@ -594,12 +602,12 @@ onDestroy(() => {
   .rate-input,
   .bpm-input {
     width: 3.75rem;
-    padding: 0.25rem 0.3rem;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    background: var(--surface);
+    padding: 0;
+    border: 0;
+    background: transparent;
     color: var(--text);
     font: inherit;
+    text-align: right;
   }
 
   .bpm-input {
@@ -608,8 +616,12 @@ onDestroy(() => {
 
   .rate-input:focus,
   .bpm-input:focus {
-    border-color: var(--accent);
     outline: none;
+  }
+
+  .rate-field:focus-within,
+  .bpm-field:focus-within {
+    box-shadow: inset 2px 0 var(--accent);
   }
 
   .bpm-input:disabled {
