@@ -570,12 +570,12 @@ function handleEnded() {
     pointer-events: none;
     stroke-linecap: round;
     stroke-width: 4;
-    transform: scale(0.78);
+    transform: scale(0.68);
     transform-box: fill-box;
     transform-origin: center;
     transition:
-      opacity 140ms ease,
-      transform 160ms ease;
+      opacity 100ms ease-out,
+      transform 240ms cubic-bezier(0.2, 1.65, 0.3, 1);
   }
 
   .knob-track {
