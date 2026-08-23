@@ -153,7 +153,6 @@ function handleSeek(event: Event) {
 		min-width: 5rem;
 		height: 2.5rem;
 		border-radius: 0.25rem;
-		background: color-mix(in srgb, var(--surface) 72%, transparent);
 		overflow: hidden;
 	}
 
