@@ -707,8 +707,11 @@ onDestroy(() => {
     height: 1.65rem;
     padding: 0;
     border: 0;
+    outline: 0;
     place-items: center;
+    appearance: none;
     background: transparent;
+    box-shadow: none;
     color: var(--text-muted);
     cursor: ns-resize;
     touch-action: none;
