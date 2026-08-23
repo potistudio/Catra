@@ -561,13 +561,11 @@ onDestroy(clearVolumeValueHideTimer);
     transition:
       opacity 100ms ease,
       transform 100ms ease;
-    visibility: hidden;
   }
 
   .volume-value.visible {
     opacity: 1;
     transform: translate(-50%, 0);
-    visibility: visible;
   }
 
   .volume-slider {
