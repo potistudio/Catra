@@ -578,11 +578,16 @@ function handleEnded() {
       transparent 270deg 360deg
     );
     mask: radial-gradient(circle, transparent 62%, #000 66%);
+    opacity: 0;
     pointer-events: none;
     transition: opacity 140ms ease;
   }
 
-  .knob-ring.muted {
+  .volume-knob:hover .knob-ring {
+    opacity: 1;
+  }
+
+  .volume-knob:hover .knob-ring.muted {
     opacity: 0.45;
   }
 
