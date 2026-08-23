@@ -273,6 +273,21 @@ function handleEnded() {
       </button>
 
       <div class="volume-control">
+        <div class="volume-slider-wrap">
+          <span class="volume-value" aria-hidden="true">{Math.round(volume * 100)}%</span>
+          <input
+            class="volume-slider"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={volume}
+            oninput={handleVolumeChange}
+            aria-label="音量"
+            aria-valuetext={`${Math.round(volume * 100)}%`}
+            title={`音量 ${Math.round(volume * 100)}%`}
+          />
+        </div>
         <button
           class="mute-btn"
           type="button"
@@ -297,21 +312,6 @@ function handleEnded() {
             <path class="mute-mark" class:visible={isEffectivelyMuted} d="m22 9-6 6"></path>
           </svg>
         </button>
-        <div class="volume-slider-wrap">
-          <span class="volume-value" aria-hidden="true">{Math.round(volume * 100)}%</span>
-          <input
-            class="volume-slider"
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            oninput={handleVolumeChange}
-            aria-label="音量"
-            aria-valuetext={`${Math.round(volume * 100)}%`}
-            title={`音量 ${Math.round(volume * 100)}%`}
-          />
-        </div>
       </div>
     </div>
   {:else}
@@ -494,8 +494,9 @@ function handleEnded() {
 
   .volume-control {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.1rem;
     flex-shrink: 0;
   }
 
