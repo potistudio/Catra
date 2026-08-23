@@ -578,6 +578,7 @@ onDestroy(() => {
     overflow: hidden;
     border: 1px solid var(--border);
     border-radius: 4px;
+    background: var(--surface);
     color: var(--text-muted);
     font-size: 0.8rem;
     font-variant-numeric: tabular-nums;
@@ -611,6 +612,13 @@ onDestroy(() => {
     color: var(--text);
     font: inherit;
     text-align: right;
+  }
+
+  .rate-input::-webkit-inner-spin-button,
+  .rate-input::-webkit-outer-spin-button,
+  .bpm-input::-webkit-inner-spin-button,
+  .bpm-input::-webkit-outer-spin-button {
+    background: transparent;
   }
 
   .rate-input:focus,
