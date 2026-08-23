@@ -277,6 +277,7 @@ function handleEnded() {
         <span
           class="knob-ring"
           class:muted={isEffectivelyMuted}
+          style={`--volume-level: ${volume * 270}deg`}
           aria-hidden="true"
         ></span>
         <input
@@ -534,46 +535,35 @@ function handleEnded() {
     stroke-linecap: round;
     stroke-linejoin: round;
     stroke-width: 2;
-    transform-box: fill-box;
-    transform-origin: center;
-    transition: transform 120ms ease;
-  }
-
-  .mute-btn:active svg {
-    transform: scale(0.86);
   }
 
   .mute-btn .sound-wave,
   .mute-btn .mute-mark {
     opacity: 0;
-    transform: translateX(-2px) scale(0.75);
-    transform-box: fill-box;
-    transform-origin: center;
-    transition:
-      opacity 140ms ease,
-      transform 180ms ease;
+    transition: opacity 140ms ease;
   }
 
   .mute-btn .sound-wave.far {
     transition-delay: 40ms;
   }
 
-  .mute-btn .mute-mark {
-    transform: scale(0.65);
-  }
-
   .mute-btn .sound-wave.visible,
   .mute-btn .mute-mark.visible {
     opacity: 1;
-    transform: translateX(0) scale(1);
   }
 
   .knob-ring {
     position: absolute;
     inset: 0;
-    box-sizing: border-box;
-    border: 2px solid var(--accent);
     border-radius: 50%;
+    background: conic-gradient(
+      from 225deg,
+      var(--accent) 0deg var(--volume-level),
+      var(--border) var(--volume-level) 270deg,
+      transparent 270deg 360deg
+    );
+    -webkit-mask: radial-gradient(circle, transparent 62%, #000 66%);
+    mask: radial-gradient(circle, transparent 62%, #000 66%);
     opacity: 0;
     pointer-events: none;
     transition: opacity 140ms ease;
