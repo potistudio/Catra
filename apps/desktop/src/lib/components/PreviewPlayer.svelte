@@ -277,7 +277,6 @@ function handleEnded() {
         <span
           class="knob-ring"
           class:muted={isEffectivelyMuted}
-          style={`--volume-level: ${volume * 270}deg`}
           aria-hidden="true"
         ></span>
         <input
@@ -572,14 +571,9 @@ function handleEnded() {
   .knob-ring {
     position: absolute;
     inset: 0;
+    box-sizing: border-box;
+    border: 2px solid var(--accent);
     border-radius: 50%;
-    background: conic-gradient(
-      from 225deg,
-      var(--accent) 0deg var(--volume-level),
-      var(--border) var(--volume-level) 270deg,
-      transparent 270deg 360deg
-    );
-    mask: radial-gradient(circle, transparent 62%, #000 66%);
     opacity: 0;
     pointer-events: none;
     transition: opacity 140ms ease;
