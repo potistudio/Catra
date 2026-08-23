@@ -39,6 +39,7 @@ const MAX_PLAYBACK_RATE = 4;
 let playbackBpm = $derived(
 	track?.bpm != null && track.bpm > 0 ? track.bpm * playbackRate : null,
 );
+let isEffectivelyMuted = $derived(isMuted || volume === 0);
 
 $effect(() => {
 	if (!track) {
@@ -276,21 +277,24 @@ function handleEnded() {
           class="mute-btn"
           type="button"
           onclick={toggleMute}
-          aria-label={isMuted || volume === 0 ? "ミュート解除" : "ミュート"}
-          aria-pressed={isMuted || volume === 0}
-          title={isMuted || volume === 0 ? "ミュート解除" : "ミュート"}
+          aria-label={isEffectivelyMuted ? "ミュート解除" : "ミュート"}
+          aria-pressed={isEffectivelyMuted}
+          title={isEffectivelyMuted ? "ミュート解除" : "ミュート"}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M11 5 6 9H2v6h4l5 4V5Z"></path>
-            {#if isMuted || volume === 0}
-              <path d="m16 9 6 6"></path>
-              <path d="m22 9-6 6"></path>
-            {:else}
-              <path d="M15.5 8.5a5 5 0 0 1 0 7"></path>
-              {#if volume >= 0.5}
-                <path d="M19 5a10 10 0 0 1 0 14"></path>
-              {/if}
-            {/if}
+            <path
+              class="sound-wave near"
+              class:visible={!isEffectivelyMuted}
+              d="M15.5 8.5a5 5 0 0 1 0 7"
+            ></path>
+            <path
+              class="sound-wave far"
+              class:visible={!isEffectivelyMuted && volume >= 0.5}
+              d="M19 5a10 10 0 0 1 0 14"
+            ></path>
+            <path class="mute-mark" class:visible={isEffectivelyMuted} d="m16 9 6 6"></path>
+            <path class="mute-mark" class:visible={isEffectivelyMuted} d="m22 9-6 6"></path>
           </svg>
         </button>
         <div class="volume-slider-wrap">
@@ -520,6 +524,36 @@ function handleEnded() {
     stroke-linecap: round;
     stroke-linejoin: round;
     stroke-width: 2;
+    transition: transform 120ms ease;
+  }
+
+  .mute-btn:active svg {
+    transform: scale(0.86);
+  }
+
+  .mute-btn .sound-wave,
+  .mute-btn .mute-mark {
+    opacity: 0;
+    transform: translateX(-2px) scale(0.75);
+    transform-box: fill-box;
+    transform-origin: center;
+    transition:
+      opacity 140ms ease,
+      transform 180ms ease;
+  }
+
+  .mute-btn .sound-wave.far {
+    transition-delay: 40ms;
+  }
+
+  .mute-btn .mute-mark {
+    transform: scale(0.65);
+  }
+
+  .mute-btn .sound-wave.visible,
+  .mute-btn .mute-mark.visible {
+    opacity: 1;
+    transform: translateX(0) scale(1);
   }
 
   .volume-slider-wrap {
@@ -558,5 +592,13 @@ function handleEnded() {
     width: 5rem;
     accent-color: var(--accent);
     cursor: pointer;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mute-btn svg,
+    .mute-btn .sound-wave,
+    .mute-btn .mute-mark {
+      transition: none;
+    }
   }
 </style>
