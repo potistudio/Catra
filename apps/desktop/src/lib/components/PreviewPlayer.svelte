@@ -1,5 +1,6 @@
 <script lang="ts">
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { onDestroy } from "svelte";
 import TrackArtwork from "$lib/components/TrackArtwork.svelte";
 import {
 	displayArtist,
@@ -30,8 +31,11 @@ let playbackRate = $state(1);
 let masterTempo = $state(true);
 let volume = $state(1);
 let isMuted = $state(false);
+let isVolumeValueVisible = $state(false);
 let lastAutoplayToken = 0;
 let lastPath: string | null = null;
+let isVolumePointerActive = false;
+let volumeValueHideTimer: ReturnType<typeof setTimeout> | undefined;
 
 const MIN_PLAYBACK_RATE = 0.25;
 const MAX_PLAYBACK_RATE = 4;
@@ -157,6 +161,34 @@ function handleVolumeChange(event: Event) {
 	const input = event.target as HTMLInputElement;
 	volume = Math.min(1, Math.max(0, Number(input.value)));
 	if (volume > 0) isMuted = false;
+	isVolumeValueVisible = true;
+	if (!isVolumePointerActive) scheduleVolumeValueHide();
+}
+
+function clearVolumeValueHideTimer() {
+	if (volumeValueHideTimer === undefined) return;
+	clearTimeout(volumeValueHideTimer);
+	volumeValueHideTimer = undefined;
+}
+
+function beginVolumeAdjustment() {
+	isVolumePointerActive = true;
+	clearVolumeValueHideTimer();
+	isVolumeValueVisible = true;
+}
+
+function endVolumeAdjustment() {
+	isVolumePointerActive = false;
+	clearVolumeValueHideTimer();
+	isVolumeValueVisible = false;
+}
+
+function scheduleVolumeValueHide() {
+	clearVolumeValueHideTimer();
+	volumeValueHideTimer = setTimeout(() => {
+		isVolumeValueVisible = false;
+		volumeValueHideTimer = undefined;
+	}, 600);
 }
 
 function toggleMute() {
@@ -176,6 +208,8 @@ function handleEnded() {
 		audioEl.currentTime = 0;
 	}
 }
+
+onDestroy(clearVolumeValueHideTimer);
 </script>
 
 <footer class="preview">
@@ -286,7 +320,9 @@ function handleEnded() {
           {volumeIcon}
         </button>
         <div class="volume-slider-wrap">
-          <span class="volume-value" aria-hidden="true">{Math.round(volume * 100)}%</span>
+          <span class="volume-value" class:visible={isVolumeValueVisible} aria-hidden="true">
+            {Math.round(volume * 100)}%
+          </span>
           <input
             class="volume-slider"
             type="range"
@@ -295,6 +331,10 @@ function handleEnded() {
             step="0.01"
             value={volume}
             oninput={handleVolumeChange}
+            onpointerdown={beginVolumeAdjustment}
+            onpointerup={endVolumeAdjustment}
+            onpointercancel={endVolumeAdjustment}
+            onblur={endVolumeAdjustment}
             aria-label="音量"
             aria-valuetext={`${Math.round(volume * 100)}%`}
             title={`音量 ${Math.round(volume * 100)}%`}
@@ -524,8 +564,7 @@ function handleEnded() {
     visibility: hidden;
   }
 
-  .volume-slider-wrap:hover .volume-value,
-  .volume-slider-wrap:focus-within .volume-value {
+  .volume-value.visible {
     opacity: 1;
     transform: translate(-50%, 0);
     visibility: visible;
