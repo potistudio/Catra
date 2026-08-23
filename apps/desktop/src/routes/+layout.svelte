@@ -3,6 +3,8 @@
 <style>
   /* Nord — https://www.nordtheme.com */
   :global(:root) {
+    color-scheme: dark;
+
     --nord0: #2e3440;
     --nord1: #3b4252;
     --nord2: #434c5e;
@@ -20,19 +22,19 @@
     --nord14: #a3be8c;
     --nord15: #b48ead;
 
-    --text: var(--nord4);
-    --text-muted: color-mix(in srgb, var(--nord4) 72%, var(--nord3));
-    --text-subtle: var(--nord3);
+    --text: var(--nord6);
+    --text-muted: color-mix(in srgb, var(--nord4) 84%, var(--nord3));
+    --text-subtle: color-mix(in srgb, var(--nord4) 58%, var(--nord3));
     --surface: var(--nord0);
     --surface-raised: var(--nord1);
     --surface-overlay: var(--nord2);
-    --surface-hover: var(--nord2);
-    --surface-active: var(--nord3);
-    --surface-selected: var(--nord3);
-    --surface-selected-hover: color-mix(in srgb, var(--nord3) 70%, var(--nord4));
+    --surface-hover: color-mix(in srgb, var(--nord2) 78%, var(--nord3));
+    --surface-active: color-mix(in srgb, var(--nord3) 82%, var(--nord4));
+    --surface-selected: color-mix(in srgb, var(--nord10) 42%, var(--nord2));
+    --surface-selected-hover: color-mix(in srgb, var(--nord10) 56%, var(--nord2));
     --surface-crust: var(--nord0);
-    --border: var(--nord2);
-    --border-subtle: color-mix(in srgb, var(--nord2) 55%, var(--nord0));
+    --border: color-mix(in srgb, var(--nord3) 78%, var(--nord4));
+    --border-subtle: color-mix(in srgb, var(--nord2) 72%, var(--nord3));
     --accent: var(--nord8);
     --accent-hover: var(--nord7);
     --accent-subtle: color-mix(in srgb, var(--nord8) 18%, transparent);
@@ -46,12 +48,12 @@
     --success: var(--nord14);
     --warning: var(--nord13);
     --warning-subtle: color-mix(in srgb, var(--nord13) 12%, transparent);
-    --on-accent: var(--nord0);
+    --on-accent: color-mix(in srgb, var(--nord0) 82%, black);
     --overlay: color-mix(in srgb, var(--nord0) 72%, transparent);
     --overlay-strong: color-mix(in srgb, var(--nord0) 82%, transparent);
     --scrollbar-size: 10px;
     --scrollbar-track: transparent;
-    --scrollbar-thumb: var(--nord3);
+    --scrollbar-thumb: color-mix(in srgb, var(--nord3) 82%, var(--nord4));
     --scrollbar-thumb-hover: color-mix(in srgb, var(--nord3) 70%, var(--nord4));
     --scrollbar-thumb-active: var(--nord8);
   }
