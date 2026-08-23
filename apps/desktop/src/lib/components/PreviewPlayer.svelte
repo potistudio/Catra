@@ -368,6 +368,7 @@ onDestroy(() => {
         </label>
 
         <label class="bpm-field" title={playbackBpm === null ? "元BPMがないため指定できません" : "再生BPMを直接指定"}>
+          <span class="rate-label">BPM</span>
           <input
             class="bpm-input"
             type="number"
@@ -380,7 +381,7 @@ onDestroy(() => {
             disabled={playbackBpm === null}
             aria-label="再生BPM"
           />
-          <span>BPM</span>
+          <span aria-hidden="true"></span>
         </label>
       </div>
 
@@ -585,7 +586,8 @@ onDestroy(() => {
 
   .rate-field,
   .bpm-field {
-    display: flex;
+    display: grid;
+    grid-template-columns: 2rem 4.5rem 0.75rem;
     align-items: center;
     gap: 0.25rem;
     padding: 0.2rem 0.35rem;
@@ -601,17 +603,14 @@ onDestroy(() => {
 
   .rate-input,
   .bpm-input {
-    width: 3.75rem;
+    width: 100%;
+    box-sizing: border-box;
     padding: 0;
     border: 0;
     background: transparent;
     color: var(--text);
     font: inherit;
     text-align: right;
-  }
-
-  .bpm-input {
-    width: 4.5rem;
   }
 
   .rate-input:focus,
