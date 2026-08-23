@@ -27,6 +27,7 @@ let duration = $state(0);
 let audioSrc = $state<string | null>(null);
 let pendingAutoplay = $state(false);
 let playbackRate = $state(1);
+let masterTempo = $state(true);
 let lastAutoplayToken = 0;
 let lastPath: string | null = null;
 
@@ -76,7 +77,7 @@ $effect(() => {
 $effect(() => {
 	if (!audioEl) return;
 	audioEl.playbackRate = playbackRate;
-	audioEl.preservesPitch = true;
+	audioEl.preservesPitch = masterTempo;
 });
 
 function togglePlay() {
@@ -207,6 +208,18 @@ function handleEnded() {
           </span>
         {/if}
       </label>
+
+      <button
+        class="master-tempo"
+        class:active={masterTempo}
+        type="button"
+        onclick={() => (masterTempo = !masterTempo)}
+        aria-label="音程維持"
+        aria-pressed={masterTempo}
+        title={masterTempo ? "Master Tempo オン（音程を維持）" : "Master Tempo オフ（速度に応じて音程を変更）"}
+      >
+        MT
+      </button>
     </div>
   {:else}
     <p class="preview-empty">トラックを選択してプレビュー</p>
@@ -351,5 +364,26 @@ function handleEnded() {
     min-width: 4.8rem;
     color: var(--text);
     text-align: right;
+  }
+
+  .master-tempo {
+    padding: 0.3rem 0.45rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .master-tempo:hover {
+    border-color: var(--accent);
+  }
+
+  .master-tempo.active {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--on-accent);
   }
 </style>
