@@ -17,6 +17,7 @@ const PLACEHOLDER_PEAKS = Array.from(
 let peaks = $state<number[]>([]);
 let isLoading = $state(false);
 let loadFailed = $state(false);
+let activePointerId: number | null = null;
 let displayedPeaks = $derived(peaks.length > 0 ? peaks : PLACEHOLDER_PEAKS);
 let progress = $derived(
 	duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0,
@@ -93,6 +94,37 @@ function handleSeek(event: Event) {
 	const input = event.currentTarget as HTMLInputElement;
 	onseek(Number(input.value));
 }
+
+function handleSeekPointerDown(event: PointerEvent) {
+	if (event.button !== 0 || duration <= 0) return;
+
+	const input = event.currentTarget as HTMLInputElement;
+	event.preventDefault();
+	activePointerId = event.pointerId;
+	input.focus();
+	input.setPointerCapture(event.pointerId);
+	seekToPointer(input, event.clientX);
+}
+
+function handleSeekPointerMove(event: PointerEvent) {
+	if (activePointerId !== event.pointerId) return;
+	event.preventDefault();
+	seekToPointer(event.currentTarget as HTMLInputElement, event.clientX);
+}
+
+function handleSeekPointerEnd(event: PointerEvent) {
+	if (activePointerId !== event.pointerId) return;
+	activePointerId = null;
+}
+
+function seekToPointer(input: HTMLInputElement, clientX: number) {
+	const bounds = input.getBoundingClientRect();
+	const ratio = Math.min(
+		1,
+		Math.max(0, (clientX - bounds.left) / bounds.width),
+	);
+	onseek(ratio * duration);
+}
 </script>
 
 <div
@@ -141,6 +173,10 @@ function handleSeek(event: Event) {
 		step="0.1"
 		value={currentTime}
 		oninput={handleSeek}
+		onpointerdown={handleSeekPointerDown}
+		onpointermove={handleSeekPointerMove}
+		onpointerup={handleSeekPointerEnd}
+		onpointercancel={handleSeekPointerEnd}
 		disabled={!duration}
 		aria-label="再生位置"
 	/>
@@ -180,6 +216,7 @@ function handleSeek(event: Event) {
 		margin: 0;
 		cursor: pointer;
 		opacity: 0;
+		touch-action: none;
 	}
 
 	.waveform:has(.waveform-input:focus-visible) {
