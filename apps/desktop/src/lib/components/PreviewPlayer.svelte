@@ -37,10 +37,8 @@ let lastPath: string | null = null;
 let unlistenNativeVolumeDrag: UnlistenFn | null = null;
 let usesNativeVolumeDrag = false;
 let nextVolumeDragId = 0;
-let lastFinishedVolumeDrag: VolumeDrag | null = null;
 interface VolumeDrag {
 	control: HTMLButtonElement;
-	didMove: boolean;
 	dragId: number;
 	pointerId: number;
 	rawVolume: number;
@@ -186,13 +184,11 @@ function handleVolumePointerDown(event: PointerEvent) {
 	}).catch(() => false);
 	volumeDrag = {
 		control,
-		didMove: false,
 		dragId,
 		pointerId: event.pointerId,
 		rawVolume: volume,
 		startPromise,
 	};
-	lastFinishedVolumeDrag = null;
 	control.focus();
 	control.setPointerCapture(event.pointerId);
 	document.documentElement.classList.add("volume-knob-dragging");
@@ -222,7 +218,6 @@ function finishVolumeDrag() {
 	const drag = volumeDrag;
 	const { control, dragId, pointerId, startPromise } = drag;
 	volumeDrag = null;
-	lastFinishedVolumeDrag = drag;
 	usesNativeVolumeDrag = false;
 	if (control.hasPointerCapture(pointerId)) {
 		control.releasePointerCapture(pointerId);
@@ -233,27 +228,13 @@ function finishVolumeDrag() {
 	);
 }
 
-function applyVolumeDragDelta(deltaY: number, drag = volumeDrag) {
-	if (!drag || deltaY === 0) return;
-	drag.didMove = true;
-	drag.rawVolume = Math.min(
+function applyVolumeDragDelta(deltaY: number) {
+	if (!volumeDrag || deltaY === 0) return;
+	volumeDrag.rawVolume = Math.min(
 		1,
-		Math.max(0, drag.rawVolume + deltaY / VOLUME_DRAG_DISTANCE),
+		Math.max(0, volumeDrag.rawVolume + deltaY / VOLUME_DRAG_DISTANCE),
 	);
-	setVolume(drag.rawVolume);
-}
-
-function handleMuteClick(event: MouseEvent) {
-	if (event.detail === 0) {
-		toggleMute();
-		return;
-	}
-
-	const drag = lastFinishedVolumeDrag;
-	window.setTimeout(() => {
-		if (!drag?.didMove) toggleMute();
-		if (lastFinishedVolumeDrag === drag) lastFinishedVolumeDrag = null;
-	}, 24);
+	setVolume(volumeDrag.rawVolume);
 }
 
 function toggleMute() {
@@ -278,13 +259,9 @@ onMount(() => {
 	void listen<{ deltaY: number; dragId: number }>(
 		"native-volume-drag",
 		({ payload }) => {
-			const drag =
-				volumeDrag?.dragId === payload.dragId
-					? volumeDrag
-					: lastFinishedVolumeDrag?.dragId === payload.dragId
-						? lastFinishedVolumeDrag
-						: null;
-			applyVolumeDragDelta(payload.deltaY, drag);
+			if (volumeDrag?.dragId === payload.dragId) {
+				applyVolumeDragDelta(payload.deltaY);
+			}
 		},
 	).then((unlisten) => {
 		unlistenNativeVolumeDrag = unlisten;
@@ -427,14 +404,10 @@ onDestroy(() => {
         <button
           class="mute-btn"
           type="button"
-          onclick={handleMuteClick}
-          onpointerdown={handleVolumePointerDown}
-          onpointermove={handleVolumePointerMove}
-          onpointerup={handleVolumePointerEnd}
-          onpointercancel={handleVolumePointerEnd}
+          onclick={toggleMute}
           aria-label={isEffectivelyMuted ? "ミュート解除" : "ミュート"}
           aria-pressed={isEffectivelyMuted}
-          title={`${isEffectivelyMuted ? "ミュート解除" : "ミュート"}／上下ドラッグで音量調整`}
+          title={isEffectivelyMuted ? "ミュート解除" : "ミュート"}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M11 5 6 9H2v6h4l5 4V5Z"></path>
@@ -450,6 +423,21 @@ onDestroy(() => {
             ></path>
             <path class="mute-mark" class:visible={isEffectivelyMuted} d="m16 9 6 6"></path>
             <path class="mute-mark" class:visible={isEffectivelyMuted} d="m22 9-6 6"></path>
+          </svg>
+        </button>
+        <button
+          class="volume-drag-handle"
+          type="button"
+          onpointerdown={handleVolumePointerDown}
+          onpointermove={handleVolumePointerMove}
+          onpointerup={handleVolumePointerEnd}
+          onpointercancel={handleVolumePointerEnd}
+          aria-label="音量調整"
+          title="上下ドラッグで音量調整"
+        >
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <circle cx="10" cy="10" r="6.5"></circle>
+            <path d="M10 3.5v3.2"></path>
           </svg>
         </button>
       </div>
@@ -655,7 +643,6 @@ onDestroy(() => {
     background: var(--surface-raised);
     color: var(--text-muted);
     cursor: pointer;
-    touch-action: none;
     transform: translate(-50%, -50%);
   }
 
@@ -689,6 +676,52 @@ onDestroy(() => {
     opacity: 1;
   }
 
+  .volume-drag-handle {
+    position: absolute;
+    top: 50%;
+    right: -0.05rem;
+    z-index: 3;
+    display: grid;
+    width: 1.35rem;
+    height: 1.35rem;
+    padding: 0;
+    border: 0;
+    place-items: center;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: ns-resize;
+    touch-action: none;
+    transform: translateY(-50%);
+  }
+
+  .volume-drag-handle svg {
+    width: 1rem;
+    height: 1rem;
+    overflow: visible;
+    fill: var(--surface-raised);
+    filter: drop-shadow(0 1px 1px rgb(0 0 0 / 35%));
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-width: 1.5;
+    transition:
+      color 120ms ease,
+      filter 120ms ease,
+      transform 160ms cubic-bezier(0.2, 1.65, 0.3, 1);
+  }
+
+  .volume-drag-handle:hover svg,
+  .volume-drag-handle:focus-visible svg {
+    color: var(--accent);
+    filter:
+      drop-shadow(0 1px 1px rgb(0 0 0 / 35%))
+      drop-shadow(0 0 2px var(--accent));
+    transform: scale(1.12);
+  }
+
+  .volume-drag-handle:active svg {
+    transform: scale(0.94);
+  }
+
   .knob-ring {
     position: absolute;
     inset: 0;
@@ -715,12 +748,12 @@ onDestroy(() => {
     stroke: var(--accent);
   }
 
-  .volume-knob:has(.mute-btn:hover) .knob-ring {
+  .volume-knob:has(.volume-drag-handle:hover) .knob-ring {
     opacity: 1;
     transform: scale(1);
   }
 
-  .volume-knob:has(.mute-btn:hover) .knob-ring.muted {
+  .volume-knob:has(.volume-drag-handle:hover) .knob-ring.muted {
     opacity: 0.45;
   }
 
@@ -745,7 +778,7 @@ onDestroy(() => {
       transform 100ms ease;
   }
 
-  .volume-knob:has(.mute-btn:hover) .volume-value {
+  .volume-knob:has(.volume-drag-handle:hover) .volume-value {
     opacity: 1;
     transform: translate(-50%, 0);
   }
@@ -776,6 +809,7 @@ onDestroy(() => {
     .mute-btn svg,
     .mute-btn .sound-wave,
     .mute-btn .mute-mark,
+    .volume-drag-handle svg,
     .knob-ring {
       transition: none;
     }
