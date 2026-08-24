@@ -3,8 +3,6 @@ import SelectionCheckbox from "$lib/components/SelectionCheckbox.svelte";
 import TrackArtwork from "$lib/components/TrackArtwork.svelte";
 import TrackConvertedBadge from "$lib/components/TrackConvertedBadge.svelte";
 import TrackSourceBadge from "$lib/components/TrackSourceBadge.svelte";
-import type { Track } from "$lib/types";
-import { isTrackSource } from "$lib/trackSource";
 import {
 	displayArtist,
 	displayTitle,
@@ -15,6 +13,8 @@ import {
 	formatDuration,
 	formatRating,
 } from "$lib/format";
+import { isTrackSource } from "$lib/trackSource";
+import type { Track } from "$lib/types";
 
 interface Props {
 	track: Track;
@@ -28,6 +28,7 @@ interface Props {
 	showActions?: boolean;
 	onselect: (track: Track) => void;
 	onremove?: (track: Track) => void;
+	onplay?: (track: Track) => void;
 	ontogglecheck?: (track: Track) => void;
 }
 
@@ -42,6 +43,7 @@ let {
 	showActions = true,
 	onselect,
 	onremove,
+	onplay,
 	ontogglecheck,
 }: Props = $props();
 
@@ -84,6 +86,20 @@ function handleKeydown(event: KeyboardEvent) {
         <span class="source-badge-wrap">
           <TrackSourceBadge source={track.source} size={12} />
         </span>
+      {/if}
+      {#if onplay}
+        <button
+          type="button"
+          class="play-btn"
+          onclick={(e) => {
+            e.stopPropagation();
+            onplay(track);
+          }}
+          aria-label={`${displayTitle(track)} を再生`}
+          title="再生"
+        >
+          ▶
+        </button>
       {/if}
     </div>
   </span>
@@ -257,6 +273,40 @@ function handleKeydown(event: KeyboardEvent) {
   .source-badge-wrap :global(.source-badge) {
     width: 16px;
     height: 16px;
+  }
+
+  .play-btn {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: 0.75rem;
+    cursor: pointer;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.85);
+    transition:
+      opacity 0.15s,
+      transform 0.15s,
+      background-color 0.12s ease;
+  }
+
+  .table-row:hover .play-btn,
+  .table-row:focus-within .play-btn {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .play-btn:hover {
+    background: var(--accent-hover);
   }
 
   .title {

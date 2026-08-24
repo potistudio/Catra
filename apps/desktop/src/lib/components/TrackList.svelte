@@ -1,24 +1,24 @@
 <script lang="ts">
-import type { Snippet } from "svelte";
 import { ask } from "@tauri-apps/plugin-dialog";
+import type { Snippet } from "svelte";
+import { appSession, persistAppSession } from "$lib/appSession.svelte";
 import SelectionCheckbox from "$lib/components/SelectionCheckbox.svelte";
 import TrackGrid from "$lib/components/TrackGrid.svelte";
 import TrackRow from "$lib/components/TrackRow.svelte";
-import { appSession, persistAppSession } from "$lib/appSession.svelte";
-import type { PlaylistEntry, Track } from "$lib/types";
 import { isInRekordbox } from "$lib/rekordboxMembership";
 import { writeTrackDrag } from "$lib/trackDrag";
 import {
 	filterRows,
 	getVisibleTrackRange,
 	rowsFromTracks,
-	sortRows,
-	TRACK_ROW_HEIGHT,
 	type SortColumn,
 	type SortDirection,
+	sortRows,
+	TRACK_ROW_HEIGHT,
 	type TrackListRow,
 	type ViewMode,
 } from "$lib/trackListView";
+import type { PlaylistEntry, Track } from "$lib/types";
 
 const SORT_LABELS: Record<SortColumn, string> = {
 	position: "列の順番",
@@ -884,6 +884,7 @@ $effect(() => {
                   showActions={showRowRemove}
                   onselect={() => selectRow(row)}
                   onremove={showRowRemove ? onremove : undefined}
+                  {onplay}
                   ontogglecheck={readonly ? undefined : () => toggleCheck(row)}
                 />
               </div>
