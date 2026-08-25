@@ -303,7 +303,8 @@ function handleKeydown(event: KeyboardEvent) {
   }
 
   .table-row:hover .play-btn,
-  .table-row:focus-within .play-btn {
+  .table-row:focus-visible .play-btn,
+  .play-btn:focus-visible {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
   }
@@ -373,7 +374,8 @@ function handleKeydown(event: KeyboardEvent) {
   }
 
   .table-row:hover .remove-btn,
-  .table-row:focus-within .remove-btn {
+  .table-row:focus-visible .remove-btn,
+  .remove-btn:focus-visible {
     opacity: 1;
   }
 

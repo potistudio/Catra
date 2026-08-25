@@ -252,7 +252,8 @@ function handleKeydown(event: KeyboardEvent) {
   }
 
   .track-card:hover .play-btn,
-  .track-card:focus-within .play-btn {
+  .track-card:focus-visible .play-btn,
+  .play-btn:focus-visible {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
   }
@@ -281,7 +282,8 @@ function handleKeydown(event: KeyboardEvent) {
   }
 
   .track-card:hover .remove-btn,
-  .track-card:focus-within .remove-btn {
+  .track-card:focus-visible .remove-btn,
+  .remove-btn:focus-visible {
     opacity: 1;
   }
 
