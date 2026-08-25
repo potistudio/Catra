@@ -16,10 +16,17 @@ interface Props {
 	track: PreviewableTrack | null;
 	/** 変わるたびに、選択中のトラックをすぐ再生する合図。 */
 	autoplayToken?: number;
+	/** 同じトラックの再生／一時停止を切り替える合図。 */
+	togglePlayToken?: number;
 	onplayingchange?: (isPlaying: boolean) => void;
 }
 
-let { track, autoplayToken = 0, onplayingchange }: Props = $props();
+let {
+	track,
+	autoplayToken = 0,
+	togglePlayToken = 0,
+	onplayingchange,
+}: Props = $props();
 
 let audioEl: HTMLAudioElement | undefined = $state();
 let isPlaying = $state(false);
@@ -32,6 +39,7 @@ let masterTempo = $state(true);
 let volume = $state(1);
 let isMuted = $state(false);
 let lastAutoplayToken = 0;
+let lastTogglePlayToken = 0;
 let lastPath: string | null = null;
 let unlistenNativeVolumeDrag: UnlistenFn | null = null;
 let usesNativeVolumeDrag = false;
@@ -109,6 +117,13 @@ $effect(() => {
 		audioEl.currentTime = 0;
 		void audioEl.play();
 	}
+});
+
+$effect(() => {
+	const shouldTogglePlay = togglePlayToken !== lastTogglePlayToken;
+	lastTogglePlayToken = togglePlayToken;
+	if (!shouldTogglePlay || !track || !audioEl || !audioSrc) return;
+	togglePlay();
 });
 
 $effect(() => {

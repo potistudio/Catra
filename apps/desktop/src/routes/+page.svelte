@@ -753,8 +753,14 @@ function handleSelect(track: Track) {
 }
 
 let playToken = $state(0);
+let togglePlayToken = $state(0);
 
 function handlePlayTrack(track: Track) {
+	if (selectedTrack?.id === track.id && previewTrack?.path === track.path) {
+		togglePlayToken += 1;
+		return;
+	}
+
 	handleSelect(track);
 	playToken += 1;
 }
@@ -1348,6 +1354,7 @@ onMount(() => {
   <PreviewPlayer
     track={previewTrack}
     autoplayToken={playToken}
+    togglePlayToken={togglePlayToken}
     onplayingchange={handlePreviewPlayingChange}
   />
 
