@@ -349,10 +349,14 @@ function selectRow(row: TrackListRow) {
 /**
  * グリッドはチェックボックスを持たないので、カードの本体クリックが
  * 一括操作の対象選択（旧チェックボックスの仕事）を兼ねる。
+ * プレビューの曲切り替えは、ホバープレイボタンから行う。
  */
 function selectAndToggleCheck(row: TrackListRow) {
-	selectRow(row);
-	if (!readonly) toggleCheck(row);
+	if (readonly) {
+		selectRow(row);
+		return;
+	}
+	toggleCheck(row);
 }
 
 async function handleLibraryRemove() {
