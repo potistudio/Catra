@@ -1,6 +1,5 @@
 <script lang="ts">
 import TrackCard from "$lib/components/TrackCard.svelte";
-import type { Track } from "$lib/types";
 import { isInRekordbox } from "$lib/rekordboxMembership";
 import {
 	getGridColumnCount,
@@ -9,10 +8,12 @@ import {
 	TRACK_GRID_ROW_HEIGHT,
 	type TrackListRow,
 } from "$lib/trackListView";
+import type { Track } from "$lib/types";
 
 interface Props {
 	rows: TrackListRow[];
 	selectedId: number | null;
+	playing?: boolean;
 	checkedKeys?: Set<number>;
 	readonly?: boolean;
 	rekordboxPathIndex?: Map<string, string>;
@@ -26,6 +27,7 @@ interface Props {
 let {
 	rows,
 	selectedId,
+	playing = false,
 	checkedKeys = new Set(),
 	readonly = false,
 	rekordboxPathIndex,
@@ -90,6 +92,7 @@ function handleScroll(event: Event) {
         <TrackCard
           track={row.track}
           selected={selectedId === row.track.id}
+          playing={playing && selectedId === row.track.id}
           checked={checkedKeys.has(row.key)}
           {readonly}
           inRekordbox={rekordboxPathIndex

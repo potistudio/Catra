@@ -2,9 +2,9 @@
 import TrackArtwork from "$lib/components/TrackArtwork.svelte";
 import TrackConvertedBadge from "$lib/components/TrackConvertedBadge.svelte";
 import TrackSourceBadge from "$lib/components/TrackSourceBadge.svelte";
-import type { Track } from "$lib/types";
-import { isTrackSource } from "$lib/trackSource";
 import { displayArtist, displayTitle, formatDuration } from "$lib/format";
+import { isTrackSource } from "$lib/trackSource";
+import type { Track } from "$lib/types";
 
 interface Props {
 	track: Track;
@@ -12,6 +12,8 @@ interface Props {
 	selected: boolean;
 	/** 一括操作（タグ付け・変換・Rekordbox 追加など）の対象かどうか。 */
 	checked: boolean;
+	/** プレビュー中の曲が現在再生中かどうか。 */
+	playing?: boolean;
 	readonly?: boolean;
 	inRekordbox?: boolean;
 	showRowRemove?: boolean;
@@ -24,6 +26,7 @@ let {
 	track,
 	selected,
 	checked,
+	playing = false,
 	readonly = false,
 	inRekordbox = false,
 	showRowRemove = true,
@@ -80,10 +83,10 @@ function handleKeydown(event: KeyboardEvent) {
           e.stopPropagation();
           onplay(track);
         }}
-        aria-label={`${displayTitle(track)} を再生`}
-        title="再生"
+        aria-label={`${displayTitle(track)} を${playing ? "一時停止" : "再生"}`}
+        title={playing ? "一時停止" : "再生"}
       >
-        ▶
+        {playing ? "⏸" : "▶"}
       </button>
     {/if}
     {#if showRowRemove && !readonly && onremove}

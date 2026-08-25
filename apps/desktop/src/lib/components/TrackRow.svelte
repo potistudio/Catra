@@ -22,6 +22,8 @@ interface Props {
 	position?: number | null;
 	selected: boolean;
 	checked: boolean;
+	/** プレビュー中の曲が現在再生中かどうか。 */
+	playing?: boolean;
 	readonly?: boolean;
 	removeTitle?: string;
 	inRekordbox?: boolean;
@@ -37,6 +39,7 @@ let {
 	position = null,
 	selected,
 	checked,
+	playing = false,
 	readonly = false,
 	removeTitle = "ライブラリから外す",
 	inRekordbox = false,
@@ -95,10 +98,10 @@ function handleKeydown(event: KeyboardEvent) {
             e.stopPropagation();
             onplay(track);
           }}
-          aria-label={`${displayTitle(track)} を再生`}
-          title="再生"
+          aria-label={`${displayTitle(track)} を${playing ? "一時停止" : "再生"}`}
+          title={playing ? "一時停止" : "再生"}
         >
-          ▶
+          {playing ? "⏸" : "▶"}
         </button>
       {/if}
     </div>

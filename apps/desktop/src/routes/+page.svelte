@@ -35,6 +35,12 @@ import {
 	scanFolder,
 	tagListAxes,
 } from "$lib/api";
+import {
+	type AppTab,
+	appSession,
+	type BrowseMode,
+	persistAppSession,
+} from "$lib/appSession.svelte";
 import ActivityConsole from "$lib/components/ActivityConsole.svelte";
 import ConvertDialog from "$lib/components/ConvertDialog.svelte";
 import DuplicateTrackDialog from "$lib/components/DuplicateTrackDialog.svelte";
@@ -45,26 +51,20 @@ import RekordboxList from "$lib/components/RekordboxList.svelte";
 import StatusBar from "$lib/components/StatusBar.svelte";
 import TagPanel from "$lib/components/TagPanel.svelte";
 import TrackList from "$lib/components/TrackList.svelte";
-import {
-	appSession,
-	persistAppSession,
-	type AppTab,
-	type BrowseMode,
-} from "$lib/appSession.svelte";
+import { ancestorIds } from "$lib/playlistTree";
+import { rekordboxContentToPreview } from "$lib/rekordboxListView";
 import {
 	buildRekordboxIdSet,
 	buildRekordboxPathIndex,
 } from "$lib/rekordboxMembership";
-import { rekordboxContentToPreview } from "$lib/rekordboxListView";
-import { ancestorIds } from "$lib/playlistTree";
 import type {
 	ActivityLogPayload,
 	ConvertOptions,
 	ConvertProgress,
 	ConvertResult,
 	DownloadProgress,
-	DuplicateFoundPayload,
 	DuplicateChoice,
+	DuplicateFoundPayload,
 	FacetField,
 	PlaylistEntry,
 	PlaylistNode,
@@ -84,6 +84,7 @@ let activeTab = $state<AppTab>(appSession.activeTab);
 let tracks = $state<Track[]>([]);
 let trashedTracks = $state<Track[]>([]);
 let selectedTrack = $state<Track | null>(null);
+let isPreviewPlaying = $state(false);
 let rekordboxTracks = $state<RekordboxContent[]>([]);
 let selectedRekordboxId = $state<string | null>(appSession.selectedRekordboxId);
 let rekordboxStatus = $state<RekordboxCheck | null>(null);
@@ -758,6 +759,10 @@ function handlePlayTrack(track: Track) {
 	playToken += 1;
 }
 
+function handlePreviewPlayingChange(isPlaying: boolean) {
+	isPreviewPlaying = isPlaying;
+}
+
 $effect(() => {
 	appSession.activeTab = activeTab;
 	appSession.selectedRekordboxId = selectedRekordboxId;
@@ -1267,6 +1272,7 @@ onMount(() => {
           {rekordboxLockedHint}
           onselect={handleSelect}
           onplay={handlePlayTrack}
+          playing={isPreviewPlaying}
           onremove={handleRemove}
           onbulkremove={handleBulkRemove}
           onAddToRekordbox={handleAddToRekordbox}
@@ -1327,6 +1333,7 @@ onMount(() => {
           bulkRemoveConfirmMessage="曲をライブラリに戻しますか？"
           onselect={handleSelect}
           onplay={handlePlayTrack}
+          playing={isPreviewPlaying}
           onremove={handleRestore}
           onbulkremove={handleBulkRestore}
           onbulkpermanent={handlePermanentDelete}
@@ -1338,7 +1345,11 @@ onMount(() => {
   </div>
 
   <StatusBar />
-  <PreviewPlayer track={previewTrack} autoplayToken={playToken} />
+  <PreviewPlayer
+    track={previewTrack}
+    autoplayToken={playToken}
+    onplayingchange={handlePreviewPlayingChange}
+  />
 
   {#if fileDropActive}
     <div class="drop-overlay" aria-live="polite">

@@ -16,9 +16,10 @@ interface Props {
 	track: PreviewableTrack | null;
 	/** 変わるたびに、選択中のトラックをすぐ再生する合図。 */
 	autoplayToken?: number;
+	onplayingchange?: (isPlaying: boolean) => void;
 }
 
-let { track, autoplayToken = 0 }: Props = $props();
+let { track, autoplayToken = 0, onplayingchange }: Props = $props();
 
 let audioEl: HTMLAudioElement | undefined = $state();
 let isPlaying = $state(false);
@@ -68,10 +69,16 @@ let playbackBpm = $derived(
 );
 let isEffectivelyMuted = $derived(isMuted || volume === 0);
 
+function setPlaying(next: boolean) {
+	if (isPlaying === next) return;
+	isPlaying = next;
+	onplayingchange?.(next);
+}
+
 $effect(() => {
 	if (!track) {
 		audioSrc = null;
-		isPlaying = false;
+		setPlaying(false);
 		currentTime = 0;
 		duration = 0;
 		pendingAutoplay = false;
@@ -90,7 +97,7 @@ $effect(() => {
 		// 文字列として同一なので DOM は更新されず、loadedmetadata も
 		// 発火しない。だから即再生できるケースはここを通さない。
 		audioSrc = convertFileSrc(track.path);
-		isPlaying = false;
+		setPlaying(false);
 		currentTime = 0;
 		duration = track.durationMs ? track.durationMs / 1000 : 0;
 		pendingAutoplay = shouldAutoplay;
@@ -272,7 +279,7 @@ function toggleMute() {
 }
 
 function handleEnded() {
-	isPlaying = false;
+	setPlaying(false);
 	currentTime = 0;
 	if (audioEl) {
 		audioEl.currentTime = 0;
@@ -306,8 +313,8 @@ onDestroy(() => {
     <audio
       bind:this={audioEl}
       src={audioSrc}
-      onplay={() => (isPlaying = true)}
-      onpause={() => (isPlaying = false)}
+      onplay={() => setPlaying(true)}
+      onpause={() => setPlaying(false)}
       ontimeupdate={handleTimeUpdate}
       onloadedmetadata={handleLoadedMetadata}
       onended={handleEnded}

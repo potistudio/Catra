@@ -46,6 +46,7 @@ interface Props {
 	 */
 	entries?: PlaylistEntry[] | null;
 	selectedId: number | null;
+	playing?: boolean;
 	readonly?: boolean;
 	searchPlaceholder?: string;
 	emptyTitle?: string;
@@ -86,6 +87,7 @@ let {
 	tracks = [],
 	entries = null,
 	selectedId,
+	playing = false,
 	readonly = false,
 	searchPlaceholder = "トラックを検索...",
 	emptyTitle = "ライブラリにトラックがありません",
@@ -708,6 +710,7 @@ $effect(() => {
     <TrackGrid
       rows={sorted}
       selectedId={selectedId}
+      {playing}
       {checkedKeys}
       {readonly}
       {rekordboxPathIndex}
@@ -876,6 +879,7 @@ $effect(() => {
                   position={isSequence ? row.position : null}
                   selected={isFocused(row)}
                   checked={checkedKeys.has(row.key)}
+                  playing={playing && selectedId === row.track.id}
                   {readonly}
                   {removeTitle}
                   inRekordbox={rekordboxPathIndex
