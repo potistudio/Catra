@@ -1,6 +1,7 @@
 mod convert;
 mod db;
 mod duplicate;
+mod export;
 mod facet;
 mod health;
 mod import_rekordbox;
@@ -16,6 +17,7 @@ mod trash;
 pub use convert::{start_convert_tracks, ConvertOptions};
 pub use db::{init_library, LibraryState, Track};
 pub use duplicate::{DuplicateChoice, DuplicateResolver};
+pub use export::{export_tracks, ExportResult};
 pub use facet::{browse_facet as facet_values, facet_track_ids, FacetValue};
 pub use health::{check_health, check_health_with, HealthDepth, HealthReport};
 pub use import_rekordbox::start_import_from_rekordbox;

@@ -50,6 +50,13 @@ export interface ScanResult {
 	skipped: number;
 }
 
+export interface ExportResult {
+	exported: number;
+	skipped: number;
+	failed: number;
+	errors: string[];
+}
+
 export interface ScanProgress {
 	processed: number;
 	added: number;

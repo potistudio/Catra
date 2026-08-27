@@ -15,6 +15,7 @@ import {
 	convertTracks,
 	deleteTracksPermanently,
 	emptyTrash,
+	exportTracks,
 	importFromRekordbox,
 	importPaths,
 	libraryAddToRekordbox,
@@ -65,6 +66,7 @@ import type {
 	DownloadProgress,
 	DuplicateChoice,
 	DuplicateFoundPayload,
+	ExportResult,
 	FacetField,
 	PlaylistEntry,
 	PlaylistNode,
@@ -101,6 +103,7 @@ let convertProgress = $state<ConvertProgress | null>(null);
 let convertTargets = $state<Track[]>([]);
 let convertDialogOpen = $state(false);
 let converting = $derived(convertProgress != null);
+let exporting = $state(false);
 
 // 分類（集合層と属性層）。ライブラリタブの左側に出る。
 let playlistNodes = $state<PlaylistNode[]>([]);
@@ -630,7 +633,7 @@ async function handleRemoveFromRekordbox(selected: Track[]) {
 }
 
 function handleOpenConvert(selected: Track[]) {
-	if (selected.length === 0 || converting || scanning) return;
+	if (selected.length === 0 || converting || scanning || exporting) return;
 	convertTargets = selected;
 	convertDialogOpen = true;
 }
@@ -660,7 +663,52 @@ async function handleConvertConfirm(options: ConvertOptions) {
 	}
 }
 
+async function handleExport(selected: Track[]) {
+	if (selected.length === 0 || exporting || scanning || converting) return;
+
+	const destination = await open({
+		directory: true,
+		multiple: false,
+		title: "エクスポート先フォルダを選択",
+	});
+	if (!destination || typeof destination !== "string") return;
+
+	exporting = true;
+	try {
+		const result: ExportResult = await exportTracks(
+			selected.map((track) => track.id),
+			destination,
+		);
+		if (result.exported > 0) {
+			pushActivityLog(
+				"success",
+				`${result.exported} 曲をフォルダへエクスポートしました`,
+				destination,
+			);
+		}
+		if (result.skipped > 0) {
+			pushActivityLog(
+				"info",
+				`${result.skipped} 曲は既にエクスポート先にあります`,
+			);
+		}
+		if (result.failed > 0) {
+			pushActivityLog(
+				result.exported > 0 ? "warning" : "error",
+				`${result.failed} 曲のエクスポートに失敗しました`,
+				result.errors.slice(0, 5).join(" | "),
+			);
+		}
+	} catch (e) {
+		pushActivityLog("error", "エクスポートに失敗しました", String(e));
+	} finally {
+		exporting = false;
+	}
+}
+
 async function handleAddFolder() {
+	if (exporting) return;
+
 	const selected = await open({
 		directory: true,
 		multiple: false,
@@ -685,6 +733,7 @@ async function handleAddFolder() {
 }
 
 async function handleImportFromRekordbox() {
+	if (exporting) return;
 	if (!(await ensureRekordboxWritable())) return;
 
 	scanning = true;
@@ -718,7 +767,11 @@ function isFileDrag(event: DragEvent): boolean {
 
 function dropImportBlocked(): boolean {
 	return (
-		scanning || converting || duplicatePayload != null || convertDialogOpen
+		scanning ||
+		converting ||
+		exporting ||
+		duplicatePayload != null ||
+		convertDialogOpen
 	);
 }
 
@@ -1211,14 +1264,14 @@ onMount(() => {
     <button
       class="btn primary"
       onclick={handleAddFolder}
-      disabled={loading || scanning || converting || activeTab !== "library"}
+      disabled={loading || scanning || converting || exporting || activeTab !== "library"}
     >
       {scanning && scanKind === "folder" ? "スキャン中..." : "Add Folder"}
     </button>
     <button
       class="btn primary"
       onclick={handleImportFromRekordbox}
-      disabled={loading || scanning || converting || activeTab !== "rekordbox" || !rekordboxStatus?.dbPath}
+      disabled={loading || scanning || converting || exporting || activeTab !== "rekordbox" || !rekordboxStatus?.dbPath}
     >
       {scanning && scanKind === "rekordbox" ? "インポート中..." : "ライブラリにインポート"}
     </button>
@@ -1283,8 +1336,10 @@ onMount(() => {
           onbulkremove={handleBulkRemove}
           onAddToRekordbox={handleAddToRekordbox}
           onRemoveFromRekordbox={handleRemoveFromRekordbox}
+          onexport={handleExport}
           onconvert={handleOpenConvert}
-          convertBusy={converting || scanning}
+          convertBusy={converting || scanning || exporting}
+          exportBusy={exporting}
           onreorder={canReorder ? handleReorderEntries : undefined}
           onremoveentries={selectedPlaylist?.kind === "static" ? handleRemoveEntries : undefined}
           ontagtracks={(selected) => (tagTargets = selected)}

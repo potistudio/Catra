@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
 	ConvertOptions,
 	DuplicateChoice,
+	ExportResult,
 	FacetField,
 	FacetValue,
 	HealthReport,
@@ -49,6 +50,13 @@ export async function importFromRekordbox(): Promise<void> {
 
 export async function importPaths(paths: string[]): Promise<void> {
 	return invoke("library_import_paths", { paths });
+}
+
+export async function exportTracks(
+	ids: number[],
+	destination: string,
+): Promise<ExportResult> {
+	return invoke<ExportResult>("library_export_tracks", { ids, destination });
 }
 
 export async function removeTrack(id: number): Promise<void> {

@@ -72,8 +72,10 @@ interface Props {
 	onemptytrash?: () => void | Promise<void>;
 	onAddToRekordbox?: (tracks: Track[]) => void | Promise<void>;
 	onRemoveFromRekordbox?: (tracks: Track[]) => void | Promise<void>;
+	onexport?: (tracks: Track[]) => void | Promise<void>;
 	onconvert?: (tracks: Track[]) => void;
 	convertBusy?: boolean;
+	exportBusy?: boolean;
 	/** 列の並べ替え。要素 ID の完全な配列を新しい順で受け取る。 */
 	onreorder?: (entryIds: number[]) => void | Promise<void>;
 	/** この要素だけプレイリストから外す。同じ曲の別の要素は残る。 */
@@ -113,8 +115,10 @@ let {
 	onemptytrash,
 	onAddToRekordbox,
 	onRemoveFromRekordbox,
+	onexport,
 	onconvert,
 	convertBusy = false,
+	exportBusy = false,
 	onreorder,
 	onremoveentries,
 	removeEntriesLabel = "プレイリストから外す",
@@ -296,7 +300,8 @@ let targetSummary = $derived.by(() => {
 });
 
 let showCommandBar = $derived(
-	(commandBarMode || !!onremoveentries || !!ontagtracks) && checkedCount > 0,
+	(commandBarMode || !!onremoveentries || !!ontagtracks || !!onexport) &&
+		checkedCount > 0,
 );
 
 /** Remove keys that are not in the current filtered list from checkedKeys. */
@@ -436,8 +441,15 @@ async function handleRemoveFromRekordbox() {
 }
 
 function handleConvert() {
-	if (!onconvert || targetTracks.length === 0 || convertBusy) return;
+	if (!onconvert || targetTracks.length === 0 || convertBusy || exportBusy)
+		return;
 	onconvert(targetTracks);
+}
+
+async function handleExport() {
+	if (!onexport || targetTracks.length === 0 || exportBusy || convertBusy)
+		return;
+	await onexport(targetTracks);
 }
 
 function handleTag() {
@@ -915,10 +927,23 @@ $effect(() => {
         <button
           type="button"
           class="command-btn"
-          disabled={convertBusy || rekordboxBusy}
+          disabled={convertBusy || exportBusy || rekordboxBusy}
           onclick={handleConvert}
         >
           変換
+          {#if targetTracks.length > 0}
+            ({targetTracks.length})
+          {/if}
+        </button>
+      {/if}
+      {#if onexport}
+        <button
+          type="button"
+          class="command-btn primary"
+          disabled={exportBusy || convertBusy || rekordboxBusy}
+          onclick={handleExport}
+        >
+          {exportBusy ? "エクスポート中..." : "フォルダへエクスポート"}
           {#if targetTracks.length > 0}
             ({targetTracks.length})
           {/if}
@@ -931,6 +956,7 @@ $effect(() => {
             class="command-btn primary"
             disabled={!rekordboxWritable ||
               rekordboxBusy ||
+              exportBusy ||
               targetNotInRekordbox.length === 0}
             onclick={handleAddToRekordbox}
           >
@@ -946,6 +972,7 @@ $effect(() => {
             class="command-btn"
             disabled={!rekordboxWritable ||
               rekordboxBusy ||
+              exportBusy ||
               targetInRekordbox.length === 0}
             onclick={handleRemoveFromRekordbox}
           >
@@ -974,7 +1001,7 @@ $effect(() => {
         <button
           type="button"
           class="command-btn danger"
-          disabled={rekordboxBusy}
+          disabled={rekordboxBusy || exportBusy}
           onclick={handleLibraryRemove}
         >
           {bulkRemoveLabel}
@@ -984,7 +1011,7 @@ $effect(() => {
         <button
           type="button"
           class="command-btn danger"
-          disabled={rekordboxBusy}
+          disabled={rekordboxBusy || exportBusy}
           onclick={handlePermanentDelete}
         >
           {permanentTitle}

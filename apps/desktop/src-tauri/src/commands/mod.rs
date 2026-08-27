@@ -5,10 +5,10 @@ pub mod tag;
 
 pub use library::{
     library_add_to_rekordbox, library_check_health, library_convert_tracks,
-    library_delete_permanently, library_empty_trash, library_import_from_rekordbox,
-    library_import_paths, library_list_tracks, library_list_trashed, library_remove_from_rekordbox,
-    library_remove_track, library_remove_tracks, library_resolve_duplicate, library_restore_tracks,
-    library_scan_folder,
+    library_delete_permanently, library_empty_trash, library_export_tracks,
+    library_import_from_rekordbox, library_import_paths, library_list_tracks, library_list_trashed,
+    library_remove_from_rekordbox, library_remove_track, library_remove_tracks,
+    library_resolve_duplicate, library_restore_tracks, library_scan_folder,
 };
 pub use playlist::{
     browse_facet, browse_facet_tracks, playlist_add_tracks, playlist_create, playlist_delete,

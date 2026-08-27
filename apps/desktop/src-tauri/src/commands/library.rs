@@ -1,8 +1,8 @@
 use crate::library::{
-    add_track_to_rekordbox, check_health, delete_permanently, empty_trash,
+    add_track_to_rekordbox, check_health, delete_permanently, empty_trash, export_tracks,
     remove_track_from_rekordbox, restore_tracks, start_convert_tracks, start_import_from_rekordbox,
     start_import_paths, start_scan_folder, trash_tracks, ConvertOptions, DuplicateChoice,
-    DuplicateResolver, HealthReport, LibraryState, Track,
+    DuplicateResolver, ExportResult, HealthReport, LibraryState, Track,
 };
 use std::path::Path;
 use tauri::{AppHandle, State};
@@ -44,6 +44,15 @@ pub fn library_import_from_rekordbox(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn library_export_tracks(
+    state: State<'_, LibraryState>,
+    ids: Vec<i64>,
+    destination: String,
+) -> Result<ExportResult, String> {
+    export_tracks(&state, &ids, &destination)
+}
+
+#[tauri::command]
 pub fn library_remove_track(state: State<'_, LibraryState>, id: i64) -> Result<(), String> {
     let removed = trash_tracks(&state, &[id])?;
     if removed > 0 {
@@ -59,7 +68,10 @@ pub fn library_remove_tracks(state: State<'_, LibraryState>, ids: Vec<i64>) -> R
 }
 
 #[tauri::command]
-pub fn library_restore_tracks(state: State<'_, LibraryState>, ids: Vec<i64>) -> Result<u32, String> {
+pub fn library_restore_tracks(
+    state: State<'_, LibraryState>,
+    ids: Vec<i64>,
+) -> Result<u32, String> {
     restore_tracks(&state, &ids)
 }
 
