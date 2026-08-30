@@ -2,6 +2,7 @@ use super::config::load_config;
 use super::db::MasterDatabase;
 use super::ids::{new_uuid, unused_numeric_id};
 use super::write::{now_local, timestamp_sql, WriteSession};
+use chrono::{DateTime, Local};
 use lofty::config::ParseOptions;
 use lofty::file::{AudioFile, TaggedFileExt};
 use lofty::probe::Probe;
@@ -153,8 +154,7 @@ impl MasterDatabase {
             .map_err(|error| error.to_string())?;
 
         for content in &mut contents {
-            content.artwork_path =
-                resolve_artwork_path(db_dir, content.artwork_path.as_deref());
+            content.artwork_path = resolve_artwork_path(db_dir, content.artwork_path.as_deref());
         }
 
         Ok(contents)
@@ -222,6 +222,7 @@ pub fn add_content(path: String, title: Option<String>) -> Result<RekordboxConte
     let uuid = new_uuid();
     let now = now_local();
     let ts = timestamp_sql(now);
+    let stock_date = stock_date_sql(now);
 
     let artist_id = {
         let (conn, usn) = session.conn_and_usn();
@@ -250,15 +251,15 @@ pub fn add_content(path: String, title: Option<String>) -> Result<RekordboxConte
                 ID, FolderPath, FileNameL, Title,
                 ArtistID, AlbumID, GenreID, BPM, Length,
                 BitRate, FileType, Rating, KeyID, FileSize, SampleRate,
-                OrgFolderPath, DateCreated,
+                OrgFolderPath, DateCreated, StockDate,
                 UUID, rb_data_status, rb_local_data_status,
                 rb_local_deleted, rb_local_synced, created_at, updated_at
              ) VALUES (
                 ?1, ?2, ?3, ?4,
                 ?5, ?6, ?7, ?8, ?9,
                 ?10, ?11, ?12, ?13, ?14, ?15,
-                ?2, ?16,
-                ?17, 0, 0, 0, 0, ?16, ?16
+                ?2, ?16, ?17,
+                ?18, 0, 0, 0, 0, ?16, ?16
              )",
             params![
                 id.as_str(),
@@ -277,6 +278,7 @@ pub fn add_content(path: String, title: Option<String>) -> Result<RekordboxConte
                 file_size,
                 meta.sample_rate,
                 ts.as_str(),
+                stock_date.as_str(),
                 uuid.as_str(),
             ],
         )
@@ -291,6 +293,10 @@ pub fn add_content(path: String, title: Option<String>) -> Result<RekordboxConte
     contents
         .pop()
         .ok_or_else(|| "added content could not be reloaded".to_string())
+}
+
+fn stock_date_sql(now: DateTime<Local>) -> String {
+    now.format("%Y-%m-%d").to_string()
 }
 
 pub fn update_content(
@@ -699,7 +705,10 @@ fn read_file_metadata(path: &Path) -> FileMeta {
 
     if let Some(tag) = tagged_file.primary_tag() {
         return FileMeta {
-            title: tag.title().map(|value| value.to_string()).or(fallback_title),
+            title: tag
+                .title()
+                .map(|value| value.to_string())
+                .or(fallback_title),
             artist: tag.artist().map(|value| value.to_string()),
             album: tag.album().map(|value| value.to_string()),
             genre: tag.genre().map(|value| value.to_string()),
@@ -857,9 +866,19 @@ fn prefer_medium_artwork(path: &Path) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_rating, prefer_medium_artwork, resolve_artwork_path};
+    use super::{normalize_rating, prefer_medium_artwork, resolve_artwork_path, stock_date_sql};
+    use chrono::{Local, TimeZone};
     use std::fs;
     use std::path::PathBuf;
+
+    #[test]
+    fn formats_stock_date_for_rekordbox() {
+        let now = Local
+            .with_ymd_and_hms(2026, 8, 31, 12, 34, 56)
+            .single()
+            .expect("unambiguous local time");
+        assert_eq!(stock_date_sql(now), "2026-08-31");
+    }
 
     #[test]
     fn normalizes_star_count_rating_to_255_scale() {
@@ -896,9 +915,8 @@ mod tests {
         fs::write(&jpg, b"full").unwrap();
         fs::write(&medium, b"med").unwrap();
 
-        let resolved =
-            resolve_artwork_path(&root, Some("/PIONEER/Artwork/000/abc/artwork.jpg"))
-                .expect("resolved");
+        let resolved = resolve_artwork_path(&root, Some("/PIONEER/Artwork/000/abc/artwork.jpg"))
+            .expect("resolved");
         assert_eq!(PathBuf::from(resolved), medium);
 
         let _ = fs::remove_dir_all(root);
