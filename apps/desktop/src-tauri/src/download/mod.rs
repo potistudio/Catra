@@ -623,13 +623,17 @@ fn run_yt_dlp(
 
     args.push(url.to_string());
 
-    let mut child = Command::new("yt-dlp")
+    let mut command = Command::new("yt-dlp");
+    command
         .env("PYTHONUNBUFFERED", "1")
         .env("PYTHONUTF8", "1")
         .env("PYTHONIOENCODING", "utf-8")
         .args(&args)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+    configure_yt_dlp_command(&mut command);
+
+    let mut child = command
         .spawn()
         .map_err(|e| format!("yt-dlp を実行できませんでした: {e}"))?;
 
@@ -650,6 +654,15 @@ fn run_yt_dlp(
     }
 
     Ok((Vec::new(), files_before, output_dir))
+}
+
+fn configure_yt_dlp_command(command: &mut Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
 }
 
 pub fn download_track(app: &AppHandle, url: &str) -> Result<PathBuf, String> {
