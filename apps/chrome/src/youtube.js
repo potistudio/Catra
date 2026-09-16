@@ -42,7 +42,13 @@ function getYouTubeTarget(href = location.href) {
 function findVisibleElement(selectors) {
 	for (const selector of selectors) {
 		for (const element of document.querySelectorAll(selector)) {
-			if (element instanceof HTMLElement && element.offsetParent !== null) {
+			if (
+				element instanceof HTMLElement &&
+				(element.offsetParent !== null ||
+					[...element.getClientRects()].some(
+						(rect) => rect.width > 0 && rect.height > 0,
+					))
+			) {
 				return element;
 			}
 		}
