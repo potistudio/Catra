@@ -76,6 +76,6 @@ POST http://127.0.0.1:17340/download/playlist
 |------|-----------|---------------|
 | Watch | `ytd-watch-metadata #actions-inner` | `youtube.com/watch?v={video}` |
 | Shorts | Active reel action column | `youtube.com/shorts/{video}` |
-| Playlist | Visible page-header action group | `youtube.com/playlist?list={playlist}` |
+| Playlist | Visible page-header action group or legacy metadata action row | `youtube.com/playlist?list={playlist}` |
 
 YouTube query identifiers are preserved by the desktop download queue. Tracking and playlist context are omitted from single-video URLs.

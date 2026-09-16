@@ -60,6 +60,7 @@ function findVisibleElement(selectors) {
 function findActionContainer(target) {
 	if (target.kind === "playlist") {
 		return findVisibleElement([
+			"ytd-playlist-header-renderer .metadata-buttons-wrapper",
 			"yt-page-header-view-model yt-flexible-actions-view-model",
 			"ytd-playlist-header-renderer #buttons",
 			"ytd-playlist-header-renderer #menu",
