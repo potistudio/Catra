@@ -141,6 +141,10 @@
 	white-space: nowrap;
 }
 
+ytd-playlist-header-renderer .catra-yt-download-label {
+	color: #fff;
+}
+
 .catra-yt-download-btn:hover {
 	background: var(--yt-spec-button-chip-background-hover, rgba(0, 0, 0, 0.14));
 }
