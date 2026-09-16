@@ -17,7 +17,7 @@ interface Props {
 	readonly?: boolean;
 	inRekordbox?: boolean;
 	showRowRemove?: boolean;
-	onselect: (track: Track) => void;
+	onselect: (track: Track, event?: MouseEvent) => void;
 	onremove?: (track: Track) => void;
 	onplay?: (track: Track) => void;
 }
@@ -49,7 +49,7 @@ function handleKeydown(event: KeyboardEvent) {
   class:checked
   role="button"
   tabindex="0"
-  onclick={() => onselect(track)}
+	onclick={(event) => onselect(track, event)}
   onkeydown={handleKeydown}
   ondblclick={() => onselect(track)}
 >

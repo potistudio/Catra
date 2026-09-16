@@ -19,7 +19,7 @@ interface Props {
 	rekordboxPathIndex?: Map<string, string>;
 	rekordboxContentIds?: Set<string>;
 	showRowRemove?: boolean;
-	onselect: (row: TrackListRow) => void;
+	onselect: (row: TrackListRow, event?: MouseEvent) => void;
 	onremove?: (track: Track) => void;
 	onplay?: (track: Track) => void;
 }
@@ -99,7 +99,7 @@ function handleScroll(event: Event) {
             ? isInRekordbox(row.track, rekordboxPathIndex, rekordboxContentIds)
             : false}
           {showRowRemove}
-          onselect={() => onselect(row)}
+		  onselect={(_track, event) => onselect(row, event)}
           {onremove}
           {onplay}
         />

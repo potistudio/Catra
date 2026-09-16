@@ -31,7 +31,7 @@ interface Props {
 	onselect: (track: Track) => void;
 	onremove?: (track: Track) => void;
 	onplay?: (track: Track) => void;
-	ontogglecheck?: (track: Track) => void;
+	ontogglecheck?: (track: Track, event?: MouseEvent) => void;
 }
 
 let {
@@ -75,7 +75,7 @@ function handleKeydown(event: KeyboardEvent) {
       <SelectionCheckbox
         {checked}
         label={`${displayTitle(track)} を選択`}
-        onToggle={() => ontogglecheck(track)}
+		  onToggle={(event) => ontogglecheck(track, event)}
       />
     {/if}
   </span>

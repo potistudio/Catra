@@ -5,7 +5,7 @@ interface Props {
 	label: string;
 	title?: string;
 	variant?: "default" | "overlay";
-	onToggle: () => void;
+	onToggle: (event: MouseEvent) => void;
 }
 
 let {
@@ -28,7 +28,7 @@ $effect(() => {
 function handleClick(event: MouseEvent) {
 	event.preventDefault();
 	event.stopPropagation();
-	onToggle();
+	onToggle(event);
 }
 </script>
 

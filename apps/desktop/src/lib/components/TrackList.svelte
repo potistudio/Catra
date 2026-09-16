@@ -142,6 +142,8 @@ const listSession =
 
 /** 選択の単位は行。列の中では要素 ID、それ以外はトラック ID。 */
 let checkedKeys = $state<Set<number>>(new Set());
+/** Shift 選択の始点。現在の表示順から外れたら次の通常選択で置き換える。 */
+let rangeAnchorKey = $state<number | null>(null);
 let membershipFilter = $state<MembershipFilter>(
 	listSession?.membershipFilter ?? "all",
 );
@@ -313,7 +315,30 @@ $effect(() => {
 	}
 });
 
-function toggleCheck(row: TrackListRow) {
+function toggleCheck(row: TrackListRow, event?: MouseEvent) {
+	const anchorIndex =
+		event?.shiftKey && rangeAnchorKey != null
+			? sorted.findIndex((candidate) => candidate.key === rangeAnchorKey)
+			: -1;
+
+	if (anchorIndex >= 0) {
+		const rowIndex = sorted.findIndex((candidate) => candidate.key === row.key);
+		const rangeStart = Math.min(anchorIndex, rowIndex);
+		const rangeEnd = Math.max(anchorIndex, rowIndex);
+		const select = !checkedKeys.has(row.key);
+		const next = new Set(checkedKeys);
+
+		for (const candidate of sorted.slice(rangeStart, rangeEnd + 1)) {
+			if (select) {
+				next.add(candidate.key);
+			} else {
+				next.delete(candidate.key);
+			}
+		}
+		checkedKeys = next;
+		return;
+	}
+
 	const next = new Set(checkedKeys);
 	if (next.has(row.key)) {
 		next.delete(row.key);
@@ -321,6 +346,7 @@ function toggleCheck(row: TrackListRow) {
 		next.add(row.key);
 	}
 	checkedKeys = next;
+	rangeAnchorKey = row.key;
 }
 
 function toggleSelectAll() {
@@ -356,12 +382,12 @@ function selectRow(row: TrackListRow) {
  * 一括操作の対象選択（旧チェックボックスの仕事）を兼ねる。
  * プレビューの曲切り替えは、ホバープレイボタンから行う。
  */
-function selectAndToggleCheck(row: TrackListRow) {
+function selectAndToggleCheck(row: TrackListRow, event?: MouseEvent) {
 	if (readonly) {
 		selectRow(row);
 		return;
 	}
-	toggleCheck(row);
+	toggleCheck(row, event);
 }
 
 async function handleLibraryRemove() {
@@ -905,7 +931,7 @@ $effect(() => {
                   onselect={() => selectRow(row)}
                   onremove={showRowRemove ? onremove : undefined}
                   {onplay}
-                  ontogglecheck={readonly ? undefined : () => toggleCheck(row)}
+				  ontogglecheck={readonly ? undefined : (_track, event) => toggleCheck(row, event)}
                 />
               </div>
             {/each}
