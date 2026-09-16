@@ -141,7 +141,8 @@
 	white-space: nowrap;
 }
 
-ytd-playlist-header-renderer .catra-yt-download-label {
+ytd-playlist-header-renderer .catra-yt-download-label,
+ytd-playlist-header-renderer .catra-yt-download-btn svg {
 	color: #fff;
 }
 
