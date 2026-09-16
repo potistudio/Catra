@@ -1,12 +1,12 @@
-# Catra SoundCloud Chrome Extension
+# Catra Chrome Extension
 
 ## Overview
 
-Injects download buttons on SoundCloud. Track downloads POST a canonical track URL to Catra. Playlist downloads POST the playlist URL for yt-dlp playlist import.
+Injects download buttons on SoundCloud and YouTube. Track and video downloads POST a canonical URL to Catra. Playlist downloads POST the playlist URL for yt-dlp playlist import.
 
 Load unpacked from `apps/chrome/`.
 
-## Architecture
+## SoundCloud architecture
 
 ```mermaid
 flowchart TB
@@ -53,8 +53,9 @@ Shared resilience: 500ms polling, `MutationObserver`, history hooks. Shadow DOM 
 
 | File | Role |
 |------|------|
-| `manifest.json` | `all_frames: true`, `soundcloud.com` matches |
+| `manifest.json` | SoundCloud frame injection and YouTube top-frame injection |
 | `src/content.js` | Frame policy, DOM injection, SPA sync |
+| `src/youtube.js` | YouTube video, Shorts, and playlist injection |
 | `src/background.js` | Catra API bridge |
 | `src/utils.js` | URL normalization |
 | `src/styles.css` | Button states and MUI icon sizing |
@@ -68,3 +69,13 @@ POST http://127.0.0.1:17340/download
 POST http://127.0.0.1:17340/download/playlist
      { "url": "https://soundcloud.com/space-cadet/sets/liberex-003" }
 ```
+
+## YouTube
+
+| Page | Container | Canonical URL |
+|------|-----------|---------------|
+| Watch | `ytd-watch-metadata #actions-inner` | `youtube.com/watch?v={video}` |
+| Shorts | Active reel action column | `youtube.com/shorts/{video}` |
+| Playlist | Visible page-header action group | `youtube.com/playlist?list={playlist}` |
+
+YouTube query identifiers are preserved by the desktop download queue. Tracking and playlist context are omitted from single-video URLs.

@@ -326,11 +326,35 @@ fn parse_playlist_item_line(line: &str) -> Option<(usize, usize)> {
 pub fn normalize_download_url(url: &str) -> String {
     let trimmed = url.trim();
     let without_fragment = trimmed.split('#').next().unwrap_or(trimmed);
+
+    if is_youtube_url(without_fragment) {
+        return without_fragment.trim_end_matches('/').to_string();
+    }
+
     let without_query = without_fragment
         .split('?')
         .next()
         .unwrap_or(without_fragment);
     without_query.trim_end_matches('/').to_string()
+}
+
+fn is_youtube_url(url: &str) -> bool {
+    let Some((_, remainder)) = url.split_once("://") else {
+        return false;
+    };
+    let host = remainder
+        .split(['/', '?'])
+        .next()
+        .unwrap_or_default()
+        .split(':')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    matches!(
+        host.as_str(),
+        "youtube.com" | "www.youtube.com" | "m.youtube.com" | "youtu.be" | "www.youtu.be"
+    )
 }
 
 pub fn get_download_progress(url: &str) -> DownloadProgressPayload {
@@ -822,4 +846,29 @@ pub fn download_and_import(app: AppHandle, url: String) {
 
 pub fn download_playlist_and_import(app: AppHandle, url: String) {
     enqueue_job(app, DownloadJob::Playlist(normalize_download_url(&url)));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_download_url;
+
+    #[test]
+    fn normalize_download_url_preserves_youtube_identifiers() {
+        assert_eq!(
+            normalize_download_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ#details"),
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        );
+        assert_eq!(
+            normalize_download_url("https://www.youtube.com/playlist?list=PL123"),
+            "https://www.youtube.com/playlist?list=PL123"
+        );
+    }
+
+    #[test]
+    fn normalize_download_url_still_removes_soundcloud_query() {
+        assert_eq!(
+            normalize_download_url("https://soundcloud.com/artist/track?si=abc#player"),
+            "https://soundcloud.com/artist/track"
+        );
+    }
 }

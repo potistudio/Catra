@@ -157,7 +157,7 @@ function getCurrentPageUrl() {
 	const href = isPlaylistPage()
 		? getPageHrefForDetection()
 		: window.location.href;
-	const normalized = CatraSC.normalizeTrackUrl(href);
+	const normalized = CatraExtension.normalizeTrackUrl(href);
 	const parsed = new URL(normalized);
 	const segments = parsed.pathname.split("/").filter(Boolean);
 
@@ -429,7 +429,7 @@ function wait(ms) {
 }
 
 async function fetchDownloadProgress(trackUrl) {
-	const normalizedUrl = CatraSC.normalizeTrackUrl(trackUrl);
+	const normalizedUrl = CatraExtension.normalizeTrackUrl(trackUrl);
 
 	const specific = await chrome.runtime
 		.sendMessage({
@@ -572,7 +572,7 @@ async function downloadTrack(trackUrl, button) {
 		return;
 	}
 
-	const normalizedUrl = CatraSC.normalizeTrackUrl(trackUrl);
+	const normalizedUrl = CatraExtension.normalizeTrackUrl(trackUrl);
 	if (button) {
 		setButtonState(button, "loading");
 	}
@@ -725,7 +725,7 @@ function getPathSegmentsFromUrl(url) {
 }
 
 function getCurrentPageUrlFromHref(href) {
-	const normalized = CatraSC.normalizeTrackUrl(href);
+	const normalized = CatraExtension.normalizeTrackUrl(href);
 	const parsed = new URL(normalized, window.location.origin);
 	const segments = parsed.pathname.split("/").filter(Boolean);
 

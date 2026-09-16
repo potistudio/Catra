@@ -5,6 +5,6 @@ function normalizeTrackUrl(url) {
 	return parsed.toString().replace(/\/$/, "");
 }
 
-window.CatraSC = {
+window.CatraExtension = {
 	normalizeTrackUrl,
 };

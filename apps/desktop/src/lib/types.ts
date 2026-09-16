@@ -1,4 +1,4 @@
-export type TrackSource = "soundcloud" | "bandcamp";
+export type TrackSource = "soundcloud" | "bandcamp" | "youtube";
 
 export interface Track {
 	id: number;

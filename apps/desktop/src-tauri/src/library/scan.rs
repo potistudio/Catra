@@ -435,6 +435,8 @@ fn detect_source_from_text(text: &str) -> Option<&'static str> {
         Some("soundcloud")
     } else if lower.contains("bandcamp.com") {
         Some("bandcamp")
+    } else if lower.contains("youtube.com") || lower.contains("youtu.be") {
+        Some("youtube")
     } else {
         None
     }
@@ -561,5 +563,17 @@ mod tests {
         assert!(files.contains(&nested_wav));
         assert!(files.contains(&loose_mp3));
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn detects_youtube_source_urls() {
+        assert_eq!(
+            detect_source_from_text("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
+            Some("youtube")
+        );
+        assert_eq!(
+            detect_source_from_text("https://youtu.be/dQw4w9WgXcQ"),
+            Some("youtube")
+        );
     }
 }

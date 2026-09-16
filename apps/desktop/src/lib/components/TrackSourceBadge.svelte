@@ -8,7 +8,13 @@ interface Props {
 
 let { source, size = 16 }: Props = $props();
 
-const label = $derived(source === "soundcloud" ? "SoundCloud" : "Bandcamp");
+const label = $derived(
+	source === "soundcloud"
+		? "SoundCloud"
+		: source === "bandcamp"
+			? "Bandcamp"
+			: "YouTube",
+);
 </script>
 
 <span class="source-badge source-{source}" title={label} aria-label={label}>
@@ -24,7 +30,7 @@ const label = $derived(source === "soundcloud" ? "SoundCloud" : "Bandcamp");
         d="M17.6 11.2c-.3 0-.6.1-.8.2l-1.1-1.9c-.2-.4-.7-.6-1.1-.6H9.3c-.4 0-.9.2-1.1.6L7.2 11.4c-.2-.1-.5-.2-.8-.2-1 0-1.8.8-1.8 1.8s.8 1.8 1.8 1.8h9.4c1.1 0 2-.9 2-2s-.9-2-2-2z"
       />
     </svg>
-  {:else}
+  {:else if source === "bandcamp"}
     <svg
       width={size}
       height={size}
@@ -33,6 +39,16 @@ const label = $derived(source === "soundcloud" ? "SoundCloud" : "Bandcamp");
       aria-hidden="true"
     >
       <path d="M3 19.5 9.8 8.5h3.4L20 19.5h-3.4l-1.6-3.2-1.6 3.2H3z" />
+    </svg>
+  {:else}
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M21.6 7.2a2.8 2.8 0 0 0-2-2C17.8 4.7 12 4.7 12 4.7s-5.8 0-7.6.5a2.8 2.8 0 0 0-2 2A29 29 0 0 0 2 12a29 29 0 0 0 .4 4.8 2.8 2.8 0 0 0 2 2c1.8.5 7.6.5 7.6.5s5.8 0 7.6-.5a2.8 2.8 0 0 0 2-2A29 29 0 0 0 22 12a29 29 0 0 0-.4-4.8ZM10 15.1V8.9l5.2 3.1-5.2 3.1Z" />
     </svg>
   {/if}
 </span>
@@ -57,6 +73,11 @@ const label = $derived(source === "soundcloud" ? "SoundCloud" : "Bandcamp");
 
   .source-bandcamp {
     color: #629aa9;
+    background: var(--overlay-strong);
+  }
+
+  .source-youtube {
+    color: #ff0033;
     background: var(--overlay-strong);
   }
 </style>

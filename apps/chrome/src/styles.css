@@ -120,3 +120,59 @@
 		transform: rotate(360deg);
 	}
 }
+
+.catra-yt-download-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	height: 36px;
+	margin-left: 8px;
+	padding: 0 16px;
+	border: 0;
+	border-radius: 18px;
+	background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, 0.08));
+	color: var(--yt-spec-text-primary, #0f0f0f);
+	font:
+		500 14px / 1 Roboto,
+		Arial,
+		sans-serif;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.catra-yt-download-btn:hover {
+	background: var(--yt-spec-button-chip-background-hover, rgba(0, 0, 0, 0.14));
+}
+
+.catra-yt-download-btn.is-loading {
+	cursor: wait;
+	opacity: 0.7;
+	pointer-events: none;
+}
+
+.catra-yt-download-btn.is-success {
+	color: #2ba640;
+}
+
+.catra-yt-download-btn.is-error {
+	color: #d93025;
+}
+
+.catra-yt-download-btn svg {
+	flex: 0 0 auto;
+}
+
+ytd-reel-video-renderer .catra-yt-download-btn,
+reel-action-bar-view-model .catra-yt-download-btn {
+	width: 48px;
+	height: 48px;
+	margin: 8px 0 0;
+	padding: 0;
+	border-radius: 50%;
+}
+
+ytd-reel-video-renderer .catra-yt-download-label,
+reel-action-bar-view-model .catra-yt-download-label {
+	display: none;
+}
