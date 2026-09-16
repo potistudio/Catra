@@ -18,7 +18,7 @@ import {
 	type TrackListRow,
 	type ViewMode,
 } from "$lib/trackListView";
-import type { PlaylistEntry, Track } from "$lib/types";
+import type { PlaylistEntry, PlaylistNode, Track } from "$lib/types";
 
 const SORT_LABELS: Record<SortColumn, string> = {
 	position: "列の順番",
@@ -83,6 +83,13 @@ interface Props {
 	removeEntriesLabel?: string;
 	/** 選択中の曲にタグを付ける入口。 */
 	ontagtracks?: (tracks: Track[]) => void;
+	/** 選択曲を追加できる通常プレイリスト。 */
+	playlistTargets?: PlaylistNode[];
+	playlistBusy?: boolean;
+	onaddtoplaylist?: (
+		playlistId: number,
+		trackIds: number[],
+	) => void | Promise<void>;
 }
 
 let {
@@ -123,6 +130,9 @@ let {
 	onremoveentries,
 	removeEntriesLabel = "プレイリストから外す",
 	ontagtracks,
+	playlistTargets = [],
+	playlistBusy = false,
+	onaddtoplaylist,
 }: Props = $props();
 
 /** Library bridge mode: actions live in the command bar, not on rows. */
@@ -157,6 +167,16 @@ let scrollTop = $state(0);
 let viewportHeight = $state(0);
 
 let tableWrap = $state<HTMLDivElement | null>(null);
+let playlistTargetId = $state<number | null>(null);
+
+$effect(() => {
+	if (
+		playlistTargetId != null &&
+		!playlistTargets.some((playlist) => playlist.id === playlistTargetId)
+	) {
+		playlistTargetId = null;
+	}
+});
 
 $effect(() => {
 	const value = queryInput;
@@ -302,7 +322,11 @@ let targetSummary = $derived.by(() => {
 });
 
 let showCommandBar = $derived(
-	(commandBarMode || !!onremoveentries || !!ontagtracks || !!onexport) &&
+	(commandBarMode ||
+		!!onremoveentries ||
+		!!ontagtracks ||
+		!!onexport ||
+		!!onaddtoplaylist) &&
 		checkedCount > 0,
 );
 
@@ -481,6 +505,20 @@ async function handleExport() {
 function handleTag() {
 	if (!ontagtracks || targetTracks.length === 0) return;
 	ontagtracks(targetTracks);
+}
+
+async function handleAddToPlaylist() {
+	if (
+		!onaddtoplaylist ||
+		playlistTargetId == null ||
+		targetTracks.length === 0 ||
+		playlistBusy
+	)
+		return;
+	await onaddtoplaylist(
+		playlistTargetId,
+		targetTracks.map((track) => track.id),
+	);
 }
 
 /** 確認は出さない。列から要素を抜くのは、曲を消すことではない。 */
@@ -944,6 +982,25 @@ $effect(() => {
   {#if showCommandBar}
     <div class="command-bar" aria-label="トラック操作">
       <span class="command-summary">{targetSummary}</span>
+      {#if onaddtoplaylist}
+        <div class="command-playlist">
+          <label class="sr-only" for="playlist-target">追加先のプレイリスト</label>
+          <select id="playlist-target" bind:value={playlistTargetId} disabled={playlistBusy}>
+            <option value={null}>追加先を選択</option>
+            {#each playlistTargets as playlist (playlist.id)}
+              <option value={playlist.id}>{playlist.name}</option>
+            {/each}
+          </select>
+          <button
+            type="button"
+            class="command-btn primary"
+            disabled={playlistBusy || playlistTargetId == null || targetTracks.length === 0}
+            onclick={handleAddToPlaylist}
+          >
+            プレイリストに追加 ({targetTracks.length})
+          </button>
+        </div>
+      {/if}
       {#if ontagtracks}
         <button type="button" class="command-btn" onclick={handleTag}>
           タグ ({targetTracks.length})
@@ -1172,6 +1229,40 @@ $effect(() => {
     align-items: center;
     gap: 0.5rem;
     flex-wrap: wrap;
+  }
+
+  .command-playlist {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .command-playlist select {
+    max-width: 14rem;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.8rem;
+  }
+
+  .command-playlist select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .command-spacer {

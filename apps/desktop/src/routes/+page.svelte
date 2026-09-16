@@ -1343,6 +1343,9 @@ onMount(() => {
           onreorder={canReorder ? handleReorderEntries : undefined}
           onremoveentries={selectedPlaylist?.kind === "static" ? handleRemoveEntries : undefined}
           ontagtracks={(selected) => (tagTargets = selected)}
+          playlistTargets={playlistNodes.filter((node) => node.kind === "static")}
+          playlistBusy={classifyBusy}
+          onaddtoplaylist={handleDropTracksOnPlaylist}
         >
           {#snippet headerExtra()}
             {#if selectedPlaylist}
