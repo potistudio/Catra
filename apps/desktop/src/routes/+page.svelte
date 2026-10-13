@@ -1175,6 +1175,10 @@ onMount(() => {
         aria-selected={activeTab === "library"}
         onclick={() => switchTab("library")}
       >
+        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H20v14H5.5A1.5 1.5 0 0 0 4 19.5v-14Z" />
+          <path d="M4 19.5A1.5 1.5 0 0 1 5.5 18H20M8 8h8M8 11h8" />
+        </svg>
         Library
       </button>
       <button
@@ -1185,6 +1189,11 @@ onMount(() => {
         aria-selected={activeTab === "rekordbox"}
         onclick={() => switchTab("rekordbox")}
       >
+        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.5" />
+          <circle cx="12" cy="12" r="2.5" />
+          <path d="M12 3.5v6M20.5 12h-6M12 20.5v-6M3.5 12h6" />
+        </svg>
         Rekordbox
       </button>
       <button
@@ -1195,6 +1204,9 @@ onMount(() => {
         aria-selected={activeTab === "trash"}
         onclick={() => switchTab("trash")}
       >
+        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 13h11l1-13M9 7V4h6v3" />
+        </svg>
         ゴミ箱
       </button>
     </div>
@@ -1475,6 +1487,10 @@ onMount(() => {
   }
 
   .tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
     padding: 0.35rem 0.9rem;
     border: none;
     border-radius: 6px;
@@ -1483,6 +1499,16 @@ onMount(() => {
     font-size: 0.82rem;
     font-weight: 500;
     cursor: pointer;
+  }
+
+  .tab-icon {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.7;
   }
 
   .tab:hover {
