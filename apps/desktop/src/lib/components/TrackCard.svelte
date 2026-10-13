@@ -179,6 +179,9 @@ function handleKeydown(event: KeyboardEvent) {
     border-radius: 9px;
     box-shadow: var(--shadow-control);
     overflow: hidden;
+    transition:
+      transform var(--motion-normal) var(--motion-ease),
+      box-shadow var(--motion-normal) var(--motion-ease);
   }
 
   .artwork-wrap :global(.artwork) {
@@ -249,7 +252,8 @@ function handleKeydown(event: KeyboardEvent) {
     transition:
       opacity 0.15s,
       transform 0.15s,
-      background-color 0.12s ease;
+      background-color 0.12s ease,
+      scale var(--motion-fast) var(--motion-ease);
   }
 
   .track-card:hover .play-btn,
@@ -279,7 +283,8 @@ function handleKeydown(event: KeyboardEvent) {
     transition:
       opacity 0.15s,
       background-color 0.12s ease,
-      color 0.12s ease;
+      color 0.12s ease,
+      scale var(--motion-fast) var(--motion-ease);
   }
 
   .track-card:hover .remove-btn,

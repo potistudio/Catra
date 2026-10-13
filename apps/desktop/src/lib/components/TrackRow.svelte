@@ -300,7 +300,8 @@ function handleKeydown(event: KeyboardEvent) {
     transition:
       opacity 0.15s,
       transform 0.15s,
-      background-color 0.12s ease;
+      background-color 0.12s ease,
+      scale var(--motion-fast) var(--motion-ease);
   }
 
   .table-row:hover .play-btn,

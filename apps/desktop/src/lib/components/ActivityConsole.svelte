@@ -6,6 +6,7 @@ import {
 	pushActivityLog,
 	setConsoleOpen,
 } from "$lib/activityLog.svelte";
+import { panelMotion } from "$lib/motion";
 import type { ActivityLogLevel } from "$lib/types";
 
 let logContainer: HTMLDivElement | undefined = $state();
@@ -48,7 +49,7 @@ function handleClear() {
 </script>
 
 {#if consolePanel.open}
-  <aside class="console" aria-label="コンソール">
+  <aside class="console" transition:panelMotion aria-label="コンソール">
     <header class="console-header">
       <div class="title">
         コンソール

@@ -16,6 +16,7 @@ import {
 } from "$lib/api";
 import { appSession, persistAppSession } from "$lib/appSession.svelte";
 import TrackList from "$lib/components/TrackList.svelte";
+import { fadeMotion, revealMotion } from "$lib/motion";
 import {
 	isPlaylistFolder,
 	playlistTreeRows,
@@ -731,12 +732,16 @@ function selectedContent(): RekordboxContent | null {
 {#if editOpen && editTarget}
   <div
     class="modal-backdrop"
+    in:fadeMotion|global
+    out:fadeMotion|global={{ duration: 100 }}
     role="presentation"
     onpointerdown={onBackdropPointerDown}
     onpointerup={(event) => onBackdropPointerUp(event, () => (editOpen = false))}
   >
     <div
       class="modal"
+      in:revealMotion|global
+      out:fadeMotion|global={{ duration: 100 }}
       role="dialog"
       aria-modal="true"
       aria-label="トラック編集"
@@ -794,12 +799,16 @@ function selectedContent(): RekordboxContent | null {
 {#if textPromptOpen}
   <div
     class="modal-backdrop"
+    in:fadeMotion|global
+    out:fadeMotion|global={{ duration: 100 }}
     role="presentation"
     onpointerdown={onBackdropPointerDown}
     onpointerup={(event) => onBackdropPointerUp(event, () => (textPromptOpen = false))}
   >
     <div
       class="modal"
+      in:revealMotion|global
+      out:fadeMotion|global={{ duration: 100 }}
       role="dialog"
       aria-modal="true"
       aria-label={textPromptTitle}
@@ -838,6 +847,8 @@ function selectedContent(): RekordboxContent | null {
 {#if addToPlaylistOpen && addToPlaylistTarget}
   <div
     class="modal-backdrop"
+    in:fadeMotion|global
+    out:fadeMotion|global={{ duration: 100 }}
     role="presentation"
     onpointerdown={onBackdropPointerDown}
     onpointerup={(event) =>
@@ -848,6 +859,8 @@ function selectedContent(): RekordboxContent | null {
   >
     <div
       class="modal"
+      in:revealMotion|global
+      out:fadeMotion|global={{ duration: 100 }}
       role="dialog"
       aria-modal="true"
       aria-label="プレイリストへ追加"

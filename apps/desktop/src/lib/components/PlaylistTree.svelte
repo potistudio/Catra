@@ -8,6 +8,7 @@ import {
 	playlistRename,
 } from "$lib/api";
 import RuleEditor from "$lib/components/RuleEditor.svelte";
+import { fadeMotion, revealMotion } from "$lib/motion";
 import { canDropInto, playlistTreeRows } from "$lib/playlistTree";
 import { hasTrackDrag, readTrackDrag } from "$lib/trackDrag";
 import type { PlaylistKind, PlaylistNode, TagAxis } from "$lib/types";
@@ -378,11 +379,20 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
 {#if promptOpen}
   <div
     class="modal-backdrop"
+    in:fadeMotion|global
+    out:fadeMotion|global={{ duration: 100 }}
     role="presentation"
     onpointerdown={onBackdropPointerDown}
     onpointerup={(event) => onBackdropPointerUp(event, () => (promptOpen = false))}
   >
-    <div class="modal" role="dialog" aria-modal="true" aria-label={promptTitle}>
+    <div
+      class="modal"
+      in:revealMotion|global
+      out:fadeMotion|global={{ duration: 100 }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={promptTitle}
+    >
       <h3>{promptTitle}</h3>
       <label>
         名前

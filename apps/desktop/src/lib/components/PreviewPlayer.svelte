@@ -10,6 +10,7 @@ import {
 	formatBpm,
 	formatDuration,
 } from "$lib/format";
+import { revealMotion } from "$lib/motion";
 import type { PreviewableTrack } from "$lib/types";
 
 interface Props {
@@ -341,10 +342,12 @@ onDestroy(() => {
       size={56}
     />
 
-    <div class="preview-info">
-      <span class="preview-title">{displayTitle(track)}</span>
-      <span class="preview-artist">{displayArtist(track)}</span>
-    </div>
+    {#key track.path}
+      <div class="preview-info" in:revealMotion={{ y: 4, scale: 1, duration: 160 }}>
+        <span class="preview-title">{displayTitle(track)}</span>
+        <span class="preview-artist">{displayArtist(track)}</span>
+      </div>
+    {/key}
 
     <div class="preview-controls">
       <button class="play-btn" onclick={togglePlay} aria-label={isPlaying ? "Pause" : "Play"}>

@@ -1,0 +1,63 @@
+@keyframes catra-content-in {
+	from {
+		opacity: 0.6;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes catra-marker-in {
+	from {
+		opacity: 0;
+		transform: scaleY(0.6);
+	}
+	to {
+		opacity: 1;
+		transform: scaleY(1);
+	}
+}
+
+@keyframes catra-check-in {
+	from {
+		stroke-dashoffset: 1;
+	}
+	to {
+		stroke-dashoffset: 0;
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.tab-panel:not([hidden]),
+	.grid-wrap,
+	.table-wrap,
+	.download-status,
+	.drop-overlay {
+		animation: catra-content-in var(--motion-normal) var(--motion-ease);
+	}
+
+	button:not(:disabled):not(.volume-drag-handle):active {
+		scale: 0.97;
+	}
+
+	.selection-checkbox:active .box {
+		scale: 0.9;
+	}
+
+	.selection-checkbox .mark path {
+		stroke-dasharray: 1;
+		animation: catra-check-in var(--motion-fast) var(--motion-ease);
+	}
+
+	.track-card.selected::before,
+	.table-row.selected .sticky-col::before {
+		animation: catra-marker-in var(--motion-fast) var(--motion-ease);
+	}
+
+	@media (hover: hover) and (pointer: fine) {
+		.track-card:hover .artwork-wrap {
+			transform: translateY(-2px);
+			box-shadow: var(--shadow-floating);
+		}
+	}
+}

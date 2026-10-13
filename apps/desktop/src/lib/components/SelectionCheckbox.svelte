@@ -52,6 +52,7 @@ function handleClick(event: MouseEvent) {
       <svg class="mark" viewBox="0 0 16 16" fill="none">
         <path
           d="M3.5 8.2 6.6 11.2 12.5 4.8"
+          pathLength="1"
           stroke="currentColor"
           stroke-width="2"
           stroke-linecap="round"
@@ -62,6 +63,7 @@ function handleClick(event: MouseEvent) {
       <svg class="mark" viewBox="0 0 16 16" fill="none">
         <path
           d="M4 8h8"
+          pathLength="1"
           stroke="currentColor"
           stroke-width="2"
           stroke-linecap="round"
@@ -108,7 +110,8 @@ function handleClick(event: MouseEvent) {
     transition:
       background 0.12s ease,
       border-color 0.12s ease,
-      box-shadow 0.12s ease;
+      box-shadow 0.12s ease,
+      scale var(--motion-fast) var(--motion-ease);
     pointer-events: none;
   }
 

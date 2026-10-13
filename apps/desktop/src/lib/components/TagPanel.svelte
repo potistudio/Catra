@@ -14,6 +14,7 @@ import {
 	tagUnassign,
 	tagUpdateAxis,
 } from "$lib/api";
+import { fadeMotion, revealMotion } from "$lib/motion";
 import { hasTrackDrag, readTrackDrag } from "$lib/trackDrag";
 import type { Rule, Tag, TagAxis, Track } from "$lib/types";
 
@@ -421,11 +422,20 @@ function onBackdropPointerUp(event: PointerEvent) {
 {#if promptOpen}
   <div
     class="modal-backdrop"
+    in:fadeMotion|global
+    out:fadeMotion|global={{ duration: 100 }}
     role="presentation"
     onpointerdown={onBackdropPointerDown}
     onpointerup={onBackdropPointerUp}
   >
-    <div class="modal" role="dialog" aria-modal="true" aria-label={promptTitle}>
+    <div
+      class="modal"
+      in:revealMotion|global
+      out:fadeMotion|global={{ duration: 100 }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={promptTitle}
+    >
       <h3>{promptTitle}</h3>
       <label>
         名前

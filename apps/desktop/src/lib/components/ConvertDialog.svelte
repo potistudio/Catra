@@ -1,4 +1,5 @@
 <script lang="ts">
+import { fadeMotion, revealMotion } from "$lib/motion";
 import type { ConvertFormat, ConvertOptions } from "$lib/types";
 
 const FORMATS: { value: ConvertFormat; label: string }[] = [
@@ -66,11 +67,20 @@ function submit() {
 
 <div
   class="modal-backdrop"
+  in:fadeMotion|global
+  out:fadeMotion|global={{ duration: 100 }}
   role="presentation"
   onpointerdown={onBackdropPointerDown}
   onpointerup={onBackdropPointerUp}
 >
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="convert-title">
+  <div
+    class="modal"
+    in:revealMotion|global
+    out:fadeMotion|global={{ duration: 100 }}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="convert-title"
+  >
     <h3 id="convert-title">楽曲を変換</h3>
     <p class="hint">
       {trackCount} 曲を変換します。元のファイルは残し、変換後のファイルをライブラリに追加します。

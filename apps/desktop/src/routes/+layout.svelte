@@ -1,3 +1,7 @@
+<script lang="ts">
+import "$lib/styles/motion.css";
+</script>
+
 <slot />
 
 <style>
@@ -35,6 +39,9 @@
     --on-accent: #242426;
     --overlay: rgb(0 0 0 / 48%);
     --overlay-strong: rgb(0 0 0 / 72%);
+    --motion-fast: 150ms;
+    --motion-normal: 200ms;
+    --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
     --radius-control: 7px;
     --radius-panel: 12px;
     --radius-dialog: 16px;
@@ -134,7 +141,8 @@
       color 0.15s ease,
       box-shadow 0.15s ease,
       filter 0.15s ease,
-      opacity 0.15s ease;
+      opacity 0.15s ease,
+      scale var(--motion-fast) var(--motion-ease);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -142,6 +150,7 @@
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
+      transition-delay: 0ms !important;
       scroll-behavior: auto !important;
     }
   }

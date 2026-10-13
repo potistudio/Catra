@@ -1,5 +1,6 @@
 <script lang="ts">
 import { playlistSetRule } from "$lib/api";
+import { fadeMotion, revealMotion } from "$lib/motion";
 import type {
 	PlaylistNode,
 	Rule,
@@ -406,11 +407,20 @@ function onBackdropPointerUp(event: PointerEvent) {
 
 <div
   class="modal-backdrop"
+  in:fadeMotion|global
+  out:fadeMotion|global={{ duration: 100 }}
   role="presentation"
   onpointerdown={onBackdropPointerDown}
   onpointerup={onBackdropPointerUp}
 >
-  <div class="modal" role="dialog" aria-modal="true" aria-label="規則の編集">
+  <div
+    class="modal"
+    in:revealMotion|global
+    out:fadeMotion|global={{ duration: 100 }}
+    role="dialog"
+    aria-modal="true"
+    aria-label="規則の編集"
+  >
     <h3>{node.name} の規則</h3>
     <p class="lead">
       条件に合う曲が自動で集まる。集合なので、同じ曲が2回並ぶことはない。

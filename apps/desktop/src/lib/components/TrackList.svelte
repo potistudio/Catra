@@ -5,6 +5,7 @@ import { appSession, persistAppSession } from "$lib/appSession.svelte";
 import SelectionCheckbox from "$lib/components/SelectionCheckbox.svelte";
 import TrackGrid from "$lib/components/TrackGrid.svelte";
 import TrackRow from "$lib/components/TrackRow.svelte";
+import { fadeMotion, revealMotion } from "$lib/motion";
 import { isInRekordbox } from "$lib/rekordboxMembership";
 import { writeTrackDrag } from "$lib/trackDrag";
 import {
@@ -980,7 +981,12 @@ $effect(() => {
   {/if}
 
   {#if showCommandBar}
-    <div class="command-bar" aria-label="トラック操作">
+    <div
+      class="command-bar"
+      in:revealMotion={{ scale: 1 }}
+      out:fadeMotion={{ duration: 100 }}
+      aria-label="トラック操作"
+    >
       <span class="command-summary">{targetSummary}</span>
       {#if onaddtoplaylist}
         <div class="command-playlist">

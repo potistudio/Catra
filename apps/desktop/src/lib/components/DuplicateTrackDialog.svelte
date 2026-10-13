@@ -10,6 +10,7 @@ import {
 	formatBpm,
 	formatDuration,
 } from "$lib/format";
+import { fadeMotion, revealMotion } from "$lib/motion";
 import { isTrackSource } from "$lib/trackSource";
 import type { DuplicateChoice, DuplicateFoundPayload } from "$lib/types";
 
@@ -24,9 +25,16 @@ const existingTitle = $derived(displayTitle(payload.existing));
 const candidateTitle = $derived(displayTitle(payload.candidate));
 </script>
 
-<div class="backdrop" role="presentation">
+<div
+  class="backdrop"
+  in:fadeMotion|global
+  out:fadeMotion|global={{ duration: 100 }}
+  role="presentation"
+>
   <div
     class="panel"
+    in:revealMotion|global
+    out:fadeMotion|global={{ duration: 100 }}
     role="dialog"
     aria-modal="true"
     aria-labelledby="duplicate-title"
