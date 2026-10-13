@@ -1,5 +1,5 @@
 <script lang="ts">
-import { fadeMotion, revealMotion } from "$lib/motion";
+import { fadeMotion, motionDuration, revealMotion } from "$lib/motion";
 import type { ConvertFormat, ConvertOptions } from "$lib/types";
 
 const FORMATS: { value: ConvertFormat; label: string }[] = [
@@ -38,8 +38,15 @@ let sampleRate = $state("keep");
 let channels = $state("keep");
 let addToRekordbox = $state(true);
 let backdropDismissArmed = $state(false);
+let closing = $state(false);
 
 let lossy = $derived(LOSSY_FORMATS.has(format));
+
+function closeDialog() {
+	if (closing) return;
+	closing = true;
+	window.setTimeout(oncancel, motionDuration(160));
+}
 
 function onBackdropPointerDown(event: PointerEvent) {
 	backdropDismissArmed = event.target === event.currentTarget;
@@ -47,7 +54,7 @@ function onBackdropPointerDown(event: PointerEvent) {
 
 function onBackdropPointerUp(event: PointerEvent) {
 	if (backdropDismissArmed && event.target === event.currentTarget) {
-		oncancel();
+		closeDialog();
 	}
 	backdropDismissArmed = false;
 }
@@ -67,16 +74,16 @@ function submit() {
 
 <div
   class="modal-backdrop"
+  class:closing
   in:fadeMotion|global
-  out:fadeMotion|global={{ duration: 100 }}
   role="presentation"
   onpointerdown={onBackdropPointerDown}
   onpointerup={onBackdropPointerUp}
 >
   <div
     class="modal"
+    class:closing
     in:revealMotion|global
-    out:revealMotion|global={{ duration: 150, y: 6, scale: 0.98 }}
     role="dialog"
     aria-modal="true"
     aria-labelledby="convert-title"
@@ -142,7 +149,7 @@ function submit() {
       <p class="hint">{rekordboxLockedHint}</p>
     {/if}
     <div class="modal-actions">
-      <button type="button" class="modal-btn" onclick={oncancel}>キャンセル</button>
+      <button type="button" class="modal-btn" onclick={closeDialog}>キャンセル</button>
       <button type="button" class="modal-btn primary" onclick={submit}>変換</button>
     </div>
   </div>
@@ -154,6 +161,7 @@ function submit() {
     inset: 0;
     background: var(--overlay);
     backdrop-filter: blur(12px);
+    transition: opacity 160ms ease;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -161,6 +169,7 @@ function submit() {
   }
 
   .modal {
+    transition: opacity 160ms ease, transform 160ms ease;
     width: min(28rem, calc(100% - 2rem));
     max-height: calc(100% - 2rem);
     overflow: auto;
@@ -172,6 +181,16 @@ function submit() {
     display: flex;
     flex-direction: column;
     gap: 0.55rem;
+  }
+
+  .modal-backdrop.closing {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .modal.closing {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
   }
 
   .modal h3 {
