@@ -116,7 +116,7 @@ function handleKeydown(event: KeyboardEvent) {
     gap: 0.35rem;
     padding: 0;
     border: 2px solid transparent;
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     background: transparent;
     color: var(--text);
     text-align: left;
@@ -144,8 +144,8 @@ function handleKeydown(event: KeyboardEvent) {
     top: 0;
     bottom: 0;
     left: 0;
-    width: 12px;
-    border-radius: 8px 0 0 8px;
+    width: 3px;
+    border-radius: var(--radius-panel) 0 0 var(--radius-panel);
     background: var(--accent);
     pointer-events: none;
   }
@@ -176,7 +176,8 @@ function handleKeydown(event: KeyboardEvent) {
     position: relative;
     width: 100%;
     aspect-ratio: 1;
-    border-radius: 6px;
+    border-radius: 9px;
+    box-shadow: var(--shadow-control);
     overflow: hidden;
   }
 

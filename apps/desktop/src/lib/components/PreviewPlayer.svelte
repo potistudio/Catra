@@ -490,10 +490,11 @@ onDestroy(() => {
     display: flex;
     align-items: center;
     gap: 1rem;
-    padding: 0.75rem 1.25rem;
+    padding: 1rem 1.5rem;
     border-top: 1px solid var(--border);
-    background: var(--surface-raised);
-    min-height: 80px;
+    background: var(--surface-chrome);
+    box-shadow: 0 -4px 20px rgb(0 0 0 / 12%);
+    min-height: 88px;
   }
 
   .preview-empty {
@@ -539,7 +540,8 @@ onDestroy(() => {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    border: none;
+    border: 1px solid rgb(255 255 255 / 16%);
+    box-shadow: var(--shadow-control);
     background: var(--accent);
     color: var(--on-accent);
     font-size: 1rem;
@@ -567,8 +569,9 @@ onDestroy(() => {
     flex-shrink: 0;
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 4px;
-    background: var(--surface);
+    border-radius: var(--radius-control);
+    background: var(--surface-input);
+    box-shadow: var(--shadow-inset);
     color: var(--text-muted);
     font-size: 0.8rem;
     font-variant-numeric: tabular-nums;

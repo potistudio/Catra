@@ -158,7 +158,8 @@ function handleKeydown(event: KeyboardEvent) {
     padding: 0 1rem;
     min-width: 81rem;
     font-size: 0.85rem;
-    border-bottom: 1px solid var(--border-subtle);
+    border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 50%, transparent);
+    background: var(--surface);
     cursor: pointer;
     outline: none;
     transition: background-color 0.12s ease;
@@ -256,7 +257,7 @@ function handleKeydown(event: KeyboardEvent) {
     top: 0;
     bottom: 0;
     left: -1rem;
-    width: 12px;
+    width: 3px;
     background: var(--accent);
   }
 

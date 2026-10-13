@@ -113,7 +113,7 @@ function handleClear() {
     gap: 0.75rem;
     padding: 0.35rem 0.75rem;
     border-bottom: 1px solid var(--border);
-    background: var(--surface-raised);
+    background: var(--surface-chrome);
     flex-shrink: 0;
   }
 

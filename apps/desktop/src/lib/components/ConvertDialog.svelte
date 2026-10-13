@@ -143,6 +143,7 @@ function submit() {
     position: fixed;
     inset: 0;
     background: var(--overlay);
+    backdrop-filter: blur(12px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -155,8 +156,9 @@ function submit() {
     overflow: auto;
     background: var(--surface-overlay);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1rem 1.1rem;
+    box-shadow: var(--shadow-dialog);
+    border-radius: var(--radius-dialog);
+    padding: 1.5rem;
     display: flex;
     flex-direction: column;
     gap: 0.55rem;

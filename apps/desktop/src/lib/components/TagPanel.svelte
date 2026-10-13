@@ -454,8 +454,8 @@ function onBackdropPointerUp(event: PointerEvent) {
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
-    padding: 0.5rem;
-    border-top: 1px solid var(--border);
+    padding: 0.75rem;
+    border-top: 1px solid var(--border-subtle);
     overflow: auto;
     max-height: 45%;
   }
@@ -651,7 +651,8 @@ function onBackdropPointerUp(event: PointerEvent) {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.45);
+    background: var(--overlay);
+    backdrop-filter: blur(12px);
   }
 
   .modal {
@@ -659,10 +660,11 @@ function onBackdropPointerUp(event: PointerEvent) {
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
-    padding: 1rem;
+    padding: 1.5rem;
     border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--surface-raised);
+    box-shadow: var(--shadow-dialog);
+    border-radius: var(--radius-dialog);
+    background: var(--surface-overlay);
   }
 
   .modal h3 {

@@ -1,59 +1,52 @@
 <slot />
 
 <style>
-  /* Nord — https://www.nordtheme.com */
   :global(:root) {
-    --nord0: #2e3440;
-    --nord1: #3b4252;
-    --nord2: #434c5e;
-    --nord3: #4c566a;
-    --nord4: #d8dee9;
-    --nord5: #e5e9f0;
-    --nord6: #eceff4;
-    --nord7: #8fbcbb;
-    --nord8: #88c0d0;
-    --nord9: #81a1c1;
-    --nord10: #5e81ac;
-    --nord11: #bf616a;
-    --nord12: #d08770;
-    --nord13: #ebcb8b;
-    --nord14: #a3be8c;
-    --nord15: #b48ead;
-
-    --text: var(--nord4);
-    --text-muted: color-mix(in srgb, var(--nord4) 72%, var(--nord3));
-    --text-subtle: var(--nord3);
-    --surface: var(--nord0);
-    --surface-raised: var(--nord1);
-    --surface-overlay: var(--nord2);
-    --surface-hover: var(--nord2);
-    --surface-active: var(--nord3);
-    --surface-selected: var(--nord3);
-    --surface-selected-hover: color-mix(in srgb, var(--nord3) 70%, var(--nord4));
-    --surface-crust: var(--nord0);
-    --border: var(--nord2);
-    --border-subtle: color-mix(in srgb, var(--nord2) 55%, var(--nord0));
-    --accent: var(--nord8);
-    --accent-hover: var(--nord7);
-    --accent-subtle: color-mix(in srgb, var(--nord8) 18%, transparent);
-    --accent-subtle-hover: color-mix(in srgb, var(--nord8) 28%, transparent);
-    --danger: var(--nord11);
-    --danger-hover: var(--nord12);
-    --danger-subtle: color-mix(in srgb, var(--nord11) 16%, transparent);
-    --danger-subtle-hover: color-mix(in srgb, var(--nord11) 26%, transparent);
-    --danger-soft: var(--nord12);
-    --info: var(--nord9);
-    --success: var(--nord14);
-    --warning: var(--nord13);
-    --warning-subtle: color-mix(in srgb, var(--nord13) 12%, transparent);
-    --on-accent: var(--nord0);
-    --overlay: color-mix(in srgb, var(--nord0) 72%, transparent);
-    --overlay-strong: color-mix(in srgb, var(--nord0) 82%, transparent);
-    --scrollbar-size: 10px;
+    color-scheme: dark;
+    --text: #f2f2f4;
+    --text-muted: #b8b8be;
+    --text-subtle: #929298;
+    --surface: #202022;
+    --surface-raised: #29292c;
+    --surface-overlay: #343437;
+    --surface-hover: #353538;
+    --surface-active: #55555b;
+    --surface-selected: #424248;
+    --surface-selected-hover: #49494f;
+    --surface-crust: #1b1b1d;
+    --surface-input: #1c1c1e;
+    --surface-chrome: linear-gradient(180deg, #333336, #2b2b2e);
+    --surface-sidebar: linear-gradient(180deg, #2c2c2f, #262628);
+    --border: rgb(255 255 255 / 12%);
+    --border-subtle: rgb(255 255 255 / 6%);
+    --accent: #d0d0d6;
+    --accent-hover: #e5e5ea;
+    --accent-subtle: rgb(208 208 214 / 12%);
+    --accent-subtle-hover: rgb(208 208 214 / 20%);
+    --danger: #ff8580;
+    --danger-hover: #ffa39e;
+    --danger-subtle: rgb(255 133 128 / 12%);
+    --danger-subtle-hover: rgb(255 133 128 / 20%);
+    --danger-soft: #ffb1a5;
+    --info: #a8c7ed;
+    --success: #8fd5a3;
+    --warning: #edcb86;
+    --warning-subtle: rgb(237 203 134 / 12%);
+    --on-accent: #242426;
+    --overlay: rgb(0 0 0 / 48%);
+    --overlay-strong: rgb(0 0 0 / 72%);
+    --radius-control: 7px;
+    --radius-panel: 12px;
+    --radius-dialog: 16px;
+    --shadow-control: inset 0 1px 0 rgb(255 255 255 / 7%), 0 1px 2px rgb(0 0 0 / 18%);
+    --shadow-inset: inset 0 1px 3px rgb(0 0 0 / 20%);
+    --shadow-floating: 0 8px 24px rgb(0 0 0 / 28%), inset 0 1px 0 rgb(255 255 255 / 6%);
+    --shadow-dialog: 0 24px 80px rgb(0 0 0 / 48%), inset 0 1px 0 rgb(255 255 255 / 8%);
+    --scrollbar-size: 9px;
     --scrollbar-track: transparent;
-    --scrollbar-thumb: var(--nord3);
-    --scrollbar-thumb-hover: color-mix(in srgb, var(--nord3) 70%, var(--nord4));
-    --scrollbar-thumb-active: var(--nord8);
+    --scrollbar-thumb: #5c5c62;
+    --scrollbar-thumb-hover: #77777d;
+    --scrollbar-thumb-active: #929298;
   }
 
   :global(*, *::before, *::after) {
@@ -64,15 +57,13 @@
     margin: 0;
     padding: 0;
     height: 100%;
-    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", "Noto Sans JP", sans-serif;
     font-size: 14px;
     line-height: 1.5;
     color: var(--text);
     background: var(--surface);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   }
 
   :global(*) {
@@ -112,16 +103,46 @@
     background: transparent;
   }
 
+  :global(::selection) {
+    color: var(--text);
+    background: var(--surface-selected);
+  }
+
+  :global(:where(button, input, select, textarea)) {
+    font-family: inherit;
+    accent-color: var(--accent);
+  }
+
+  :global(:where(input, textarea)::placeholder) {
+    color: var(--text-subtle);
+    opacity: 1;
+  }
+
+  :global(:where(button, [role="button"], input, select, textarea, a):focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
   :global(button),
   :global([role="button"]),
   :global(label),
   :global(select),
   :global(a) {
     transition:
-      background-color 0.12s ease,
-      border-color 0.12s ease,
-      color 0.12s ease,
-      filter 0.12s ease,
-      opacity 0.12s ease;
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease,
+      box-shadow 0.15s ease,
+      filter 0.15s ease,
+      opacity 0.15s ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :global(*, *::before, *::after) {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 </style>

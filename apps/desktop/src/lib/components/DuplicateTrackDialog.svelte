@@ -124,7 +124,7 @@ const candidateTitle = $derived(displayTitle(payload.candidate));
     justify-content: center;
     padding: 1.5rem;
     background: var(--overlay);
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(12px);
   }
 
   .panel {
@@ -133,10 +133,10 @@ const candidateTitle = $derived(displayTitle(payload.candidate));
     margin: 0;
     padding: 0;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-dialog);
     background: var(--surface-overlay);
     color: var(--text);
-    box-shadow: 0 24px 64px color-mix(in srgb, var(--surface-crust) 55%, transparent);
+    box-shadow: var(--shadow-dialog);
     box-sizing: border-box;
     overflow: hidden;
   }

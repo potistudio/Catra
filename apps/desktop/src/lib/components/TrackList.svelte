@@ -1118,7 +1118,8 @@ $effect(() => {
     align-items: center;
     gap: 0.75rem;
     padding: 0.75rem 1.25rem;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--surface);
     flex-wrap: wrap;
   }
 
@@ -1127,8 +1128,9 @@ $effect(() => {
     min-width: 10rem;
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface);
+    border-radius: var(--radius-control);
+    background: var(--surface-input);
+    box-shadow: var(--shadow-inset);
     color: var(--text);
     font-size: 0.9rem;
   }
@@ -1141,15 +1143,17 @@ $effect(() => {
   .membership-filter {
     display: flex;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     overflow: hidden;
+    background: var(--surface-input);
+    box-shadow: var(--shadow-inset);
     flex-shrink: 0;
   }
 
   .filter-btn {
     padding: 0.35rem 0.7rem;
     border: none;
-    background: var(--surface);
+    background: transparent;
     color: var(--text-muted);
     font-size: 0.78rem;
     font-weight: 500;
@@ -1212,8 +1216,10 @@ $effect(() => {
     gap: 0.65rem;
     padding: 0.65rem 1rem;
     border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface-raised);
+    border-radius: var(--radius-panel);
+    background: color-mix(in srgb, var(--surface-overlay) 94%, transparent);
+    backdrop-filter: blur(20px);
+    box-shadow: var(--shadow-floating);
     flex-wrap: wrap;
   }
 
@@ -1279,8 +1285,9 @@ $effect(() => {
   .command-btn {
     padding: 0.45rem 0.9rem;
     border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface);
+    border-radius: var(--radius-control);
+    background: var(--surface-overlay);
+    box-shadow: var(--shadow-control);
     color: var(--text);
     font-size: 0.82rem;
     font-weight: 600;
@@ -1435,8 +1442,10 @@ $effect(() => {
   .view-toggle {
     display: flex;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     overflow: hidden;
+    background: var(--surface-input);
+    box-shadow: var(--shadow-inset);
   }
 
   .view-btn {
@@ -1447,7 +1456,7 @@ $effect(() => {
     height: 32px;
     padding: 0;
     border: none;
-    background: var(--surface);
+    background: transparent;
     color: var(--text-muted);
     cursor: pointer;
   }

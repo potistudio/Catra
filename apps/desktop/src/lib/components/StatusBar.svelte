@@ -57,10 +57,10 @@ function levelLabel(level: ActivityLogLevel): string {
   .status-bar {
     display: flex;
     align-items: center;
-    min-height: 22px;
-    padding: 0 0.5rem;
+    min-height: 26px;
+    padding: 0 1rem;
     border-top: 1px solid var(--border);
-    background: var(--surface-raised);
+    background: var(--surface-crust);
     flex-shrink: 0;
   }
 

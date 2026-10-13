@@ -117,8 +117,8 @@ async function promote(item: FacetValue) {
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
-    padding: 0.5rem;
-    border-top: 1px solid var(--border);
+    padding: 0.75rem;
+    border-top: 1px solid var(--border-subtle);
     min-height: 0;
     overflow: hidden;
   }
@@ -162,7 +162,7 @@ async function promote(item: FacetValue) {
   .facet-row {
     display: flex;
     align-items: center;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
   }
 
   .facet-row:hover {

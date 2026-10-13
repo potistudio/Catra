@@ -1440,39 +1440,42 @@ onMount(() => {
     display: flex;
     align-items: center;
     gap: 1rem;
-    padding: 0.75rem 1.25rem;
+    min-height: 64px;
+    padding: 0.85rem 1.5rem;
     border-bottom: 1px solid var(--border);
-    background: var(--surface-raised);
+    background: var(--surface-chrome);
+    box-shadow: 0 1px 0 rgb(0 0 0 / 20%);
   }
 
   .logo {
     margin: 0;
-    font-size: 1.25rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
+    font-size: 1.2rem;
+    font-weight: 650;
+    letter-spacing: -0.04em;
     flex-shrink: 0;
   }
 
   .tabs {
     display: flex;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    overflow: hidden;
+    margin-right: auto;
+    gap: 3px;
+    padding: 3px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 9px;
+    background: var(--surface-input);
+    box-shadow: var(--shadow-inset);
     flex-shrink: 0;
   }
 
   .tab {
-    padding: 0.4rem 0.85rem;
+    padding: 0.35rem 0.9rem;
     border: none;
-    background: var(--surface);
+    border-radius: 6px;
+    background: transparent;
     color: var(--text-muted);
     font-size: 0.82rem;
     font-weight: 500;
     cursor: pointer;
-  }
-
-  .tab:not(:last-child) {
-    border-right: 1px solid var(--border);
   }
 
   .tab:hover {
@@ -1482,7 +1485,8 @@ onMount(() => {
 
   .tab.active {
     background: var(--surface-selected);
-    color: var(--accent);
+    box-shadow: var(--shadow-control);
+    color: var(--text);
   }
 
   .tab.active:hover {
@@ -1532,8 +1536,9 @@ onMount(() => {
   .btn {
     padding: 0.45rem 1rem;
     border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface);
+    border-radius: var(--radius-control);
+    box-shadow: var(--shadow-control);
+    background: var(--surface-overlay);
     color: var(--text);
     font-size: 0.875rem;
     font-weight: 500;
@@ -1592,11 +1597,11 @@ onMount(() => {
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
-    width: 15rem;
+    width: 16rem;
     min-height: 0;
     overflow: hidden;
     border-right: 1px solid var(--border);
-    background: var(--surface-raised);
+    background: var(--surface-sidebar);
   }
 
   .scope-name {

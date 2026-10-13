@@ -1,6 +1,5 @@
 <script lang="ts">
 import { ask } from "@tauri-apps/plugin-dialog";
-import RuleEditor from "$lib/components/RuleEditor.svelte";
 import {
 	playlistCreate,
 	playlistDelete,
@@ -8,6 +7,7 @@ import {
 	playlistMove,
 	playlistRename,
 } from "$lib/api";
+import RuleEditor from "$lib/components/RuleEditor.svelte";
 import { canDropInto, playlistTreeRows } from "$lib/playlistTree";
 import { hasTrackDrag, readTrackDrag } from "$lib/trackDrag";
 import type { PlaylistKind, PlaylistNode, TagAxis } from "$lib/types";
@@ -434,9 +434,9 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
     gap: 0.35rem;
     width: calc(100% - 1rem);
     margin: 0.5rem 0.5rem 0;
-    padding: 0.3rem 0.4rem;
+    padding: 0.45rem 0.6rem;
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     background: transparent;
     color: var(--text);
     font-size: 0.8rem;
@@ -500,7 +500,7 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
   .tree-list {
     list-style: none;
     margin: 0;
-    padding: 0 0 0.5rem;
+    padding: 0 0.5rem 0.5rem;
   }
 
   .node-row {
@@ -509,7 +509,7 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
     align-items: center;
     gap: 0.15rem;
     padding-right: 0.3rem;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
   }
 
   .node-row:hover {
@@ -630,7 +630,8 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.45);
+    background: var(--overlay);
+    backdrop-filter: blur(12px);
   }
 
   .modal {
@@ -638,10 +639,11 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
-    padding: 1rem;
+    padding: 1.5rem;
     border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--surface-raised);
+    box-shadow: var(--shadow-dialog);
+    border-radius: var(--radius-dialog);
+    background: var(--surface-overlay);
   }
 
   .modal h3 {

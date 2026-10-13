@@ -14,6 +14,7 @@ import {
 	rekordboxRenamePlaylist,
 	rekordboxUpdateContent,
 } from "$lib/api";
+import { appSession, persistAppSession } from "$lib/appSession.svelte";
 import TrackList from "$lib/components/TrackList.svelte";
 import {
 	isPlaylistFolder,
@@ -27,7 +28,6 @@ import type {
 	RekordboxPlaylist,
 	Track,
 } from "$lib/types";
-import { appSession, persistAppSession } from "$lib/appSession.svelte";
 
 type BrowseMode = "all" | "playlist";
 type TextPromptKind = "playlist" | "folder" | "rename";
@@ -937,22 +937,29 @@ function selectedContent(): RekordboxContent | null {
   .sidebar {
     display: flex;
     flex-direction: column;
-    width: 240px;
+    width: 16rem;
     flex-shrink: 0;
     border-right: 1px solid var(--border);
-    background: var(--surface-raised);
+    background: var(--surface-sidebar);
     min-height: 0;
   }
 
   .mode-switch {
     display: flex;
-    border-bottom: 1px solid var(--border);
+    gap: 3px;
+    margin: 0.75rem;
+    padding: 3px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 9px;
+    background: var(--surface-input);
+    box-shadow: var(--shadow-inset);
     flex-shrink: 0;
   }
 
   .mode-btn {
     flex: 1;
-    padding: 0.55rem 0.4rem;
+    padding: 0.4rem;
+    border-radius: 6px;
     border: none;
     background: transparent;
     color: var(--text-muted);
@@ -969,6 +976,7 @@ function selectedContent(): RekordboxContent | null {
   .mode-btn.active {
     color: var(--accent);
     background: var(--surface-selected);
+    box-shadow: var(--shadow-control);
   }
 
   .mode-btn.active:hover {
@@ -1132,6 +1140,7 @@ function selectedContent(): RekordboxContent | null {
     position: absolute;
     inset: 0;
     background: var(--overlay);
+    backdrop-filter: blur(12px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1144,8 +1153,9 @@ function selectedContent(): RekordboxContent | null {
     overflow: auto;
     background: var(--surface-overlay);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1rem 1.1rem;
+    box-shadow: var(--shadow-dialog);
+    border-radius: var(--radius-dialog);
+    padding: 1.5rem;
     display: flex;
     flex-direction: column;
     gap: 0.55rem;
