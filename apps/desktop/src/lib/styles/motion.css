@@ -1,3 +1,23 @@
+.sliding-tabs {
+	position: relative;
+	isolation: isolate;
+}
+
+.sliding-tabs::before {
+	content: "";
+	position: absolute;
+	z-index: -1;
+	top: 3px;
+	bottom: 3px;
+	left: 3px;
+	width: calc((100% - 6px - (var(--tab-count) - 1) * 3px) / var(--tab-count));
+	border-radius: 6px;
+	background: var(--surface-selected);
+	box-shadow: var(--shadow-control);
+	transform: translateX(calc(var(--tab-index) * (100% + 3px)));
+	pointer-events: none;
+}
+
 @keyframes catra-content-in {
 	from {
 		opacity: 0.6;
@@ -28,6 +48,10 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
+	.sliding-tabs::before {
+		transition: transform var(--motion-normal) var(--motion-ease);
+	}
+
 	.tab-panel:not([hidden]),
 	.grid-wrap,
 	.table-wrap,

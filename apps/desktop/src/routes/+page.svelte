@@ -1160,7 +1160,13 @@ onMount(() => {
 <div class="app">
   <header class="toolbar">
     <h1 class="logo">Catra</h1>
-    <div class="tabs" role="tablist" aria-label="ライブラリ切替">
+    <div
+      class="tabs sliding-tabs"
+      style:--tab-count={3}
+      style:--tab-index={activeTab === "library" ? 0 : activeTab === "rekordbox" ? 1 : 2}
+      role="tablist"
+      aria-label="ライブラリ切替"
+    >
       <button
         type="button"
         class="tab"
@@ -1456,7 +1462,8 @@ onMount(() => {
   }
 
   .tabs {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     margin-right: auto;
     gap: 3px;
     padding: 3px;
@@ -1479,18 +1486,13 @@ onMount(() => {
   }
 
   .tab:hover {
-    background: var(--surface-hover);
+    background: color-mix(in srgb, var(--surface-hover) 35%, transparent);
     color: var(--text);
   }
 
   .tab.active {
-    background: var(--surface-selected);
-    box-shadow: var(--shadow-control);
+    background: transparent;
     color: var(--text);
-  }
-
-  .tab.active:hover {
-    background: var(--surface-selected-hover);
   }
 
   .download-status {

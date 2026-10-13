@@ -525,7 +525,13 @@ function selectedContent(): RekordboxContent | null {
 
   <div class="body">
     <aside class="sidebar">
-      <div class="mode-switch" role="tablist" aria-label="表示切替">
+      <div
+        class="mode-switch sliding-tabs"
+        style:--tab-count={2}
+        style:--tab-index={browseMode === "all" ? 0 : 1}
+        role="tablist"
+        aria-label="表示切替"
+      >
         <button
           type="button"
           class="mode-btn"
@@ -958,7 +964,8 @@ function selectedContent(): RekordboxContent | null {
   }
 
   .mode-switch {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 3px;
     margin: 0.75rem;
     padding: 3px;
@@ -983,17 +990,12 @@ function selectedContent(): RekordboxContent | null {
 
   .mode-btn:hover {
     color: var(--text);
-    background: var(--surface-hover);
+    background: color-mix(in srgb, var(--surface-hover) 35%, transparent);
   }
 
   .mode-btn.active {
-    color: var(--accent);
-    background: var(--surface-selected);
-    box-shadow: var(--shadow-control);
-  }
-
-  .mode-btn.active:hover {
-    background: var(--surface-selected-hover);
+    color: var(--text);
+    background: transparent;
   }
 
   .sidebar-actions {
