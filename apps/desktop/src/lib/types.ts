@@ -189,6 +189,7 @@ export interface RekordboxContent {
 	fileSize: number | null;
 	discNo: number | null;
 	artworkPath: string | null;
+	addedAt: number | null;
 	/** Present when the row comes from a playlist membership query. */
 	songPlaylistId?: string | null;
 }

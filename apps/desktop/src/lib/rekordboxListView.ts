@@ -25,7 +25,7 @@ export function rekordboxContentToTrack(
 		artworkPath: content.artworkPath,
 		source: null,
 		converted: false,
-		addedAt: 0,
+		addedAt: content.addedAt ?? 0,
 	};
 }
 

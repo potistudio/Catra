@@ -2,7 +2,7 @@ use super::config::load_config;
 use super::db::MasterDatabase;
 use super::ids::{new_uuid, unused_numeric_id};
 use super::write::{now_local, timestamp_sql, WriteSession};
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone};
 use lofty::config::ParseOptions;
 use lofty::file::{AudioFile, TaggedFileExt};
 use lofty::probe::Probe;
@@ -37,6 +37,8 @@ pub struct RekordboxContent {
     pub file_size: Option<i32>,
     pub disc_no: Option<i32>,
     pub artwork_path: Option<String>,
+    /// Rekordbox collection addition time in Unix seconds.
+    pub added_at: Option<i64>,
     /// `djmdSongPlaylist.ID` when loaded via playlist membership.
     pub song_playlist_id: Option<String>,
 }
@@ -80,7 +82,10 @@ SELECT
     composer.Name,
     c.FileSize,
     c.DiscNo,
-    c.ImagePath
+    c.ImagePath,
+    c.DateCreated,
+    c.created_at,
+    c.StockDate
 FROM djmdContent c
 LEFT JOIN djmdArtist artist ON c.ArtistID = artist.ID
 LEFT JOIN djmdAlbum album ON c.AlbumID = album.ID
@@ -116,7 +121,10 @@ SELECT
     composer.Name,
     c.FileSize,
     c.DiscNo,
-    c.ImagePath
+    c.ImagePath,
+    c.DateCreated,
+    c.created_at,
+    c.StockDate
 FROM djmdContent c
 LEFT JOIN djmdArtist artist ON c.ArtistID = artist.ID
 LEFT JOIN djmdAlbum album ON c.AlbumID = album.ID
@@ -795,8 +803,41 @@ fn map_content_columns(
         file_size: row.get(offset + 20)?,
         disc_no: row.get(offset + 21)?,
         artwork_path: row.get(offset + 22)?,
+        added_at: [
+            row.get::<_, Option<String>>(offset + 23)?,
+            row.get::<_, Option<String>>(offset + 24)?,
+            row.get::<_, Option<String>>(offset + 25)?,
+        ]
+        .iter()
+        .find_map(|value| value.as_deref().and_then(parse_added_at)),
         song_playlist_id,
     })
+}
+
+fn parse_added_at(value: &str) -> Option<i64> {
+    let value = value.trim();
+    if let Ok(date) = DateTime::parse_from_rfc3339(value) {
+        return Some(date.timestamp());
+    }
+    for format in ["%Y-%m-%d %H:%M:%S%.f %:z", "%Y-%m-%d %H:%M:%S%.f%:z"] {
+        if let Ok(date) = DateTime::parse_from_str(value, format) {
+            return Some(date.timestamp());
+        }
+    }
+
+    // Rekordbox timestamps without an offset use the local timezone.
+    let date = NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S%.f")
+        .or_else(|_| NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S%.f"))
+        .ok()
+        .or_else(|| {
+            NaiveDate::parse_from_str(value, "%Y-%m-%d")
+                .ok()?
+                .and_hms_opt(0, 0, 0)
+        })?;
+    Local
+        .from_local_datetime(&date)
+        .earliest()
+        .map(|date| date.timestamp())
 }
 
 /// Map `djmdContent.Rating` onto the 0-255 scale used by the UI and ID3 POPM.
@@ -866,10 +907,131 @@ fn prefer_medium_artwork(path: &Path) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_rating, prefer_medium_artwork, resolve_artwork_path, stock_date_sql};
+    use super::{
+        map_content_row, map_content_row_with_song_id, normalize_rating, parse_added_at,
+        prefer_medium_artwork, resolve_artwork_path, stock_date_sql, CONTENT_QUERY,
+        CONTENT_QUERY_WITH_SONG,
+    };
     use chrono::{Local, TimeZone};
+    use rusqlite::{params, Connection};
     use std::fs;
     use std::path::PathBuf;
+
+    #[test]
+    fn parses_addition_time_with_timezone() {
+        let expected = Some(1_782_876_896);
+        for value in [
+            "2026-07-01T12:34:56+09:00",
+            "2026-07-01T03:34:56.789Z",
+            "2026-07-01 12:34:56.789 +09:00",
+            "2026-07-01 12:34:56+09:00",
+        ] {
+            assert_eq!(parse_added_at(value), expected, "{value}");
+        }
+    }
+
+    #[test]
+    fn parses_local_addition_time_and_date() {
+        let expected = Local
+            .with_ymd_and_hms(2026, 7, 1, 12, 34, 56)
+            .earliest()
+            .unwrap()
+            .timestamp();
+        for value in [
+            "2026-07-01 12:34:56",
+            "2026-07-01 12:34:56.789",
+            " 2026-07-01T12:34:56 ",
+        ] {
+            assert_eq!(parse_added_at(value), Some(expected), "{value}");
+        }
+        let midnight = Local
+            .with_ymd_and_hms(2026, 7, 1, 0, 0, 0)
+            .earliest()
+            .unwrap()
+            .timestamp();
+        assert_eq!(parse_added_at("2026-07-01"), Some(midnight));
+        for value in ["", "not a date", "2026-02-30", "0000-00-00 00:00:00"] {
+            assert_eq!(parse_added_at(value), None, "{value}");
+        }
+    }
+
+    #[test]
+    fn maps_addition_time_in_collection_and_playlist_queries() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE djmdContent (
+                ID TEXT, FolderPath TEXT, FileNameL TEXT, Title TEXT,
+                ArtistID TEXT, AlbumID TEXT, GenreID TEXT, KeyID TEXT,
+                RemixerID TEXT, LabelID TEXT, ComposerID TEXT,
+                BPM INTEGER, Length INTEGER, TrackNo INTEGER, BitRate INTEGER,
+                BitDepth INTEGER, Commnt TEXT, FileType INTEGER, Rating INTEGER,
+                ReleaseYear INTEGER, FileSize INTEGER, DiscNo INTEGER, ImagePath TEXT,
+                DateCreated TEXT, created_at TEXT, StockDate TEXT
+             );
+             CREATE TABLE djmdArtist (ID TEXT, Name TEXT);
+             CREATE TABLE djmdAlbum (ID TEXT, Name TEXT);
+             CREATE TABLE djmdGenre (ID TEXT, Name TEXT);
+             CREATE TABLE djmdKey (ID TEXT, ScaleName TEXT);
+             CREATE TABLE djmdLabel (ID TEXT, Name TEXT);
+             CREATE TABLE djmdSongPlaylist (ID TEXT, ContentID TEXT);
+             INSERT INTO djmdContent (ID, FolderPath, BPM, ImagePath)
+             VALUES ('42', 'track.mp3', 12800, 'artwork.jpg');
+             INSERT INTO djmdSongPlaylist VALUES ('song-42', '42');",
+        )
+        .unwrap();
+        let playlist_query =
+            format!("{CONTENT_QUERY_WITH_SONG} JOIN djmdSongPlaylist sp ON sp.ContentID = c.ID");
+        for (date_created, created_at, stock_date, expected) in [
+            (
+                Some("2026-07-01T12:34:56+09:00"),
+                Some("2026-08-01"),
+                Some("2026-06-01"),
+                Some(1_782_876_896),
+            ),
+            (
+                None,
+                Some("2026-07-01T03:34:56Z"),
+                None,
+                Some(1_782_876_896),
+            ),
+            (
+                Some("invalid"),
+                Some("2026-07-01T03:34:56Z"),
+                None,
+                Some(1_782_876_896),
+            ),
+            (
+                Some(""),
+                None,
+                Some("2026-07-01"),
+                parse_added_at("2026-07-01"),
+            ),
+            (None, None, None, None),
+            (Some("invalid"), Some("invalid"), Some("invalid"), None),
+        ] {
+            conn.execute(
+                "UPDATE djmdContent SET DateCreated = ?1, created_at = ?2, StockDate = ?3",
+                params![date_created, created_at, stock_date],
+            )
+            .unwrap();
+            let content = conn.query_row(CONTENT_QUERY, [], map_content_row).unwrap();
+            let song = conn
+                .query_row(&playlist_query, [], map_content_row_with_song_id)
+                .unwrap();
+            for row in [&content, &song] {
+                assert_eq!(row.id, "42");
+                assert_eq!(row.bpm, Some(128.0));
+                assert_eq!(row.artwork_path.as_deref(), Some("artwork.jpg"));
+                assert_eq!(row.added_at, expected);
+                assert_eq!(
+                    serde_json::to_value(row).unwrap()["addedAt"],
+                    serde_json::json!(expected)
+                );
+            }
+            assert_eq!(content.song_playlist_id, None);
+            assert_eq!(song.song_playlist_id.as_deref(), Some("song-42"));
+        }
+    }
 
     #[test]
     fn formats_stock_date_for_rekordbox() {
