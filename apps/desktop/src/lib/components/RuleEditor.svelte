@@ -416,7 +416,7 @@ function onBackdropPointerUp(event: PointerEvent) {
   <div
     class="modal"
     in:revealMotion|global
-    out:fadeMotion|global={{ duration: 100 }}
+    out:revealMotion|global={{ duration: 150, y: 6, scale: 0.98 }}
     role="dialog"
     aria-modal="true"
     aria-label="規則の編集"
