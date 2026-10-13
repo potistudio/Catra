@@ -1189,7 +1189,7 @@ onMount(() => {
         aria-selected={activeTab === "rekordbox"}
         onclick={() => switchTab("rekordbox")}
       >
-        <svg class="tab-icon rekordbox-icon" viewBox="0 0 22 27" fill="none" aria-hidden="true">
+        <svg class="tab-icon rekordbox-icon" viewBox="0 0 22 24.5" fill="none" aria-hidden="true">
           <path d="M11 2.5 19.5 7.4v9.8L11 22l-8.5-4.8V7.4L11 2.5Z" />
           <circle cx="11" cy="13" r="3" />
           <path d="M11 2.5v6.2M19.5 7.4l-5.3 3.1M2.5 7.4l5.3 3.1" />
