@@ -36,7 +36,7 @@
 		animation: catra-content-in var(--motion-normal) var(--motion-ease);
 	}
 
-	button:not(:disabled):not(.volume-drag-handle):active {
+	button:not(:disabled):not([role="tab"]):not(.volume-drag-handle):active {
 		scale: 0.97;
 	}
 
