@@ -28,7 +28,7 @@ interface Props {
 	removeTitle?: string;
 	inRekordbox?: boolean;
 	showActions?: boolean;
-	onselect: (track: Track) => void;
+	onselect: (track: Track, event?: MouseEvent | KeyboardEvent) => void;
 	onremove?: (track: Track) => void;
 	onplay?: (track: Track) => void;
 	ontogglecheck?: (track: Track, event?: MouseEvent) => void;
@@ -51,9 +51,10 @@ let {
 }: Props = $props();
 
 function handleKeydown(event: KeyboardEvent) {
+	if (event.target !== event.currentTarget) return;
 	if (event.key === "Enter" || event.key === " ") {
 		event.preventDefault();
-		onselect(track);
+		if (!event.repeat) onselect(track, event);
 	}
 }
 </script>
@@ -65,10 +66,10 @@ function handleKeydown(event: KeyboardEvent) {
   class:no-actions={!showActions}
   class:with-position={position != null}
   role="row"
+  aria-selected={checked}
   tabindex="0"
-  onclick={() => onselect(track)}
+  onclick={(event) => onselect(track, event)}
   onkeydown={handleKeydown}
-  ondblclick={() => onselect(track)}
 >
   <span class="cell checkbox-cell sticky-col" role="gridcell">
     {#if !readonly && ontogglecheck}

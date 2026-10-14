@@ -19,7 +19,7 @@ interface Props {
 	rekordboxPathIndex?: Map<string, string>;
 	rekordboxContentIds?: Set<string>;
 	showRowRemove?: boolean;
-	onselect: (row: TrackListRow, event?: MouseEvent) => void;
+	onselect: (row: TrackListRow, event?: MouseEvent | KeyboardEvent) => void;
 	onremove?: (track: Track) => void;
 	onplay?: (track: Track) => void;
 }

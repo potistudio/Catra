@@ -17,7 +17,7 @@ interface Props {
 	readonly?: boolean;
 	inRekordbox?: boolean;
 	showRowRemove?: boolean;
-	onselect: (track: Track, event?: MouseEvent) => void;
+	onselect: (track: Track, event?: MouseEvent | KeyboardEvent) => void;
 	onremove?: (track: Track) => void;
 	onplay?: (track: Track) => void;
 }
@@ -36,9 +36,10 @@ let {
 }: Props = $props();
 
 function handleKeydown(event: KeyboardEvent) {
+	if (event.target !== event.currentTarget) return;
 	if (event.key === "Enter" || event.key === " ") {
 		event.preventDefault();
-		onselect(track);
+		if (!event.repeat) onselect(track, event);
 	}
 }
 </script>
@@ -48,10 +49,10 @@ function handleKeydown(event: KeyboardEvent) {
   class:selected
   class:checked
   role="button"
+  aria-pressed={checked}
   tabindex="0"
 	onclick={(event) => onselect(track, event)}
   onkeydown={handleKeydown}
-  ondblclick={() => onselect(track)}
 >
   <div class="artwork-wrap">
     <TrackArtwork

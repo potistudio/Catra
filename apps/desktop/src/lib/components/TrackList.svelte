@@ -19,6 +19,7 @@ import {
 	type TrackListRow,
 	type ViewMode,
 } from "$lib/trackListView";
+import { selectTrackKeys } from "$lib/trackSelection";
 import type { PlaylistEntry, PlaylistNode, Track } from "$lib/types";
 
 const SORT_LABELS: Record<SortColumn, string> = {
@@ -275,11 +276,7 @@ let someVisibleSelected = $derived(
 
 let targetRows = $derived(allRows.filter((row) => checkedKeys.has(row.key)));
 
-/**
- * Action targets come only from checkboxes; card/row click is preview focus.
- * 曲への操作（変換、Rekordbox、ゴミ箱、タグ）は曲に1回だけ効くので、
- * 同じ曲の要素を2つ選んでいても1曲に畳む。
- */
+/** 一括操作は曲単位で適用するため、同じ曲の複数要素を1曲に集約する。 */
 let targetTracks = $derived.by(() => {
 	const seen = new Set<number>();
 	const picked: Track[] = [];
@@ -397,22 +394,26 @@ function isFocused(row: TrackListRow): boolean {
 	return focusedKey === row.key;
 }
 
-function selectRow(row: TrackListRow) {
+function selectRow(row: TrackListRow, event?: MouseEvent | KeyboardEvent) {
+	if (!readonly) {
+		const visibleKeys = sorted.map((candidate) => candidate.key);
+		checkedKeys = selectTrackKeys(
+			visibleKeys,
+			checkedKeys,
+			row.key,
+			rangeAnchorKey,
+			event,
+		);
+		if (
+			!event?.shiftKey ||
+			rangeAnchorKey == null ||
+			!visibleKeys.includes(rangeAnchorKey)
+		) {
+			rangeAnchorKey = row.key;
+		}
+	}
 	focusedKey = row.key;
 	onselect(row.track);
-}
-
-/**
- * グリッドはチェックボックスを持たないので、カードの本体クリックが
- * 一括操作の対象選択（旧チェックボックスの仕事）を兼ねる。
- * プレビューの曲切り替えは、ホバープレイボタンから行う。
- */
-function selectAndToggleCheck(row: TrackListRow, event?: MouseEvent) {
-	if (readonly) {
-		selectRow(row);
-		return;
-	}
-	toggleCheck(row, event);
 }
 
 async function handleLibraryRemove() {
@@ -797,7 +798,7 @@ $effect(() => {
       {rekordboxPathIndex}
       {rekordboxContentIds}
       {showRowRemove}
-      onselect={selectAndToggleCheck}
+      onselect={selectRow}
       onremove={showRowRemove ? onremove : undefined}
       {onplay}
     />
@@ -806,6 +807,7 @@ $effect(() => {
       class="table-wrap"
       role="grid"
       aria-label="Track library"
+      aria-multiselectable={!readonly}
       bind:this={tableWrap}
       onscroll={handleScroll}
     >
@@ -967,7 +969,7 @@ $effect(() => {
                     ? isInRekordbox(row.track, rekordboxPathIndex, rekordboxContentIds)
                     : false}
                   showActions={showRowRemove}
-                  onselect={() => selectRow(row)}
+                  onselect={(_track, event) => selectRow(row, event)}
                   onremove={showRowRemove ? onremove : undefined}
                   {onplay}
 				  ontogglecheck={readonly ? undefined : (_track, event) => toggleCheck(row, event)}
