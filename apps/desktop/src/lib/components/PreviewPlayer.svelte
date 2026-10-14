@@ -339,7 +339,7 @@ onDestroy(() => {
     <TrackArtwork
       artworkPath={track.artworkPath ?? null}
       title={displayTitle(track)}
-      size={56}
+      size={40}
     />
 
     {#key track.path}
@@ -492,12 +492,13 @@ onDestroy(() => {
   .preview {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 1rem 1.5rem;
+    gap: 0.75rem;
+    padding: 0.4rem 1.25rem;
     border-top: 1px solid var(--border);
     background: var(--surface-chrome);
     box-shadow: 0 -4px 20px rgb(0 0 0 / 12%);
-    min-height: 88px;
+    min-height: 64px;
+    flex-shrink: 0;
   }
 
   .preview-empty {
@@ -540,8 +541,8 @@ onDestroy(() => {
   }
 
   .play-btn {
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     border: 1px solid rgb(255 255 255 / 16%);
     box-shadow: var(--shadow-control);
@@ -591,7 +592,7 @@ onDestroy(() => {
     grid-template-columns: 2rem 4.5rem 0.75rem;
     align-items: center;
     gap: 0.25rem;
-    padding: 0.2rem 0.35rem;
+    padding: 0.15rem 0.35rem;
   }
 
   .bpm-field {
@@ -666,8 +667,8 @@ onDestroy(() => {
 
   .volume-knob {
     position: relative;
-    width: 3.5rem;
-    height: 3.5rem;
+    width: 3rem;
+    height: 3rem;
     flex-shrink: 0;
   }
 
@@ -767,10 +768,10 @@ onDestroy(() => {
 
   .knob-ring {
     position: absolute;
-    inset: 0.8rem;
+    inset: 0.55rem;
     z-index: 3;
-    width: calc(100% - 1.6rem);
-    height: calc(100% - 1.6rem);
+    width: calc(100% - 1.1rem);
+    height: calc(100% - 1.1rem);
     fill: none;
     opacity: 0;
     pointer-events: none;

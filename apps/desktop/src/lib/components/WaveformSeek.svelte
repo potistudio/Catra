@@ -187,7 +187,7 @@ function seekToPointer(input: HTMLInputElement, clientX: number) {
 		position: relative;
 		flex: 1;
 		min-width: 5rem;
-		height: 2.5rem;
+		height: 2rem;
 		border-radius: 0.25rem;
 		overflow: hidden;
 	}
