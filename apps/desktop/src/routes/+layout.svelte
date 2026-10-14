@@ -71,6 +71,8 @@ import "$lib/styles/motion.css";
     background: var(--surface);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   :global(*) {
@@ -108,6 +110,11 @@ import "$lib/styles/motion.css";
 
   :global(*::-webkit-scrollbar-corner) {
     background: transparent;
+  }
+
+  :global(input, textarea) {
+    -webkit-user-select: text;
+    user-select: text;
   }
 
   :global(::selection) {
