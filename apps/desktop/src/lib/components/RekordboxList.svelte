@@ -501,15 +501,12 @@ function selectedContent(): RekordboxContent | null {
 {#snippet playlistEmptyState()}
   <div class="playlist-empty">
     <div class="playlist-empty-art" aria-hidden="true">
-      <svg width="72" height="72" viewBox="0 0 72 72" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round">
-        <circle cx="36" cy="36" r="25" />
-        <circle cx="36" cy="36" r="8" />
-        <circle cx="36" cy="36" r="1.5" fill="currentColor" stroke="none" />
-        <path d="M19 31a18 18 0 0 1 12-12m-7 13a13 13 0 0 1 8-8m21 17a18 18 0 0 1-12 12m7-13a13 13 0 0 1-8 8" />
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 5h12M4 10h12M4 15h6m7 3V9l4-1" />
+        <ellipse cx="14.5" cy="18" rx="2.5" ry="2" />
       </svg>
     </div>
-    <h2>最初の1曲から。</h2>
-    <p>好きな音を、このプレイリストに。</p>
+    <h2>まだ曲がありません</h2>
     {#if writable}
       <button type="button" class="playlist-empty-action" onclick={selectAllTracks}>
         曲を選ぶ
@@ -1156,50 +1153,34 @@ function selectedContent(): RekordboxContent | null {
   }
 
   .playlist-empty-art {
-    display: grid;
-    place-items: center;
-    width: 96px;
-    height: 96px;
-    margin-bottom: 1.5rem;
-    border: 1px solid var(--border-subtle);
-    border-radius: 50%;
-    background: radial-gradient(circle, var(--accent-subtle), transparent 70%);
+    margin-bottom: 1rem;
     color: var(--text-muted);
   }
 
   .playlist-empty h2 {
     margin: 0;
-    color: var(--text);
-    font-size: 1.15rem;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    line-height: 1.6;
-  }
-
-  .playlist-empty p {
-    margin: 0.6rem 0 0;
     color: var(--text-muted);
-    font-size: 0.8rem;
-    line-height: 1.8;
+    font-size: 0.85rem;
+    font-weight: 400;
+    line-height: 1.6;
   }
 
   .playlist-empty-action {
     display: inline-flex;
     align-items: center;
-    gap: 0.65rem;
-    margin-top: 1.5rem;
-    padding: 0.6rem 1rem;
-    border: 1px solid var(--border);
-    border-radius: 999px;
+    gap: 0.4rem;
+    margin-top: 0.75rem;
+    padding: 0.4rem 0.65rem;
+    border: none;
+    border-radius: 6px;
     background: transparent;
     color: var(--text);
     font-size: 0.78rem;
     cursor: pointer;
-    transition: background-color 0.15s ease, border-color 0.15s ease;
+    transition: background-color 0.15s ease;
   }
 
   .playlist-empty-action:hover {
-    border-color: var(--surface-active);
     background: var(--surface-hover);
   }
 
