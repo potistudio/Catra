@@ -520,8 +520,8 @@ function selectedContent(): RekordboxContent | null {
 
   <div class="body">
     <aside class="sidebar" aria-label="Rekordbox ライブラリ">
-      <div class="collection-nav">
-        <div class="playlist-row" class:active={browseMode === "all"}>
+      <div class="playlist-scroll">
+        <div class="playlist-row collection-row" class:active={browseMode === "all"}>
           <button
             type="button"
             class="playlist-item"
@@ -531,29 +531,36 @@ function selectedContent(): RekordboxContent | null {
             すべてのトラック
           </button>
         </div>
-      </div>
 
-      <h2 class="playlist-heading">プレイリスト</h2>
-      <div class="sidebar-actions">
-        <button
-          type="button"
-          class="side-btn"
-          disabled={!writable || busy}
-          onclick={() => openCreatePlaylistPrompt()}
-        >
-          ＋ リスト
-        </button>
-        <button
-          type="button"
-          class="side-btn"
-          disabled={!writable || busy}
-          onclick={() => openCreateFolderPrompt()}
-        >
-          ＋ フォルダ
-        </button>
-      </div>
+        <div class="playlist-header">
+          <h2 class="playlist-heading">プレイリスト</h2>
+          <div class="playlist-actions">
+            <button
+              type="button"
+              class="create-btn"
+              title="プレイリストを追加"
+              aria-label="プレイリストを追加"
+              disabled={!writable || busy}
+              onclick={() => openCreatePlaylistPrompt()}
+            >
+              <span aria-hidden="true">＋</span>
+            </button>
+            <button
+              type="button"
+              class="create-btn"
+              title="フォルダを追加"
+              aria-label="フォルダを追加"
+              disabled={!writable || busy}
+              onclick={() => openCreateFolderPrompt()}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path d="M20 11V7a2 2 0 0 0-2-2h-6l-2-2H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8" />
+                <path d="M18 14v8m-4-4h8" />
+              </svg>
+            </button>
+          </div>
+        </div>
 
-      <div class="playlist-scroll">
         {#if playlistRows.length === 0}
           <p class="sidebar-empty">プレイリストがありません</p>
         {:else}
@@ -940,32 +947,32 @@ function selectedContent(): RekordboxContent | null {
     min-height: 0;
   }
 
-  .collection-nav {
-    padding: 0.45rem 0;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  .collection-nav .playlist-row {
+  .collection-row {
     padding-left: 0.65rem;
   }
 
+  .playlist-header {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.65rem 0;
+  }
+
   .playlist-heading {
+    flex: 1;
     margin: 0;
-    padding: 0.65rem 0.75rem 0.2rem;
+    padding-left: 0.35rem;
     color: var(--text-muted);
     font-size: 0.7rem;
     font-weight: 600;
   }
 
-  .sidebar-actions {
+  .playlist-actions {
     display: flex;
-    gap: 0.35rem;
-    padding: 0.45rem;
-    border-bottom: 1px solid var(--border);
+    gap: 0.15rem;
   }
 
-  .side-btn,
+  .create-btn,
   .refresh-btn,
   .icon-btn {
     padding: 0.35rem 0.55rem;
@@ -979,18 +986,26 @@ function selectedContent(): RekordboxContent | null {
     white-space: nowrap;
   }
 
-  .side-btn {
-    flex: 1;
+  .create-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    color: var(--text-muted);
   }
 
-  .side-btn:hover:not(:disabled),
+  .create-btn:hover:not(:disabled),
   .refresh-btn:hover:not(:disabled),
   .icon-btn:hover:not(:disabled) {
     background: var(--surface-hover);
     border-color: var(--surface-active);
   }
 
-  .side-btn:disabled,
+  .create-btn:disabled,
   .refresh-btn:disabled,
   .icon-btn:disabled {
     opacity: 0.6;
@@ -1011,6 +1026,7 @@ function selectedContent(): RekordboxContent | null {
   .playlist-scroll {
     flex: 1;
     min-height: 0;
+    padding: 0.45rem 0;
     overflow: auto;
   }
 
