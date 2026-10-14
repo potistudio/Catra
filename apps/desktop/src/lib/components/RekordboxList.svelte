@@ -187,16 +187,11 @@ async function loadPlaylistTracks(playlistId: string) {
 	}
 }
 
-function setBrowseMode(mode: BrowseMode) {
-	browseMode = mode;
-	if (mode === "all") {
-		selectedPlaylistId = null;
-		playlistTracks = [];
-		return;
-	}
-	if (selectedPlaylistId) {
-		void loadPlaylistTracks(selectedPlaylistId);
-	}
+function selectAllTracks() {
+	browseMode = "all";
+	selectedPlaylistId = null;
+	selectedFolderId = null;
+	playlistTracks = [];
 }
 
 function selectPlaylist(playlist: RekordboxPlaylist) {
@@ -524,36 +519,21 @@ function selectedContent(): RekordboxContent | null {
   {/if}
 
   <div class="body">
-    <aside class="sidebar">
-      <div
-        class="mode-switch sliding-tabs"
-        style:--tab-count={2}
-        style:--tab-index={browseMode === "all" ? 0 : 1}
-        role="tablist"
-        aria-label="表示切替"
-      >
-        <button
-          type="button"
-          class="mode-btn"
-          class:active={browseMode === "all"}
-          role="tab"
-          aria-selected={browseMode === "all"}
-          onclick={() => setBrowseMode("all")}
-        >
-          全て
-        </button>
-        <button
-          type="button"
-          class="mode-btn"
-          class:active={browseMode === "playlist"}
-          role="tab"
-          aria-selected={browseMode === "playlist"}
-          onclick={() => setBrowseMode("playlist")}
-        >
-          プレイリスト
-        </button>
+    <aside class="sidebar" aria-label="Rekordbox ライブラリ">
+      <div class="collection-nav">
+        <div class="playlist-row" class:active={browseMode === "all"}>
+          <button
+            type="button"
+            class="playlist-item"
+            aria-current={browseMode === "all" ? "true" : undefined}
+            onclick={selectAllTracks}
+          >
+            すべてのトラック
+          </button>
+        </div>
       </div>
 
+      <h2 class="playlist-heading">プレイリスト</h2>
       <div class="sidebar-actions">
         <button
           type="button"
@@ -601,6 +581,9 @@ function selectedContent(): RekordboxContent | null {
                     <button
                       type="button"
                       class="playlist-item"
+                      aria-current={browseMode === "playlist" && selectedPlaylistId === playlist.id
+                        ? "true"
+                        : undefined}
                       onclick={() => selectPlaylist(playlist)}
                     >
                       {playlist.name}
@@ -957,39 +940,22 @@ function selectedContent(): RekordboxContent | null {
     min-height: 0;
   }
 
-  .mode-switch {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 3px;
-    margin: 0.75rem;
-    padding: 3px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 9px;
-    background: var(--surface-input);
-    box-shadow: var(--shadow-inset);
+  .collection-nav {
+    padding: 0.45rem 0;
+    border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
 
-  .mode-btn {
-    flex: 1;
-    padding: 0.4rem;
-    border-radius: 6px;
-    border: none;
-    background: transparent;
+  .collection-nav .playlist-row {
+    padding-left: 0.65rem;
+  }
+
+  .playlist-heading {
+    margin: 0;
+    padding: 0.65rem 0.75rem 0.2rem;
     color: var(--text-muted);
-    font-size: 0.78rem;
+    font-size: 0.7rem;
     font-weight: 600;
-    cursor: pointer;
-  }
-
-  .mode-btn:hover {
-    color: var(--text);
-    background: color-mix(in srgb, var(--surface-hover) 35%, transparent);
-  }
-
-  .mode-btn.active {
-    color: var(--text);
-    background: transparent;
   }
 
   .sidebar-actions {
