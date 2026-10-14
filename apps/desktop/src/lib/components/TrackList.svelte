@@ -53,6 +53,7 @@ interface Props {
 	searchPlaceholder?: string;
 	emptyTitle?: string;
 	emptyHint?: string;
+	emptyState?: Snippet;
 	bulkRemoveConfirmMessage?: string;
 	removeTitle?: string;
 	bulkRemoveLabel?: string;
@@ -103,6 +104,7 @@ let {
 	searchPlaceholder = "トラックを検索...",
 	emptyTitle = "ライブラリにトラックがありません",
 	emptyHint = "フォルダを追加するか、ファイルをドロップしてください",
+	emptyState,
 	bulkRemoveConfirmMessage = "曲をライブラリから外してゴミ箱へ移しますか？",
 	removeTitle = "ライブラリから外す",
 	bulkRemoveLabel = "ライブラリから外す",
@@ -780,8 +782,12 @@ $effect(() => {
   {#if sorted.length === 0}
     <div class="empty">
       {#if sourceCount === 0}
-        <p>{emptyTitle}</p>
-        <p class="hint">{emptyHint}</p>
+        {#if emptyState}
+          {@render emptyState()}
+        {:else}
+          <p>{emptyTitle}</p>
+          <p class="hint">{emptyHint}</p>
+        {/if}
       {:else if membershipFilter !== "all"}
         <p>このフィルタに一致するトラックがありません</p>
       {:else}
