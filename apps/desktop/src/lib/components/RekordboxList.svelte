@@ -648,7 +648,7 @@ function selectedContent(): RekordboxContent | null {
             ? "このプレイリストにトラックがありません"
             : "Rekordbox にトラックがありません"}
           emptyHint={browseMode === "playlist"
-            ? "曲を追加するか、別のプレイリストを選んでください"
+            ? "「すべてのトラック」で曲を選び、「リストへ追加」から追加してください"
             : "ファイルを追加するか、Rekordbox で曲を登録してください"}
           bulkRemoveConfirmMessage={browseMode === "playlist"
             ? "曲をこのプレイリストから除外しますか？"
