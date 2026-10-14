@@ -339,7 +339,7 @@ onDestroy(() => {
     <TrackArtwork
       artworkPath={track.artworkPath ?? null}
       title={displayTitle(track)}
-      size={40}
+      size={48}
     />
 
     {#key track.path}
