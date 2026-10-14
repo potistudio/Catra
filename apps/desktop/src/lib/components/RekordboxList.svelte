@@ -22,6 +22,15 @@ import {
 	playlistTreeRows,
 	rekordboxContentToTrack,
 } from "$lib/rekordboxListView";
+import {
+	buildRekordboxPathIndex,
+	normalizePath,
+} from "$lib/rekordboxMembership";
+import {
+	audioFilePaths,
+	hasTrackPathsDrag,
+	readTrackPathsDrag,
+} from "$lib/trackDrag";
 import type {
 	RekordboxCheck,
 	RekordboxContent,
@@ -72,6 +81,10 @@ let playlistTracks = $state<RekordboxContent[]>([]);
 let playlistLoading = $state(false);
 let actionError = $state<string | null>(null);
 let busy = $state(false);
+let dropRoot: HTMLDivElement;
+let dropTarget = $state<HTMLElement | null>(null);
+let mainElement = $state<HTMLDivElement>();
+let playlistLoadVersion = 0;
 
 let editOpen = $state(false);
 let editTarget = $state<RekordboxContent | null>(null);
@@ -129,6 +142,12 @@ let writable = $derived(!!status?.dbPath && !status.rekordboxRunning);
 let normalPlaylists = $derived(
 	playlists.filter((playlist) => playlist.attribute === 0),
 );
+let dropPlaylistId = $derived(
+	browseMode === "playlist" &&
+		normalPlaylists.some((playlist) => playlist.id === selectedPlaylistId)
+		? selectedPlaylistId
+		: null,
+);
 
 $effect(() => {
 	if (status == null) return;
@@ -177,13 +196,19 @@ async function loadPlaylists() {
 }
 
 async function loadPlaylistTracks(playlistId: string) {
+	const version = ++playlistLoadVersion;
 	playlistLoading = true;
 	try {
-		playlistTracks = await rekordboxGetPlaylistContent(playlistId);
+		const contents = await rekordboxGetPlaylistContent(playlistId);
+		if (version === playlistLoadVersion && selectedPlaylistId === playlistId) {
+			playlistTracks = contents;
+		}
 	} catch {
-		playlistTracks = [];
+		if (version === playlistLoadVersion && selectedPlaylistId === playlistId) {
+			playlistTracks = [];
+		}
 	} finally {
-		playlistLoading = false;
+		if (version === playlistLoadVersion) playlistLoading = false;
 	}
 }
 
@@ -192,6 +217,8 @@ function selectAllTracks() {
 	selectedPlaylistId = null;
 	selectedFolderId = null;
 	playlistTracks = [];
+	playlistLoadVersion += 1;
+	playlistLoading = false;
 }
 
 function selectPlaylist(playlist: RekordboxPlaylist) {
@@ -328,7 +355,72 @@ async function handleDeletePlaylist(playlist: RekordboxPlaylist) {
 	});
 }
 
+async function addFiles(paths: string[], playlistId: string | null) {
+	const audioPaths = audioFilePaths(paths);
+	if (audioPaths.length === 0) {
+		actionError = "音楽ファイルをドロップしてください";
+		return;
+	}
+	await runAction(async () => {
+		const contentIds = buildRekordboxPathIndex(tracks);
+		try {
+			for (const path of audioPaths) {
+				const key = normalizePath(path);
+				let contentId = contentIds.get(key);
+				if (!contentId) {
+					const content = await rekordboxAddContent(path);
+					contentId = content.id;
+					contentIds.set(key, contentId);
+				}
+				if (playlistId) await rekordboxAddToPlaylist(playlistId, contentId);
+			}
+		} finally {
+			await handleRefresh();
+		}
+	});
+}
+
+function dropElementAt(position: { x: number; y: number }): HTMLElement | null {
+	if (!writable || busy || editOpen || textPromptOpen || addToPlaylistOpen) {
+		return null;
+	}
+	const element = document
+		.elementFromPoint(position.x, position.y)
+		?.closest<HTMLElement>("[data-drop-playlist], [data-drop-collection]");
+	return element && dropRoot?.contains(element) ? element : null;
+}
+
+export function updateFileDrag(position: { x: number; y: number } | null) {
+	dropTarget = position ? dropElementAt(position) : null;
+}
+
+export function dropFiles(paths: string[], position: { x: number; y: number }) {
+	const target = dropElementAt(position);
+	dropTarget = null;
+	if (!target) return;
+	void addFiles(paths, target.dataset.dropPlaylist ?? null);
+}
+
+function handleTrackDragOver(event: DragEvent) {
+	if (!hasTrackPathsDrag(event)) return;
+	updateFileDrag({ x: event.clientX, y: event.clientY });
+	if (!dropTarget) {
+		if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
+		return;
+	}
+	event.preventDefault();
+	if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+}
+
+function handleTrackDrop(event: DragEvent) {
+	if (!hasTrackPathsDrag(event)) return;
+	event.preventDefault();
+	event.stopPropagation();
+	dropFiles(readTrackPathsDrag(event), { x: event.clientX, y: event.clientY });
+}
+
 async function handleAddFiles() {
+	const playlistId = dropPlaylistId;
 	const selected = await open({
 		multiple: true,
 		filters: [
@@ -340,12 +432,7 @@ async function handleAddFiles() {
 	});
 	if (!selected) return;
 	const paths = Array.isArray(selected) ? selected : [selected];
-	await runAction(async () => {
-		for (const path of paths) {
-			await rekordboxAddContent(path);
-		}
-		await handleRefresh();
-	});
+	await addFiles(paths, playlistId);
 }
 
 async function handleRemoveTrack(track: Track) {
@@ -508,6 +595,7 @@ function selectedContent(): RekordboxContent | null {
     </div>
     <h2>まだ曲がありません</h2>
     {#if writable}
+      <p class="playlist-empty-hint">曲をここにドロップ</p>
       <button type="button" class="playlist-empty-action" onclick={selectAllTracks}>
         曲を選ぶ
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -518,7 +606,20 @@ function selectedContent(): RekordboxContent | null {
   </div>
 {/snippet}
 
-<div class="rekordbox-list">
+<svelte:window ondragend={() => (dropTarget = null)} />
+
+<div
+  class="rekordbox-list"
+  bind:this={dropRoot}
+  role="presentation"
+  ondragover={handleTrackDragOver}
+  ondrop={handleTrackDrop}
+  ondragleave={(event) => {
+    if (!(event.relatedTarget instanceof Node) || !dropRoot.contains(event.relatedTarget)) {
+      dropTarget = null;
+    }
+  }}
+>
   {#if status}
     <div class="status-bar" class:warning={status.rekordboxRunning}>
       {#if status.rekordboxRunning}
@@ -541,7 +642,12 @@ function selectedContent(): RekordboxContent | null {
   <div class="body">
     <aside class="sidebar" aria-label="Rekordbox ライブラリ">
       <div class="playlist-scroll">
-        <div class="playlist-row collection-row" class:active={browseMode === "all"}>
+        <div
+          class="playlist-row collection-row"
+          class:active={browseMode === "all"}
+          class:drop-active={dropTarget?.hasAttribute("data-drop-collection") && dropTarget !== mainElement}
+          data-drop-collection
+        >
           <button
             type="button"
             class="playlist-item"
@@ -590,6 +696,8 @@ function selectedContent(): RekordboxContent | null {
                 <div
                   class="playlist-row"
                   class:folder={isPlaylistFolder(playlist)}
+                  class:drop-active={dropTarget?.dataset.dropPlaylist === playlist.id && dropTarget !== mainElement}
+                  data-drop-playlist={playlist.attribute === 0 ? playlist.id : undefined}
                   class:active={browseMode === "playlist" &&
                     selectedPlaylistId === playlist.id}
                   class:folder-selected={selectedFolderId === playlist.id &&
@@ -644,7 +752,13 @@ function selectedContent(): RekordboxContent | null {
       </div>
     </aside>
 
-    <div class="main">
+    <div
+      class="main"
+      bind:this={mainElement}
+      class:drop-active={dropTarget === mainElement}
+      data-drop-playlist={dropPlaylistId ?? undefined}
+      data-drop-collection={browseMode === "all" ? true : undefined}
+    >
       {#if listLoading && activeTracks.length === 0}
         <div class="empty">
           <p>
@@ -1070,6 +1184,12 @@ function selectedContent(): RekordboxContent | null {
     background: var(--surface-selected);
   }
 
+  .playlist-row.drop-active {
+    background: var(--accent-subtle);
+    outline: 1px solid var(--accent);
+    outline-offset: -1px;
+  }
+
   .playlist-row.active:hover,
   .playlist-row.folder-selected:hover {
     background: var(--surface-selected-hover);
@@ -1144,6 +1264,12 @@ function selectedContent(): RekordboxContent | null {
     margin: 0;
   }
 
+  .main.drop-active {
+    background: var(--accent-subtle);
+    outline: 1px dashed var(--accent);
+    outline-offset: -8px;
+  }
+
   .playlist-empty {
     display: flex;
     flex-direction: column;
@@ -1163,6 +1289,12 @@ function selectedContent(): RekordboxContent | null {
     font-size: 0.85rem;
     font-weight: 400;
     line-height: 1.6;
+  }
+
+  .playlist-empty-hint {
+    margin: 0.5rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.78rem;
   }
 
   .playlist-empty-action {

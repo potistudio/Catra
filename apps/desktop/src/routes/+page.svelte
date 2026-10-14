@@ -92,6 +92,7 @@ let selectedRekordboxId = $state<string | null>(appSession.selectedRekordboxId);
 let rekordboxStatus = $state<RekordboxCheck | null>(null);
 let rekordboxLoading = $state(false);
 let rekordboxBusy = $state(false);
+let rekordboxList = $state<ReturnType<typeof RekordboxList>>();
 let loading = $state(false);
 let scanning = $state(false);
 let scanKind = $state<"folder" | "rekordbox" | "drop" | null>(null);
@@ -997,6 +998,26 @@ onMount(() => {
 	void getCurrentWebview()
 		.onDragDropEvent((event) => {
 			const payload = event.payload;
+			if (activeTab === "rekordbox") {
+				fileDropActive = false;
+				if (payload.type === "leave") {
+					rekordboxList?.updateFileDrag(null);
+					return;
+				}
+				const position = payload.position.toLogical(window.devicePixelRatio);
+				if (payload.type === "drop") {
+					rekordboxList?.updateFileDrag(null);
+					if (dropImportBlocked()) {
+						pushActivityLog("warning", "取り込み中はドロップできません");
+					} else {
+						rekordboxList?.dropFiles(payload.paths, position);
+					}
+				} else {
+					rekordboxList?.updateFileDrag(dropImportBlocked() ? null : position);
+				}
+				return;
+			}
+			rekordboxList?.updateFileDrag(null);
 			if (payload.type === "enter" || payload.type === "over") {
 				fileDropActive = true;
 				return;
@@ -1389,6 +1410,7 @@ onMount(() => {
         aria-hidden={activeTab !== "rekordbox"}
       >
         <RekordboxList
+          bind:this={rekordboxList}
           tracks={rekordboxTracks}
           selectedId={selectedRekordboxId}
           loading={rekordboxLoading}

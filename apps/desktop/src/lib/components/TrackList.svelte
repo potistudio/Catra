@@ -536,15 +536,12 @@ let dragKey = $state<number | null>(null);
 let dropKey = $state<number | null>(null);
 let dropAfter = $state(false);
 
-/**
- * 掴んだ行がチェック済みなら選択の全部を、そうでなければその1行だけを運ぶ。
- * 列の中では同じ曲が2回入ることもあるので、重複は畳まずそのまま渡す。
- */
-function draggedTrackIds(row: TrackListRow): number[] {
-	if (!checkedKeys.has(row.key)) return [row.track.id];
+/** 選択済みの行をドラッグした場合は、表示順と重複を保持して選択曲を渡す。 */
+function draggedTracks(row: TrackListRow): Track[] {
+	if (!checkedKeys.has(row.key)) return [row.track];
 	return sorted
 		.filter((item) => checkedKeys.has(item.key))
-		.map((item) => item.track.id);
+		.map((item) => item.track);
 }
 
 function handleDragStart(row: TrackListRow, event: DragEvent) {
@@ -552,7 +549,12 @@ function handleDragStart(row: TrackListRow, event: DragEvent) {
 	if (!event.dataTransfer) return;
 	event.dataTransfer.effectAllowed = reorderable ? "copyMove" : "copy";
 	event.dataTransfer.setData("text/plain", String(row.key));
-	writeTrackDrag(event, draggedTrackIds(row));
+	const dragged = draggedTracks(row);
+	writeTrackDrag(
+		event,
+		dragged.map((track) => track.id),
+		dragged.map((track) => track.path),
+	);
 }
 
 function handleDragOver(row: TrackListRow, event: DragEvent) {
@@ -805,6 +807,7 @@ $effect(() => {
       {rekordboxContentIds}
       {showRowRemove}
       onselect={selectRow}
+      ondragstart={handleDragStart}
       onremove={showRowRemove ? onremove : undefined}
       {onplay}
     />

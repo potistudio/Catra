@@ -18,6 +18,7 @@ interface Props {
 	inRekordbox?: boolean;
 	showRowRemove?: boolean;
 	onselect: (track: Track, event?: MouseEvent | KeyboardEvent) => void;
+	ondragstart?: (event: DragEvent) => void;
 	onremove?: (track: Track) => void;
 	onplay?: (track: Track) => void;
 }
@@ -31,6 +32,7 @@ let {
 	inRekordbox = false,
 	showRowRemove = true,
 	onselect,
+	ondragstart,
 	onremove,
 	onplay,
 }: Props = $props();
@@ -51,7 +53,9 @@ function handleKeydown(event: KeyboardEvent) {
   role="button"
   aria-pressed={checked}
   tabindex="0"
-	onclick={(event) => onselect(track, event)}
+  draggable={!!ondragstart}
+  {ondragstart}
+  onclick={(event) => onselect(track, event)}
   onkeydown={handleKeydown}
 >
   <div class="artwork-wrap">
