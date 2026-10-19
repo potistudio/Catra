@@ -100,6 +100,7 @@ let rekordboxStatus = $state<RekordboxCheck | null>(null);
 let rekordboxLoading = $state(false);
 let rekordboxBusy = $state(false);
 let rekordboxList = $state<ReturnType<typeof RekordboxList>>();
+let librarySidebar = $state<ReturnType<typeof LibrarySidebar>>();
 let loading = $state(false);
 let scanning = $state(false);
 let scanKind = $state<"folder" | "rekordbox" | "drop" | null>(null);
@@ -1364,7 +1365,7 @@ onMount(() => {
         inert={activeTab !== "library" ? true : undefined}
         aria-hidden={activeTab !== "library"}
       >
-        <LibrarySidebar activeTagCount={activeTagIds.length} facetActive={facetNarrowed != null}>
+        <LibrarySidebar bind:this={librarySidebar} activeTagCount={activeTagIds.length} facetActive={facetNarrowed != null}>
           {#snippet playlists()}
             <PlaylistTree
               nodes={playlistNodes}
@@ -1427,7 +1428,10 @@ onMount(() => {
           exportBusy={exporting}
           onreorder={canReorder ? handleReorderEntries : undefined}
           onremoveentries={selectedPlaylist?.kind === "static" ? handleRemoveEntries : undefined}
-          ontagtracks={(selected) => (tagTargets = selected)}
+          ontagtracks={(selected) => {
+            tagTargets = selected;
+            void librarySidebar?.revealTags();
+          }}
           playlistTargets={playlistNodes.filter((node) => node.kind === "static")}
           playlistBusy={classifyBusy}
           onaddtoplaylist={handleDropTracksOnPlaylist}
