@@ -1141,8 +1141,9 @@ $effect(() => {
   }
 
   .search {
-    flex: 1;
-    min-width: 10rem;
+    flex: 1 0 100%;
+    width: 100%;
+    min-width: 0;
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
@@ -1458,6 +1459,8 @@ $effect(() => {
 
   .view-toggle {
     display: flex;
+    flex-shrink: 0;
+    margin-left: auto;
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
     overflow: hidden;
