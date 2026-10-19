@@ -60,14 +60,6 @@
 		animation: catra-content-in var(--motion-normal) var(--motion-ease);
 	}
 
-	button:not(:disabled):not([role="tab"]):not(.volume-drag-handle):active {
-		scale: 0.97;
-	}
-
-	.selection-checkbox:active .box {
-		scale: 0.9;
-	}
-
 	.selection-checkbox .mark path {
 		stroke-dasharray: 1;
 		animation: catra-check-in var(--motion-fast) var(--motion-ease);

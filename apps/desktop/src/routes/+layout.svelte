@@ -148,8 +148,7 @@ import "$lib/styles/motion.css";
       color 0.15s ease,
       box-shadow 0.15s ease,
       filter 0.15s ease,
-      opacity 0.15s ease,
-      scale var(--motion-fast) var(--motion-ease);
+      opacity 0.15s ease;
   }
 
   @media (prefers-reduced-motion: reduce) {

@@ -110,8 +110,7 @@ function handleClick(event: MouseEvent) {
     transition:
       background 0.12s ease,
       border-color 0.12s ease,
-      box-shadow 0.12s ease,
-      scale var(--motion-fast) var(--motion-ease);
+      box-shadow 0.12s ease;
     pointer-events: none;
   }
 

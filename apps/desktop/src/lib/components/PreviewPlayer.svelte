@@ -771,10 +771,6 @@ onDestroy(() => {
     transform: scale(1.12);
   }
 
-  .volume-drag-handle:active svg {
-    transform: scale(0.94);
-  }
-
   .knob-ring {
     position: absolute;
     inset: 0.55rem;
