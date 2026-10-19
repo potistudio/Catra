@@ -1,3 +1,8 @@
+import {
+	defaultSidebarLayout,
+	parseSidebarLayout,
+	type SidebarLayout,
+} from "$lib/sidebarLayout";
 import type { SortColumn, SortDirection, ViewMode } from "$lib/trackListView";
 
 const STORAGE_KEY = "catra.app-session.v1";
@@ -21,6 +26,7 @@ export type AppSession = {
 	selectedRekordboxId: string | null;
 	consoleOpen: boolean;
 	library: {
+		sidebar: SidebarLayout;
 		browseMode: BrowseMode;
 		selectedPlaylistId: number | null;
 		expandedPlaylistIds: number[];
@@ -66,6 +72,7 @@ function defaultSession(): AppSession {
 		selectedRekordboxId: null,
 		consoleOpen: false,
 		library: {
+			sidebar: defaultSidebarLayout(),
 			browseMode: "all",
 			selectedPlaylistId: null,
 			expandedPlaylistIds: [],
@@ -150,6 +157,7 @@ function parseSession(raw: unknown): AppSession {
 		next.consoleOpen = record.consoleOpen;
 	if (record.library && typeof record.library === "object") {
 		const library = record.library as Record<string, unknown>;
+		next.library.sidebar = parseSidebarLayout(library.sidebar);
 		if ("list" in library) {
 			if (isBrowseMode(library.browseMode))
 				next.library.browseMode = library.browseMode;

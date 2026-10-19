@@ -46,6 +46,7 @@ import ActivityConsole from "$lib/components/ActivityConsole.svelte";
 import ConvertDialog from "$lib/components/ConvertDialog.svelte";
 import DuplicateTrackDialog from "$lib/components/DuplicateTrackDialog.svelte";
 import FacetBrowser from "$lib/components/FacetBrowser.svelte";
+import LibrarySidebar from "$lib/components/LibrarySidebar.svelte";
 import PlaylistTree from "$lib/components/PlaylistTree.svelte";
 import PreviewPlayer from "$lib/components/PreviewPlayer.svelte";
 import RekordboxList from "$lib/components/RekordboxList.svelte";
@@ -1359,38 +1360,44 @@ onMount(() => {
         inert={activeTab !== "library" ? true : undefined}
         aria-hidden={activeTab !== "library"}
       >
-        <aside class="side">
-          <PlaylistTree
-            nodes={playlistNodes}
-            axes={tagAxes}
-            selectedId={selectedPlaylistId}
-            expandedIds={expandedPlaylistIds}
-            busy={classifyBusy}
-            onselect={selectPlaylist}
-            ontoggleexpand={togglePlaylistExpanded}
-            onchanged={handlePlaylistChanged}
-            onerror={(message) => pushActivityLog("error", message)}
-            ondroptracks={handleDropTracksOnPlaylist}
-          />
-          <TagPanel
-            axes={tagAxes}
-            selectedTracks={tagTargets}
-            {activeTagIds}
-            busy={classifyBusy}
-            onchanged={handleTagsChanged}
-            onfilterchange={(tagIds) => void handleTagFilterChange(tagIds)}
-            onerror={(message) => pushActivityLog("error", message)}
-          />
-          <FacetBrowser
-            field={facetField}
-            value={facetValue}
-            active={facetNarrowed != null}
-            onselect={(field, value) => void handleFacetSelect(field, value)}
-            onclear={clearFacet}
-            onchanged={handlePlaylistChanged}
-            onerror={(message) => pushActivityLog("error", message)}
-          />
-        </aside>
+        <LibrarySidebar activeTagCount={activeTagIds.length} facetActive={facetNarrowed != null}>
+          {#snippet playlists()}
+            <PlaylistTree
+              nodes={playlistNodes}
+              axes={tagAxes}
+              selectedId={selectedPlaylistId}
+              expandedIds={expandedPlaylistIds}
+              busy={classifyBusy}
+              onselect={selectPlaylist}
+              ontoggleexpand={togglePlaylistExpanded}
+              onchanged={handlePlaylistChanged}
+              onerror={(message) => pushActivityLog("error", message)}
+              ondroptracks={handleDropTracksOnPlaylist}
+            />
+          {/snippet}
+          {#snippet tags()}
+            <TagPanel
+              axes={tagAxes}
+              selectedTracks={tagTargets}
+              {activeTagIds}
+              busy={classifyBusy}
+              onchanged={handleTagsChanged}
+              onfilterchange={(tagIds) => void handleTagFilterChange(tagIds)}
+              onerror={(message) => pushActivityLog("error", message)}
+            />
+          {/snippet}
+          {#snippet facets()}
+            <FacetBrowser
+              field={facetField}
+              value={facetValue}
+              active={facetNarrowed != null}
+              onselect={(field, value) => void handleFacetSelect(field, value)}
+              onclear={clearFacet}
+              onchanged={handlePlaylistChanged}
+              onerror={(message) => pushActivityLog("error", message)}
+            />
+          {/snippet}
+        </LibrarySidebar>
         <TrackList
           tracks={libraryTracks}
           entries={libraryEntries}
@@ -1685,17 +1692,6 @@ onMount(() => {
 
   .tab-panel[hidden] {
     display: none;
-  }
-
-  .side {
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-    width: 16rem;
-    min-height: 0;
-    overflow: hidden;
-    border-right: 1px solid var(--border);
-    background: var(--surface-sidebar);
   }
 
   .scope-name {

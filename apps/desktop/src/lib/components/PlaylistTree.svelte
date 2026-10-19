@@ -293,7 +293,7 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
     </button>
   </div>
 
-  <div class="tree-scroll">
+  <div>
     {#if rows.length === 0}
       <p class="tree-empty">プレイリストがありません</p>
     {:else}
@@ -433,7 +433,6 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
     display: flex;
     flex-direction: column;
     min-height: 0;
-    flex: 1;
   }
 
   .all-btn {
@@ -491,12 +490,6 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--on-accent);
-  }
-
-  .tree-scroll {
-    flex: 1;
-    overflow: auto;
-    min-height: 0;
   }
 
   .tree-empty {

@@ -293,7 +293,6 @@ function onBackdropPointerUp(event: PointerEvent) {
 
 <div class="tag-panel">
   <div class="panel-head">
-    <span class="panel-title">タグ</span>
     <button type="button" class="side-btn" disabled={busy} onclick={startCreateAxis}>＋ 軸</button>
   </div>
 
@@ -462,25 +461,14 @@ function onBackdropPointerUp(event: PointerEvent) {
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
-    padding: 0.75rem;
-    border-top: 1px solid var(--border-subtle);
-    overflow: auto;
-    max-height: 45%;
+    padding: 0 0.75rem 0.75rem;
   }
 
   .panel-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 0.4rem;
-  }
-
-  .panel-title {
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--text-muted);
   }
 
   .lead {

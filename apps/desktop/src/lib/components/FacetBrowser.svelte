@@ -69,9 +69,9 @@ async function promote(item: FacetValue) {
 
 <div class="facets">
   <div class="facet-head">
-    <span class="panel-title">ブラウズ</span>
     <select
       class="facet-select"
+      aria-label="ブラウズの分類"
       value={field}
       onchange={(event) => onselect(event.currentTarget.value as FacetField, null)}
     >
@@ -86,7 +86,7 @@ async function promote(item: FacetValue) {
 
   <p class="lead">値は配信元まかせで揺れる。整えたい分類はタグに移す</p>
 
-  <div class="facet-list">
+  <div>
     {#if loading && values.length === 0}
       <p class="lead">読み込み中...</p>
     {:else if values.length === 0}
@@ -117,10 +117,7 @@ async function promote(item: FacetValue) {
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
-    padding: 0.75rem;
-    border-top: 1px solid var(--border-subtle);
-    min-height: 0;
-    overflow: hidden;
+    padding: 0 0.75rem 0.75rem;
   }
 
   .facet-head {
@@ -129,16 +126,9 @@ async function promote(item: FacetValue) {
     gap: 0.3rem;
   }
 
-  .panel-title {
-    flex: 1;
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-  }
-
   .facet-select {
+    flex: 1;
+    min-width: 0;
     padding: 0.2rem 0.3rem;
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -151,12 +141,6 @@ async function promote(item: FacetValue) {
     margin: 0;
     font-size: 0.68rem;
     color: var(--text-muted);
-  }
-
-  .facet-list {
-    overflow: auto;
-    min-height: 0;
-    max-height: 14rem;
   }
 
   .facet-row {
