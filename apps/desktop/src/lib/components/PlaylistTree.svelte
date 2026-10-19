@@ -271,16 +271,6 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
   }}
   ondrop={handleRootDrop}
 >
-  <button
-    type="button"
-    class="all-btn"
-    class:active={selectedId === null}
-    onclick={() => onselect(null)}
-  >
-    <span class="kind-icon" aria-hidden="true">◎</span>
-    <span class="node-name">全て</span>
-  </button>
-
   <div class="tree-actions">
     <button type="button" class="side-btn" disabled={busy} onclick={() => startCreate("static")}>
       ＋ リスト
@@ -293,87 +283,97 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
     </button>
   </div>
 
-  <div>
-    {#if rows.length === 0}
-      <p class="tree-empty">プレイリストがありません</p>
-    {:else}
-      <ul class="tree-list">
-        {#each rows as row (row.node.id)}
-          <li>
-            <div
-              class="node-row"
-              class:active={selectedId === row.node.id}
-              class:drop-before={dropId === row.node.id && dropSpot === "before"}
-              class:drop-after={dropId === row.node.id && dropSpot === "after"}
-              class:drop-into={(dropId === row.node.id && dropSpot === "into") ||
-                trackDropId === row.node.id}
-              style={`padding-left: ${0.35 + row.depth * 0.75}rem`}
-              draggable={!busy}
-              role="presentation"
-              ondragstart={(event) => handleNodeDragStart(row.node, event)}
-              ondragover={(event) => handleRowDragOver(row.node, event)}
-              ondrop={(event) => handleRowDrop(row.node, event)}
-              ondragend={clearDrag}
+  <ul class="tree-list">
+    <li>
+      <div class="node-row" class:active={selectedId === null} style="padding-left: 0.35rem">
+        <span class="twisty-space"></span>
+        <button
+          type="button"
+          class="node-item"
+          onclick={() => onselect(null)}
+        >
+          <span class="kind-icon" aria-hidden="true">◎</span>
+          <span class="node-name">全て</span>
+        </button>
+      </div>
+    </li>
+    {#each rows as row (row.node.id)}
+      <li>
+        <div
+          class="node-row"
+          class:active={selectedId === row.node.id}
+          class:drop-before={dropId === row.node.id && dropSpot === "before"}
+          class:drop-after={dropId === row.node.id && dropSpot === "after"}
+          class:drop-into={(dropId === row.node.id && dropSpot === "into") ||
+            trackDropId === row.node.id}
+          style={`padding-left: ${0.35 + row.depth * 0.75}rem`}
+          draggable={!busy}
+          role="presentation"
+          ondragstart={(event) => handleNodeDragStart(row.node, event)}
+          ondragover={(event) => handleRowDragOver(row.node, event)}
+          ondrop={(event) => handleRowDrop(row.node, event)}
+          ondragend={clearDrag}
+        >
+          {#if row.hasChildren}
+            <button
+              type="button"
+              class="twisty"
+              aria-label={row.expanded ? "折りたたむ" : "開く"}
+              onclick={() => ontoggleexpand(row.node.id)}
             >
-              {#if row.hasChildren}
-                <button
-                  type="button"
-                  class="twisty"
-                  aria-label={row.expanded ? "折りたたむ" : "開く"}
-                  onclick={() => ontoggleexpand(row.node.id)}
-                >
-                  {row.expanded ? "▾" : "▸"}
-                </button>
-              {:else}
-                <span class="twisty-space"></span>
-              {/if}
+              {row.expanded ? "▾" : "▸"}
+            </button>
+          {:else}
+            <span class="twisty-space"></span>
+          {/if}
+          <button
+            type="button"
+            class="node-item"
+            title={KIND_LABEL[row.node.kind]}
+            onclick={() => onselect(row.node.id)}
+          >
+            <span class="kind-icon" aria-hidden="true">{KIND_ICON[row.node.kind]}</span>
+            <span class="node-name">{row.node.name}</span>
+            <span class="node-count">{row.node.trackCount}</span>
+          </button>
+          <div class="node-ops">
+            {#if row.node.kind === "smart"}
               <button
                 type="button"
-                class="node-item"
-                title={KIND_LABEL[row.node.kind]}
-                onclick={() => onselect(row.node.id)}
+                class="icon-btn"
+                title="規則を編集"
+                disabled={busy}
+                onclick={() => (ruleTarget = row.node)}
               >
-                <span class="kind-icon" aria-hidden="true">{KIND_ICON[row.node.kind]}</span>
-                <span class="node-name">{row.node.name}</span>
-                <span class="node-count">{row.node.trackCount}</span>
+                ⚙
               </button>
-              <div class="node-ops">
-                {#if row.node.kind === "smart"}
-                  <button
-                    type="button"
-                    class="icon-btn"
-                    title="規則を編集"
-                    disabled={busy}
-                    onclick={() => (ruleTarget = row.node)}
-                  >
-                    ⚙
-                  </button>
-                {/if}
-                <button
-                  type="button"
-                  class="icon-btn"
-                  title="名前を変更"
-                  disabled={busy}
-                  onclick={() => startRename(row.node)}
-                >
-                  ✎
-                </button>
-                <button
-                  type="button"
-                  class="icon-btn"
-                  title="削除"
-                  disabled={busy}
-                  onclick={() => startDelete(row.node)}
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-          </li>
-        {/each}
-      </ul>
+            {/if}
+            <button
+              type="button"
+              class="icon-btn"
+              title="名前を変更"
+              disabled={busy}
+              onclick={() => startRename(row.node)}
+            >
+              ✎
+            </button>
+            <button
+              type="button"
+              class="icon-btn"
+              title="削除"
+              disabled={busy}
+              onclick={() => startDelete(row.node)}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      </li>
+    {/each}
+    {#if rows.length === 0}
+      <li class="tree-empty">プレイリストがありません</li>
     {/if}
-  </div>
+  </ul>
 </div>
 
 {#if promptOpen}
@@ -435,30 +435,6 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
     min-height: 0;
   }
 
-  .all-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    width: calc(100% - 1rem);
-    margin: 0.5rem 0.5rem 0;
-    padding: 0.45rem 0.6rem;
-    border: none;
-    border-radius: var(--radius-control);
-    background: transparent;
-    color: var(--text);
-    font-size: 0.8rem;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .all-btn:hover {
-    background: var(--surface-hover);
-  }
-
-  .all-btn.active {
-    background: var(--surface-selected);
-  }
-
   .tree-actions {
     display: flex;
     gap: 0.3rem;
@@ -509,6 +485,7 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
     display: flex;
     align-items: center;
     gap: 0.15rem;
+    min-height: 2rem;
     padding-right: 0.3rem;
     border-radius: var(--radius-control);
   }
@@ -571,11 +548,14 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
     background: transparent;
     color: var(--text);
     font-size: 0.8rem;
+    line-height: 1.5;
     text-align: left;
     cursor: pointer;
   }
 
   .kind-icon {
+    width: 1rem;
+    text-align: center;
     flex-shrink: 0;
     color: var(--text-muted);
     font-size: 0.75rem;
