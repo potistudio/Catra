@@ -1323,33 +1323,35 @@ onMount(() => {
         {/if}
       </div>
     {/if}
-    <button
-      class="btn primary"
-      onclick={handleAddFolder}
-      disabled={loading || scanning || converting || exporting || activeTab !== "library"}
-    >
-      {scanning && scanKind === "folder" ? "スキャン中..." : "Add Folder"}
-    </button>
-    <button
-      class="btn primary"
-      onclick={handleImportFromRekordbox}
-      disabled={loading || scanning || converting || exporting || activeTab !== "rekordbox" || !rekordboxStatus?.dbPath}
-    >
-      {scanning && scanKind === "rekordbox" ? "インポート中..." : "ライブラリにインポート"}
-    </button>
-    <button
-      type="button"
-      class="btn settings-button"
-      aria-label="設定を開く"
-      aria-haspopup="dialog"
-      title="設定"
-      onclick={() => (settingsOpen = true)}
-    >
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="m9.5 3-.6 2.3-2 .9-2.2-.7-2.5 4.3 1.7 1.6v2.3l-1.7 1.5 2.5 4.3 2.2-.7 2 .9.6 2.3h5l.6-2.3 2-.9 2.2.7 2.5-4.3-1.7-1.5v-2.3l1.7-1.6-2.5-4.3-2.2.7-2-.9-.6-2.3h-5Z" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-    </button>
+    <div class="toolbar-actions">
+      <button
+        class="btn primary"
+        onclick={handleAddFolder}
+        disabled={loading || scanning || converting || exporting || activeTab !== "library"}
+      >
+        {scanning && scanKind === "folder" ? "スキャン中..." : "Add Folder"}
+      </button>
+      <button
+        class="btn primary"
+        onclick={handleImportFromRekordbox}
+        disabled={loading || scanning || converting || exporting || activeTab !== "rekordbox" || !rekordboxStatus?.dbPath}
+      >
+        {scanning && scanKind === "rekordbox" ? "インポート中..." : "ライブラリにインポート"}
+      </button>
+      <button
+        type="button"
+        class="btn settings-button"
+        aria-label="設定を開く"
+        aria-haspopup="dialog"
+        title="設定"
+        onclick={() => (settingsOpen = true)}
+      >
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="m9.5 3-.6 2.3-2 .9-2.2-.7-2.5 4.3 1.7 1.6v2.3l-1.7 1.5 2.5 4.3 2.2-.7 2 .9.6 2.3h5l.6-2.3 2-.9 2.2.7 2.5-4.3-1.7-1.5v-2.3l1.7-1.6-2.5-4.3-2.2.7-2-.9-.6-2.3h-5Z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      </button>
+    </div>
   </header>
 
   <div class="body">
@@ -1513,6 +1515,8 @@ onMount(() => {
 
   .toolbar {
     display: flex;
+    flex-wrap: wrap;
+    flex-shrink: 0;
     align-items: center;
     gap: 1rem;
     min-height: 64px;
@@ -1520,6 +1524,15 @@ onMount(() => {
     border-bottom: 1px solid var(--border);
     background: var(--surface-chrome);
     box-shadow: 0 1px 0 rgb(0 0 0 / 20%);
+  }
+
+  .toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    max-width: 100%;
+    margin-left: auto;
   }
 
   .logo {
@@ -1583,7 +1596,7 @@ onMount(() => {
     align-items: center;
     gap: 0.65rem;
     min-width: 0;
-    flex: 1;
+    flex: 1 1 16rem;
     padding: 0.35rem 0.75rem;
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -1619,6 +1632,8 @@ onMount(() => {
   }
 
   .btn {
+    flex-shrink: 0;
+    white-space: nowrap;
     padding: 0.45rem 1rem;
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
