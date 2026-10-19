@@ -1,19 +1,12 @@
 <script lang="ts">
 import { fadeMotion, revealMotion } from "$lib/motion";
+import {
+	CONVERT_BITRATES,
+	CONVERT_FORMATS,
+	isLossyFormat,
+} from "$lib/settings";
+import { appSettings } from "$lib/settings.svelte";
 import type { ConvertFormat, ConvertOptions } from "$lib/types";
-
-const FORMATS: { value: ConvertFormat; label: string }[] = [
-	{ value: "mp3", label: "MP3" },
-	{ value: "aac", label: "AAC (M4A)" },
-	{ value: "flac", label: "FLAC" },
-	{ value: "wav", label: "WAV" },
-	{ value: "aiff", label: "AIFF" },
-	{ value: "ogg", label: "OGG Vorbis" },
-	{ value: "opus", label: "Opus" },
-];
-
-const BITRATES = [128, 192, 256, 320];
-const LOSSY_FORMATS = new Set<ConvertFormat>(["mp3", "aac", "ogg", "opus"]);
 
 interface Props {
 	trackCount: number;
@@ -31,15 +24,15 @@ let {
 	onconfirm,
 }: Props = $props();
 
-let format = $state<ConvertFormat>("mp3");
-let bitrateKbps = $state("320");
+let format = $state<ConvertFormat>(appSettings.convertFormat);
+let bitrateKbps = $state(String(appSettings.convertBitrateKbps));
 let bitDepth = $state("16");
 let sampleRate = $state("keep");
 let channels = $state("keep");
-let addToRekordbox = $state(true);
+let addToRekordbox = $state(appSettings.convertAddToRekordbox);
 let backdropDismissArmed = $state(false);
 
-let lossy = $derived(LOSSY_FORMATS.has(format));
+let lossy = $derived(isLossyFormat(format));
 
 function onBackdropPointerDown(event: PointerEvent) {
 	backdropDismissArmed = event.target === event.currentTarget;
@@ -86,7 +79,7 @@ function submit() {
     <label>
       フォーマット
       <select bind:value={format}>
-        {#each FORMATS as item (item.value)}
+        {#each CONVERT_FORMATS as item (item.value)}
           <option value={item.value}>{item.label}</option>
         {/each}
       </select>
@@ -95,7 +88,7 @@ function submit() {
       <label>
         ビットレート
         <select bind:value={bitrateKbps}>
-          {#each BITRATES as rate (rate)}
+          {#each CONVERT_BITRATES as rate (rate)}
             <option value={String(rate)}>{rate} kbps</option>
           {/each}
         </select>

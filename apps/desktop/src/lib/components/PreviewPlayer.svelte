@@ -11,6 +11,7 @@ import {
 	formatDuration,
 } from "$lib/format";
 import { revealMotion } from "$lib/motion";
+import { appSettings } from "$lib/settings.svelte";
 import type { PreviewableTrack } from "$lib/types";
 
 interface Props {
@@ -36,8 +37,8 @@ let duration = $state(0);
 let audioSrc = $state<string | null>(null);
 let pendingAutoplay = $state(false);
 let playbackRate = $state(1);
-let masterTempo = $state(true);
-let volume = $state(1);
+let masterTempo = $state(appSettings.previewMasterTempo);
+let volume = $state(appSettings.previewVolume / 100);
 let isMuted = $state(false);
 let lastAutoplayToken = 0;
 let lastTogglePlayToken = 0;
@@ -77,6 +78,14 @@ let playbackBpm = $derived(
 	track?.bpm != null && track.bpm > 0 ? track.bpm * playbackRate : null,
 );
 let isEffectivelyMuted = $derived(isMuted || volume === 0);
+
+$effect(() => {
+	volume = appSettings.previewVolume / 100;
+});
+
+$effect(() => {
+	masterTempo = appSettings.previewMasterTempo;
+});
 
 function setPlaying(next: boolean) {
 	if (isPlaying === next) return;

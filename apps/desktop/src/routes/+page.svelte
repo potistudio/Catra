@@ -49,6 +49,7 @@ import FacetBrowser from "$lib/components/FacetBrowser.svelte";
 import PlaylistTree from "$lib/components/PlaylistTree.svelte";
 import PreviewPlayer from "$lib/components/PreviewPlayer.svelte";
 import RekordboxList from "$lib/components/RekordboxList.svelte";
+import SettingsDialog from "$lib/components/SettingsDialog.svelte";
 import StatusBar from "$lib/components/StatusBar.svelte";
 import TagPanel from "$lib/components/TagPanel.svelte";
 import TrackList from "$lib/components/TrackList.svelte";
@@ -58,6 +59,8 @@ import {
 	buildRekordboxIdSet,
 	buildRekordboxPathIndex,
 } from "$lib/rekordboxMembership";
+import { resolveStartupTab } from "$lib/settings";
+import { appSettings } from "$lib/settings.svelte";
 import type {
 	ActivityLogPayload,
 	ConvertOptions,
@@ -82,7 +85,10 @@ import type {
 /** Rekordbox may start or quit after the initial check; keep the write lock aligned. */
 const REKORDBOX_RUNNING_POLL_MS = 2000;
 
-let activeTab = $state<AppTab>(appSession.activeTab);
+let activeTab = $state<AppTab>(
+	resolveStartupTab(appSettings, appSession.activeTab),
+);
+let settingsOpen = $state(false);
 let tracks = $state<Track[]>([]);
 let trashedTracks = $state<Track[]>([]);
 let selectedTrack = $state<Track | null>(null);
@@ -773,7 +779,8 @@ function dropImportBlocked(): boolean {
 		converting ||
 		exporting ||
 		duplicatePayload != null ||
-		convertDialogOpen
+		convertDialogOpen ||
+		settingsOpen
 	);
 }
 
@@ -1166,6 +1173,10 @@ onMount(() => {
 });
 </script>
 
+{#if settingsOpen}
+  <SettingsDialog {rekordboxStatus} onclose={() => (settingsOpen = false)} />
+{/if}
+
 {#if duplicatePayload}
   <DuplicateTrackDialog payload={duplicatePayload} onchoose={handleDuplicateChoice} />
 {/if}
@@ -1318,6 +1329,19 @@ onMount(() => {
       disabled={loading || scanning || converting || exporting || activeTab !== "rekordbox" || !rekordboxStatus?.dbPath}
     >
       {scanning && scanKind === "rekordbox" ? "インポート中..." : "ライブラリにインポート"}
+    </button>
+    <button
+      type="button"
+      class="btn settings-button"
+      aria-label="設定を開く"
+      aria-haspopup="dialog"
+      title="設定"
+      onclick={() => (settingsOpen = true)}
+    >
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="m9.5 3-.6 2.3-2 .9-2.2-.7-2.5 4.3 1.7 1.6v2.3l-1.7 1.5 2.5 4.3 2.2-.7 2 .9.6 2.3h5l.6-2.3 2-.9 2.2.7 2.5-4.3-1.7-1.5v-2.3l1.7-1.6-2.5-4.3-2.2.7-2-.9-.6-2.3h-5Z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
     </button>
   </header>
 
@@ -1609,6 +1633,22 @@ onMount(() => {
   .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .settings-button {
+    display: grid;
+    place-items: center;
+    padding: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  .settings-button svg {
+    width: 19px;
+    height: 19px;
+    stroke: currentColor;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   .btn.primary {
