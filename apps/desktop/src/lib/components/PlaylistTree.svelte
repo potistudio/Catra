@@ -56,6 +56,11 @@ const KIND_LABEL: Record<PlaylistKind, string> = {
 };
 
 let rows = $derived(playlistTreeRows(nodes, expandedIds));
+let selectedIndex = $derived.by(() => {
+	if (selectedId === null) return 0;
+	const index = rows.findIndex((row) => row.node.id === selectedId);
+	return index < 0 ? -1 : index + 1;
+});
 
 function fail(error: unknown) {
 	onerror?.(error instanceof Error ? error.message : String(error));
@@ -283,7 +288,7 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
     </button>
   </div>
 
-  <ul class="tree-list">
+  <ul class="tree-list" class:has-selection={selectedIndex >= 0} style:--selected-index={selectedIndex}>
     <li>
       <div class="node-row" class:active={selectedId === null} style="padding-left: 0.35rem">
         <span class="twisty-space"></span>
@@ -475,9 +480,36 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
   }
 
   .tree-list {
+    position: relative;
+    isolation: isolate;
     list-style: none;
     margin: 0;
     padding: 0 0.5rem 0.5rem;
+  }
+
+  .tree-list::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    left: 0.5rem;
+    right: 0.5rem;
+    height: 2rem;
+    border-radius: var(--radius-control);
+    background: var(--surface-selected);
+    transform: translateY(calc(var(--selected-index) * 2rem));
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .tree-list.has-selection::before {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .tree-list::before {
+      transition: transform var(--motion-normal) var(--motion-ease);
+    }
   }
 
   .node-row {
@@ -485,17 +517,13 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
     display: flex;
     align-items: center;
     gap: 0.15rem;
-    min-height: 2rem;
+    height: 2rem;
     padding-right: 0.3rem;
     border-radius: var(--radius-control);
   }
 
-  .node-row:hover {
+  .node-row:hover:not(.active) {
     background: var(--surface-hover);
-  }
-
-  .node-row.active {
-    background: var(--surface-selected);
   }
 
   .node-row.drop-into {
