@@ -5,7 +5,7 @@ use crate::library::{
     DuplicateResolver, ExportResult, HealthReport, LibraryState, Track,
 };
 use std::path::Path;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
 pub fn library_list_tracks(state: State<'_, LibraryState>) -> Result<Vec<Track>, String> {
@@ -89,8 +89,13 @@ pub fn library_empty_trash(state: State<'_, LibraryState>) -> Result<u32, String
 }
 
 #[tauri::command]
-pub fn library_check_health(state: State<'_, LibraryState>) -> Result<HealthReport, String> {
-    check_health(&state)
+pub async fn library_check_health(app: AppHandle) -> Result<HealthReport, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<LibraryState>();
+        check_health(&state)
+    })
+    .await
+    .map_err(|error| format!("ライブラリのファイル確認タスクに失敗しました: {error}"))?
 }
 
 #[tauri::command]

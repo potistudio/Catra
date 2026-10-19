@@ -105,6 +105,7 @@ let convertTargets = $state<Track[]>([]);
 let convertDialogOpen = $state(false);
 let converting = $derived(convertProgress != null);
 let exporting = $state(false);
+let checkingHealth = $state(false);
 
 // 分類（集合層と属性層）。ライブラリタブの左側に出る。
 let playlistNodes = $state<PlaylistNode[]>([]);
@@ -934,6 +935,8 @@ async function handleEmptyTrash() {
 }
 
 async function handleHealthCheck() {
+	if (checkingHealth) return;
+	checkingHealth = true;
 	try {
 		const report = await checkLibraryHealth();
 		if (!report.missing && !report.hashMismatch) {
@@ -953,6 +956,8 @@ async function handleHealthCheck() {
 		);
 	} catch (e) {
 		pushActivityLog("error", "健全性チェックに失敗しました", String(e));
+	} finally {
+		checkingHealth = false;
 	}
 }
 
@@ -1396,9 +1401,10 @@ onMount(() => {
             <button
               type="button"
               onclick={handleHealthCheck}
-              disabled={loading || scanning || converting}
+              disabled={loading || scanning || converting || checkingHealth}
+              aria-busy={checkingHealth}
             >
-              健全性チェック
+              {checkingHealth ? "チェック中…" : "健全性チェック"}
             </button>
           {/snippet}
         </TrackList>
