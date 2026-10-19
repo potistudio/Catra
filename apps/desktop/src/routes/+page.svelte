@@ -1331,13 +1331,15 @@ onMount(() => {
       >
         {scanning && scanKind === "folder" ? "スキャン中..." : "Add Folder"}
       </button>
-      <button
-        class="btn primary"
-        onclick={handleImportFromRekordbox}
-        disabled={loading || scanning || converting || exporting || activeTab !== "rekordbox" || !rekordboxStatus?.dbPath}
-      >
-        {scanning && scanKind === "rekordbox" ? "インポート中..." : "ライブラリにインポート"}
-      </button>
+      {#if activeTab === "rekordbox"}
+        <button
+          class="btn primary"
+          onclick={handleImportFromRekordbox}
+          disabled={loading || scanning || converting || exporting || !rekordboxStatus?.dbPath}
+        >
+          {scanning && scanKind === "rekordbox" ? "インポート中..." : "ライブラリにインポート"}
+        </button>
+      {/if}
       <button
         type="button"
         class="btn settings-button"
