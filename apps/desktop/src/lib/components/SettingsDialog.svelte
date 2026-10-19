@@ -12,16 +12,25 @@ import type { RekordboxCheck } from "$lib/types";
 
 interface Props {
 	rekordboxStatus: RekordboxCheck | null;
+	checkingHealth: boolean;
+	healthCheckDisabled: boolean;
+	oncheckhealth: () => Promise<void>;
 	onclose: () => void;
 }
 
-let { rekordboxStatus, onclose }: Props = $props();
+let {
+	rekordboxStatus,
+	checkingHealth,
+	healthCheckDisabled,
+	oncheckhealth,
+	onclose,
+}: Props = $props();
 
 const SECTIONS = [
 	{
 		id: "general",
 		label: "一般",
-		description: "アプリの起動時の動作を設定します。",
+		description: "起動時の動作を設定し、ライブラリを管理します。",
 	},
 	{
 		id: "playback",
@@ -120,6 +129,21 @@ function save(event: SubmitEvent) {
                 {/each}
               </select>
             </label>
+            <div class="setting-row">
+              <div>
+                <span class="setting-title">ライブラリ</span>
+                <span class="hint">ファイルの欠損やハッシュの不一致を確認します。結果はアクティビティログに記録されます。</span>
+              </div>
+              <button
+                type="button"
+                class="health-check-button"
+                onclick={oncheckhealth}
+                disabled={healthCheckDisabled || checkingHealth}
+                aria-busy={checkingHealth}
+              >
+                {checkingHealth ? "チェック中…" : "健全性チェック"}
+              </button>
+            </div>
           </div>
           <p class="note">設定はこの端末に保存され、次回の起動時も引き継がれます。</p>
         {:else if section === "playback"}
@@ -287,8 +311,16 @@ function save(event: SubmitEvent) {
     cursor: pointer;
   }
 
-  button:hover {
+  button:hover:not(:disabled) {
     background: var(--surface-hover);
+  }
+  button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .health-check-button {
+    flex-shrink: 0;
+    white-space: nowrap;
   }
   select {
     max-width: 100%;

@@ -1174,7 +1174,13 @@ onMount(() => {
 </script>
 
 {#if settingsOpen}
-  <SettingsDialog {rekordboxStatus} onclose={() => (settingsOpen = false)} />
+  <SettingsDialog
+    {rekordboxStatus}
+    {checkingHealth}
+    healthCheckDisabled={loading || scanning || converting}
+    oncheckhealth={handleHealthCheck}
+    onclose={() => (settingsOpen = false)}
+  />
 {/if}
 
 {#if duplicatePayload}
@@ -1422,14 +1428,6 @@ onMount(() => {
             {#if narrowIds}
               <button type="button" onclick={clearNarrowing}>絞り込みを外す</button>
             {/if}
-            <button
-              type="button"
-              onclick={handleHealthCheck}
-              disabled={loading || scanning || converting || checkingHealth}
-              aria-busy={checkingHealth}
-            >
-              {checkingHealth ? "チェック中…" : "健全性チェック"}
-            </button>
           {/snippet}
         </TrackList>
       </div>
