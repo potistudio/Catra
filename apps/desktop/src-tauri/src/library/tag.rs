@@ -1,5 +1,5 @@
 //! ユーザー由来のタグを library.db で管理し、ファイルへの書き戻しは行わない。
-//! 軸への所属は任意とする。単一選択軸の排他制約は書き込みトランザクション内で適用する。
+//! グループへの所属は任意とする。単一選択グループの排他制約は書き込みトランザクション内で適用する。
 
 use super::db::LibraryState;
 use super::playlist;
@@ -109,7 +109,7 @@ fn axis_by_id(conn: &Connection, id: i64) -> Result<TagAxis, String> {
         .optional()
         .map_err(err)?;
     let Some((id, name, selection, position)) = row else {
-        return Err(format!("軸が見つかりません: {id}"));
+        return Err(format!("グループが見つかりません: {id}"));
     };
     Ok(TagAxis {
         id,
@@ -185,7 +185,7 @@ pub fn create_axis(
         params![name, selection.as_str(), position, stamp],
     )
     .map_err(|error| match error {
-        rusqlite::Error::SqliteFailure(_, _) => format!("同じ名前の軸があります: {name}"),
+        rusqlite::Error::SqliteFailure(_, _) => format!("同じ名前のグループがあります: {name}"),
         other => other.to_string(),
     })?;
     axis_by_id(&conn, conn.last_insert_rowid())
@@ -218,7 +218,7 @@ pub fn update_axis(
         let conflicts = axis_conflicts(library, id)?;
         if conflicts > 0 {
             return Err(format!(
-                "この軸で2つ以上のタグを持つ曲が {conflicts} 曲あります。先に整理してください"
+                "このグループで2つ以上のタグを持つ曲が {conflicts} 曲あります。先に整理してください"
             ));
         }
     }
@@ -242,8 +242,7 @@ pub fn update_axis(
     axis_by_id(&conn, id)
 }
 
-/// 軸を消すと、その下のタグと割り当ても消える。曲は消えない。
-/// 消えたタグを指していた述語の項は落とす。
+/// グループ削除時は曲を保持し、タグの割り当てと述語の参照を削除する。
 pub fn delete_axis(library: &LibraryState, id: i64) -> Result<u32, String> {
     let mut guard = library.conn().map_err(err)?;
     let tx = guard.transaction().map_err(err)?;
@@ -262,7 +261,7 @@ pub fn delete_axis(library: &LibraryState, id: i64) -> Result<u32, String> {
         .execute("DELETE FROM tag_axes WHERE id = ?1", params![id])
         .map_err(err)?;
     if removed == 0 {
-        return Err(format!("軸が見つかりません: {id}"));
+        return Err(format!("グループが見つかりません: {id}"));
     }
     playlist::prune_dead_refs(&tx, &dead_tags, &[])?;
     tx.commit().map_err(err)?;
@@ -289,7 +288,7 @@ pub fn create_tag(library: &LibraryState, axis_id: Option<i64>, name: &str) -> R
          VALUES (?1, ?2, ?3, ?4, ?4)",
         params![axis_id, name, position, stamp],
     )
-    .map_err(|_| format!("同じ軸に同じ名前のタグがあります: {name}"))?;
+    .map_err(|_| format!("同じグループに同じ名前のタグがあります: {name}"))?;
     tag_by_id(&conn, conn.last_insert_rowid())
 }
 
@@ -301,7 +300,7 @@ pub fn rename_tag(library: &LibraryState, id: i64, name: &str) -> Result<Tag, St
             "UPDATE tags SET name = ?2, updated_at = ?3 WHERE id = ?1",
             params![id, name, now()],
         )
-        .map_err(|_| format!("同じ軸に同じ名前のタグがあります: {name}"))?;
+        .map_err(|_| format!("同じグループに同じ名前のタグがあります: {name}"))?;
     if changed == 0 {
         return Err(format!("タグが見つかりません: {id}"));
     }
@@ -324,7 +323,7 @@ pub fn move_tag(library: &LibraryState, id: i64, axis_id: Option<i64>) -> Result
                 |row| row.get(0),
             ).map_err(err)?;
             if conflicts > 0 {
-                return Err(format!("移動先の単一選択軸でタグが競合する曲が {conflicts} 曲あります。先に整理してください"));
+                return Err(format!("移動先の単一選択グループでタグが競合する曲が {conflicts} 曲あります。先に整理してください"));
             }
         }
     }
@@ -362,8 +361,7 @@ pub fn delete_tag(library: &LibraryState, id: i64) -> Result<(), String> {
     Ok(())
 }
 
-/// タグを付ける。single の軸では、同じ軸の他のタグを同じトランザクションの中で外す。
-/// 「付けたら前のが外れた」が1回の操作として見えるようにする。
+/// 単一選択グループの既存割り当ては、新規割り当てと同じトランザクションで解除する。
 pub fn assign(library: &LibraryState, track_ids: &[i64], tag_ids: &[i64]) -> Result<(), String> {
     if track_ids.is_empty() || tag_ids.is_empty() {
         return Ok(());
@@ -501,8 +499,8 @@ pub fn track_ids(library: &LibraryState, tag_ids: &[i64]) -> Result<Vec<i64>, St
     Ok(rows)
 }
 
-/// 重複解決で負けた側のタグを勝ち側へ引き継ぐ。
-/// single の軸で勝ち側が既にタグを持っていたら、勝ち側のものを残す。
+/// 重複解決時は元トラックのタグを残存トラックへ継承する。
+/// 単一選択グループの競合時は残存トラックの割り当てを優先する。
 pub(super) fn carry_over_tags(
     conn: &Connection,
     from_track_id: i64,

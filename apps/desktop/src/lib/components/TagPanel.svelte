@@ -91,7 +91,7 @@ async function toggleAssign(tag: Tag) {
 		if (stateOf(tag) === "all") {
 			await tagUnassign(ids, [tag.id]);
 		} else {
-			// 単一選択の軸では、同じ軸の別のタグはバックエンド側で外れる。
+			// 単一選択グループの排他制約はバックエンドのトランザクションで適用する。
 			await tagAssign(ids, [tag.id]);
 		}
 		const rows = await tagOfTracks(ids);
@@ -118,7 +118,7 @@ function toggleFilter(tag: Tag) {
 	onfilterchange([...next]);
 }
 
-/** 絞り込みを集合層へ上げる。軸をまたいだ選択は AND で効く。 */
+/** 選択タグの AND 条件をスマートプレイリストとして保存する。 */
 async function promoteFilter() {
 	if (activeTagIds.length === 0) return;
 	const names = activeTagIds
@@ -146,7 +146,7 @@ async function promoteFilter() {
 	}
 }
 
-// ---- 軸とタグの手入れ
+// ---- グループとタグの管理
 
 let promptOpen = $state(false);
 let promptTitle = $state("");
@@ -179,13 +179,13 @@ async function submitPrompt() {
 }
 
 function startCreateAxis() {
-	openPrompt("新しい軸", "", async (name) => {
+	openPrompt("新しいグループ", "", async (name) => {
 		await tagCreateAxis(name, "multi");
 	});
 }
 
 function startRenameAxis(axis: TagAxis) {
-	openPrompt("軸の名前を変更", axis.name, async (name) => {
+	openPrompt("グループの名前を変更", axis.name, async (name) => {
 		await tagUpdateAxis(axis.id, name, null);
 	});
 }
@@ -237,7 +237,7 @@ async function changeSelection(axis: TagAxis, selection: "single" | "multi") {
 			const conflicts = await tagAxisConflicts(axis.id);
 			if (conflicts > 0) {
 				await ask(
-					`${conflicts} 曲がこの軸のタグを2つ以上持っている。単一選択にする前に減らす必要がある。`,
+					`${conflicts} 曲がこのグループのタグを2つ以上持っている。単一選択にする前に減らす必要がある。`,
 					{ title: "単一選択にできない", kind: "warning" },
 				);
 				return;
@@ -252,8 +252,8 @@ async function changeSelection(axis: TagAxis, selection: "single" | "multi") {
 
 async function deleteAxis(axis: TagAxis) {
 	const confirmed = await ask(
-		`軸「${axis.name}」と、その中の ${axis.tags.length} 個のタグを消しますか？曲は消えません。`,
-		{ title: "軸の削除", kind: "warning" },
+		`グループ「${axis.name}」と、その中の ${axis.tags.length} 個のタグを消しますか？曲は消えません。`,
+		{ title: "グループの削除", kind: "warning" },
 	);
 	if (!confirmed) return;
 	try {
@@ -362,7 +362,7 @@ function onBackdropPointerUp(event: PointerEvent) {
         <button
           type="button"
           class="icon-btn tiny"
-          title="タグの軸を変更"
+          title="グループを変更"
           disabled={busy}
           onclick={() => startMoveTag(tag)}
         >
@@ -385,7 +385,7 @@ function onBackdropPointerUp(event: PointerEvent) {
   <div class="panel-head">
     <div class="panel-ops">
       <button type="button" class="side-btn" disabled={busy} onclick={() => startCreateTag(null)}>＋ タグ</button>
-      <button type="button" class="side-btn" disabled={busy} onclick={startCreateAxis}>＋ 軸</button>
+      <button type="button" class="side-btn" disabled={busy} onclick={startCreateAxis}>＋ グループ</button>
     </div>
   </div>
 
@@ -398,7 +398,7 @@ function onBackdropPointerUp(event: PointerEvent) {
   {#if ungroupedTags.length > 0}
     {@render tagChips(ungroupedTags)}
   {:else if axes.length === 0}
-    <p class="lead">「＋ タグ」で軸なしのタグを作成できる</p>
+    <p class="lead">「＋ タグ」でグループなしのタグを作成できる</p>
   {/if}
 
   {#if axes.length > 0}
@@ -411,7 +411,7 @@ function onBackdropPointerUp(event: PointerEvent) {
               class="axis-selection"
               value={axis.selection}
               disabled={busy}
-              title="単一選択の軸は、1曲につき1つしか付かない"
+              title="単一選択のグループは、1曲につき1つしか付かない"
               onchange={(event) =>
                 void changeSelection(axis, event.currentTarget.value as "single" | "multi")}
             >
@@ -431,7 +431,7 @@ function onBackdropPointerUp(event: PointerEvent) {
               <button
                 type="button"
                 class="icon-btn"
-                title="軸の名前を変更"
+                title="グループの名前を変更"
                 disabled={busy}
                 onclick={() => startRenameAxis(axis)}
               >
@@ -440,7 +440,7 @@ function onBackdropPointerUp(event: PointerEvent) {
               <button
                 type="button"
                 class="icon-btn"
-                title="軸を削除"
+                title="グループを削除"
                 disabled={busy}
                 onclick={() => void deleteAxis(axis)}
               >
@@ -510,12 +510,12 @@ function onBackdropPointerUp(event: PointerEvent) {
 
 {#if moveTarget}
   <div class="modal-backdrop" role="presentation">
-    <div class="modal" role="dialog" aria-modal="true" aria-label="タグの軸を変更">
-      <h3>「{moveTarget.name}」の軸を変更</h3>
+    <div class="modal" role="dialog" aria-modal="true" aria-label="グループを変更">
+      <h3>「{moveTarget.name}」のグループを変更</h3>
       <label>
-        軸
+        グループ
         <select bind:value={moveAxisId} disabled={moveSaving}>
-          <option value={null}>軸なし</option>
+          <option value={null}>グループなし</option>
           {#each axes as axis (axis.id)}
             <option value={axis.id}>{axis.name}</option>
           {/each}
