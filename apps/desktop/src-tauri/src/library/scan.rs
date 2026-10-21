@@ -389,29 +389,39 @@ fn empty_metadata(fallback_title: Option<String>) -> FileMetadata {
 }
 
 fn detect_source(tag: &lofty::tag::Tag) -> Option<String> {
+    // 説明文の宣伝リンクより、取得元を記録した URL を優先する。
     let url_keys = [
-        ItemKey::Comment,
-        ItemKey::AudioFileUrl,
         ItemKey::AudioSourceUrl,
+        ItemKey::AudioFileUrl,
+        ItemKey::PodcastUrl,
+        ItemKey::Unknown("purl".to_string()),
+        ItemKey::Unknown("PURL".to_string()),
+        ItemKey::Unknown("URL".to_string()),
+        ItemKey::Unknown("url".to_string()),
+        ItemKey::Unknown("WWW".to_string()),
+        ItemKey::Unknown("www".to_string()),
+        ItemKey::Comment,
+        ItemKey::Unknown("comment".to_string()),
+        ItemKey::Unknown("COMMENT".to_string()),
         ItemKey::PaymentUrl,
         ItemKey::CommercialInformationUrl,
         ItemKey::TrackArtistUrl,
-        ItemKey::Unknown("WWW".to_string()),
-        ItemKey::Unknown("www".to_string()),
-        ItemKey::Unknown("URL".to_string()),
-        ItemKey::Unknown("url".to_string()),
     ];
 
     for key in url_keys {
-        if let Some(value) = tag.get_string(&key) {
-            if let Some(source) = detect_source_from_text(value) {
-                return Some(source.to_string());
+        for item in tag.get_items(&key) {
+            let value = item.value();
+            if let Some(text) = value.text().or_else(|| value.locator()) {
+                if let Some(source) = detect_source_from_text(text) {
+                    return Some(source.to_string());
+                }
             }
         }
     }
 
     for item in tag.items() {
-        if let Some(text) = item.value().text() {
+        let value = item.value();
+        if let Some(text) = value.text().or_else(|| value.locator()) {
             if let Some(source) = detect_source_from_text(text) {
                 return Some(source.to_string());
             }
@@ -555,6 +565,118 @@ mod tests {
         assert!(files.contains(&nested_wav));
         assert!(files.contains(&loose_mp3));
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn source_url_overrides_bandcamp_promotional_descriptions() {
+        use lofty::tag::{ItemValue, Tag, TagItem, TagType};
+
+        let cases = [
+            (
+                "https://soundcloud.com/temenough/hyped-meme-garage",
+                "https://memoryscape.bandcamp.com/album/hyped-garage-02",
+            ),
+            (
+                "https://soundcloud.com/oliveoiler3/dopanica",
+                "Songs can be purchased on Bandcamp. https://funsoundcreate.bandcamp.com/album/lepidos-vol-3",
+            ),
+        ];
+        for (origin, description) in cases {
+            for key in ["purl", "PURL"] {
+                let mut tag = Tag::new(TagType::Id3v2);
+                for key in ["description", "synopsis"] {
+                    tag.insert_unchecked(TagItem::new(
+                        ItemKey::Unknown(key.to_string()),
+                        ItemValue::Text(description.to_string()),
+                    ));
+                }
+                tag.insert_unchecked(TagItem::new(
+                    ItemKey::Unknown(key.to_string()),
+                    ItemValue::Text(origin.to_string()),
+                ));
+                assert_eq!(detect_source(&tag).as_deref(), Some("soundcloud"));
+            }
+        }
+    }
+
+    #[test]
+    fn explicit_source_urls_take_priority_over_comments_and_purchase_links() {
+        use lofty::tag::{ItemValue, Tag, TagItem, TagType};
+
+        for key in [
+            ItemKey::AudioSourceUrl,
+            ItemKey::AudioFileUrl,
+            ItemKey::PodcastUrl,
+        ] {
+            for locator in [false, true] {
+                let mut tag = Tag::new(TagType::Id3v2);
+                tag.insert_text(
+                    ItemKey::Comment,
+                    "https://artist.bandcamp.com/album/promotion".to_string(),
+                );
+                tag.insert_text(
+                    ItemKey::PaymentUrl,
+                    "https://artist.bandcamp.com/track/purchase".to_string(),
+                );
+                let origin = "https://soundcloud.com/artist/track".to_string();
+                let value = if locator {
+                    ItemValue::Locator(origin)
+                } else {
+                    ItemValue::Text(origin)
+                };
+                tag.insert_unchecked(TagItem::new(key.clone(), value));
+                assert_eq!(detect_source(&tag).as_deref(), Some("soundcloud"));
+            }
+        }
+    }
+
+    #[test]
+    fn bandcamp_origin_is_not_overridden_by_soundcloud_promotions() {
+        use lofty::tag::{ItemValue, Tag, TagItem, TagType};
+
+        let mut tag = Tag::new(TagType::Id3v2);
+        tag.insert_text(
+            ItemKey::Comment,
+            "Listen at https://soundcloud.com/artist/preview".to_string(),
+        );
+        tag.insert_unchecked(TagItem::new(
+            ItemKey::Unknown("purl".to_string()),
+            ItemValue::Text("https://artist.bandcamp.com/track/purchased".to_string()),
+        ));
+        assert_eq!(detect_source(&tag).as_deref(), Some("bandcamp"));
+    }
+
+    #[test]
+    fn source_detection_checks_all_values_of_a_url_key() {
+        use lofty::tag::{ItemValue, Tag, TagItem, TagType};
+
+        let mut tag = Tag::new(TagType::Id3v2);
+        for url in [
+            "https://example.com/track",
+            "https://soundcloud.com/artist/track",
+        ] {
+            tag.push_unchecked(TagItem::new(
+                ItemKey::AudioSourceUrl,
+                ItemValue::Locator(url.to_string()),
+            ));
+        }
+        assert_eq!(detect_source(&tag).as_deref(), Some("soundcloud"));
+    }
+
+    #[test]
+    fn source_detection_preserves_fallbacks_when_no_origin_url_is_available() {
+        use lofty::tag::{ItemValue, Tag, TagItem, TagType};
+
+        let mut tag = Tag::new(TagType::Id3v2);
+        assert_eq!(detect_source(&tag), None);
+        tag.insert_text(ItemKey::Comment, "https://youtu.be/video".to_string());
+        assert_eq!(detect_source(&tag).as_deref(), Some("youtube"));
+        tag.remove_key(&ItemKey::Comment);
+        tag.insert_unchecked(TagItem::new(
+            ItemKey::Description,
+            ItemValue::Text("Visit https://artist.bandcamp.com/track/song".to_string()),
+        ));
+        assert_eq!(detect_source(&tag).as_deref(), Some("bandcamp"));
     }
 
     #[test]
