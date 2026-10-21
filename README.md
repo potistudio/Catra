@@ -24,6 +24,14 @@ pnpm check        # Svelte の型チェック
 pnpm lint         # Biome によるリント
 ```
 
+Tauri CLI はプロジェクトルートから実行できる。サブコマンドとオプションは `apps/desktop` の CLI に転送される。
+
+```bash
+pnpm tauri dev
+pnpm tauri build
+pnpm tauri --help
+```
+
 Chrome 拡張機能は `chrome://extensions` から `apps/chrome/` を「パッケージ化されていない拡張機能を読み込む」で読み込む。
 
 ## ライセンス

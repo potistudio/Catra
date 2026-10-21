@@ -2,6 +2,7 @@
 	"name": "catra",
 	"private": true,
 	"scripts": {
+		"tauri": "pnpm --dir apps/desktop tauri",
 		"dev": "pnpm --dir apps/desktop tauri dev",
 		"build": "pnpm --dir apps/desktop tauri build",
 		"check": "pnpm --dir apps/desktop check",
