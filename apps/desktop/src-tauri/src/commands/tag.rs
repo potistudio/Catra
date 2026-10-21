@@ -1,13 +1,27 @@
 use crate::library::{
     assign_tags, axis_conflicts, create_axis, create_tag, delete_axis, delete_tag, list_axes,
-    rename_tag, tagged_track_ids, tags_of_tracks, unassign_tags, update_axis, LibraryState, Tag,
-    TagAxis, TagSelection, Track, TrackTags,
+    list_ungrouped, move_tag, rename_tag, tagged_track_ids, tags_of_tracks, unassign_tags,
+    update_axis, LibraryState, Tag, TagAxis, TagSelection, Track, TrackTags,
 };
 use tauri::State;
 
 #[tauri::command]
 pub fn tag_list_axes(state: State<'_, LibraryState>) -> Result<Vec<TagAxis>, String> {
     list_axes(&state)
+}
+
+#[tauri::command]
+pub fn tag_list_ungrouped(state: State<'_, LibraryState>) -> Result<Vec<Tag>, String> {
+    list_ungrouped(&state)
+}
+
+#[tauri::command]
+pub fn tag_move(
+    state: State<'_, LibraryState>,
+    id: i64,
+    axis_id: Option<i64>,
+) -> Result<Tag, String> {
+    move_tag(&state, id, axis_id)
 }
 
 #[tauri::command]
@@ -43,7 +57,7 @@ pub fn tag_delete_axis(state: State<'_, LibraryState>, id: i64) -> Result<u32, S
 #[tauri::command]
 pub fn tag_create(
     state: State<'_, LibraryState>,
-    axis_id: i64,
+    axis_id: Option<i64>,
     name: String,
 ) -> Result<Tag, String> {
     create_tag(&state, axis_id, &name)

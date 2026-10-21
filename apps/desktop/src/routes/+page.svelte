@@ -35,6 +35,7 @@ import {
 	restoreTracks,
 	scanFolder,
 	tagListAxes,
+	tagListUngrouped,
 } from "$lib/api";
 import {
 	type AppTab,
@@ -79,6 +80,7 @@ import type {
 	RekordboxContent,
 	ScanProgress,
 	ScanResult,
+	Tag,
 	TagAxis,
 	Track,
 } from "$lib/types";
@@ -118,6 +120,7 @@ let checkingHealth = $state(false);
 // 分類（集合層と属性層）。ライブラリタブの左側に出る。
 let playlistNodes = $state<PlaylistNode[]>([]);
 let tagAxes = $state<TagAxis[]>([]);
+let ungroupedTags = $state<Tag[]>([]);
 let browseMode = $state<BrowseMode>(appSession.library.browseMode);
 let selectedPlaylistId = $state<number | null>(
 	appSession.library.selectedPlaylistId,
@@ -282,12 +285,14 @@ async function loadTrashed(silent = true) {
 
 async function loadClassification(silent = true) {
 	try {
-		const [nodes, axes] = await Promise.all([
+		const [nodes, axes, tags] = await Promise.all([
 			playlistListTree(),
 			tagListAxes(),
+			tagListUngrouped(),
 		]);
 		playlistNodes = nodes;
 		tagAxes = axes;
+		ungroupedTags = tags;
 		if (selectedPlaylistId != null) {
 			if (nodes.some((node) => node.id === selectedPlaylistId)) {
 				expandAncestorsOf(selectedPlaylistId);
@@ -1370,6 +1375,7 @@ onMount(() => {
             <PlaylistTree
               nodes={playlistNodes}
               axes={tagAxes}
+              {ungroupedTags}
               selectedId={selectedPlaylistId}
               expandedIds={expandedPlaylistIds}
               busy={classifyBusy}
@@ -1383,6 +1389,7 @@ onMount(() => {
           {#snippet tags()}
             <TagPanel
               axes={tagAxes}
+              {ungroupedTags}
               selectedTracks={tagTargets}
               {activeTagIds}
               busy={classifyBusy}

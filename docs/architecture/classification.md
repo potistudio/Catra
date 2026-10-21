@@ -56,7 +56,7 @@ Catra が曲を分類する仕組みを定める。Rekordbox の `djmdPlaylist` 
 
 - **フォルダは合併である。** フォルダを選ぶと、子孫の集合に入っている曲がすべて見える（重複は1回だけ）。単なる入れ物にしない。合併に手動順はないため、既定の並びはライブラリと同じ（アーティスト → タイトル）とする。
 - **タグの軸は、軸ごとに単一選択か複数選択かを持つ。** 「テンション」は 低/中/高 のどれか1つ（単一選択）、「テーマ」はメロディックかつ攻撃的がありうる（複数選択）。両方が要る。
-- **タグの階層は「軸 > タグ」の2層固定、継承なし。** 深い入れ子は「泣き を付けたら メロディック も付いたことになるのか」という継承の問題を生む。多階層が要るのは集合層だけで足りる。
+- **タグは軸なしで作成でき、軸への所属は任意とする。** 分類や単一選択の制約が必要な場合だけ軸へまとめる。階層は「軸 > タグ」までとし、継承は行わない。
 - **Rekordbox の My Tag には寄せない。** 軸の設計は Catra の都合だけで決める。相互運用も将来の含みも持たせない。
 - **同じ曲を同じ静的プレイリストに何度でも入れられる。** 静的プレイリストは集合ではなく列である。DJ Mix でアカペラを2回落とす、ツール曲を使い回す、終盤でリプライズする、はすべて正当な列である。スマートプレイリストとフォルダは集合なので重複は起きない（フォルダの合併は畳む）。
 - **階層の深さに上限は設けない。** 禁止するのは循環だけである。
@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS tag_axes (
 
 CREATE TABLE IF NOT EXISTS tags (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    axis_id    INTEGER NOT NULL REFERENCES tag_axes(id) ON DELETE CASCADE,
+    axis_id    INTEGER REFERENCES tag_axes(id) ON DELETE CASCADE,
     name       TEXT    NOT NULL,
     position   INTEGER NOT NULL,
     created_at INTEGER NOT NULL,
@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS tags (
     UNIQUE(axis_id, name)
 );
 CREATE INDEX IF NOT EXISTS idx_tags_axis ON tags(axis_id, position);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_ungrouped_name ON tags(name) WHERE axis_id IS NULL;
 
 CREATE TABLE IF NOT EXISTS track_tags (
     track_id    INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
@@ -128,6 +129,8 @@ CREATE TABLE IF NOT EXISTS track_tags (
 );
 CREATE INDEX IF NOT EXISTS idx_track_tags_tag ON track_tags(tag_id);
 ```
+
+`axis_id` が NULL のタグは軸なしとし、同じ曲に複数付与できる。軸なしタグの名前は軸なしタグ全体で一意とする。既存 DB はタグ ID、割り当て、スマートプレイリストの参照を維持して移行する。
 
 単一選択の軸は SQLite の宣言では表せない。書き込み経路で守る。単一選択の軸のタグを付けるとき、同じ軸の他のタグを同一トランザクション内で外す。
 
@@ -219,7 +222,8 @@ CREATE INDEX IF NOT EXISTS idx_track_tags_tag ON track_tags(tag_id);
 |---|---|
 | 軸の作成・改名・削除 | 名前は全体で一意。削除は配下のタグと割り当てごと消す。件数を示して確認する。 |
 | 軸の選択方式の変更 | 複数選択 → 単一選択にするとき、既に複数付いている曲がある。件数を示し、どれを残すか（最後に付けたもの／中止）を選ばせる。 |
-| タグの作成・改名・削除 | 名前は軸の中で一意。改名は1箇所の更新で、参照している曲はすべて追従する。 |
+| タグの作成・改名・削除 | 軸は任意。名前は同じ軸内、軸なしの場合は軸なしタグ全体で一意。改名は参照先の曲にも反映する。 |
+| タグの分類変更 | 軸への移動・別の軸への移動・軸なしへの変更を許可する。ID、曲への割り当て、述語の参照を維持する。同名タグがある移動先や、同じ曲が移動先の単一選択軸の別タグを持つ場合は変更を拒否する。 |
 | 曲への割り当て | 複数トラック × 複数タグをまとめて受ける。単一選択の軸なら、同じ軸の既存タグを同一トランザクションで外す。 |
 | 曲からの解除 | 複数トラック × 複数タグをまとめて受ける。 |
 
@@ -257,10 +261,12 @@ playlist_remove_tracks(playlistId, trackIds)          -> u32       // その曲�
 playlist_reorder_entries(playlistId, entryIds)        -> ()
 
 tag_list_axes()                                       -> Vec<TagAxis>   // タグを含む
+tag_list_ungrouped()                                  -> Vec<Tag>
 tag_create_axis(name, selection)                      -> TagAxis
 tag_update_axis(id, name?, selection?)                -> TagAxis
 tag_delete_axis(id)                                   -> u32
-tag_create(axisId, name)                              -> Tag
+tag_create(axisId?, name)                             -> Tag
+tag_move(id, axisId?)                                 -> Tag
 tag_rename(id, name)                                  -> Tag
 tag_delete(id)                                        -> u32
 tag_assign(trackIds, tagIds)                          -> u32
@@ -309,7 +315,7 @@ export interface TagAxis {
 
 export interface Tag {
   id: number;
-  axisId: number;
+  axisId: number | null;
   name: string;
   position: number;
   trackCount: number;
@@ -357,6 +363,8 @@ library: {
 
 ### タグ
 
+- 「＋ タグ」は軸なしタグを作成する。軸なしタグは軸ごとのタグの前に表示し、付与・解除・絞り込み・スマートプレイリストの条件選択に対応する。
+- タグの「軸を変更」操作で所属先を選択する。「軸なし」への変更も可能とする。
 - 曲を選んだときの詳細に、軸ごとのタグを出す。単一選択の軸はラジオ、複数選択の軸はトグル。
 - 複数曲を選んで一括で付け外しできる。3曲中2曲に付いている状態は中間表示にする。
 - タグでの絞り込みは、軸を並べて値をクリックする形にする。複数軸を選んだら AND で効く。

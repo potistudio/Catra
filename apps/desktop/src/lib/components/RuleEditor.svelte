@@ -7,6 +7,7 @@ import type {
 	RuleField,
 	RuleOp,
 	SortRule,
+	Tag,
 	TagAxis,
 } from "$lib/types";
 
@@ -14,12 +15,14 @@ interface Props {
 	node: PlaylistNode;
 	nodes: PlaylistNode[];
 	axes: TagAxis[];
+	ungroupedTags: Tag[];
 	onclose: () => void;
 	onsaved: () => void;
 	onerror?: (message: string) => void;
 }
 
-let { node, nodes, axes, onclose, onsaved, onerror }: Props = $props();
+let { node, nodes, axes, ungroupedTags, onclose, onsaved, onerror }: Props =
+	$props();
 
 type FieldType = "text" | "number" | "bool";
 
@@ -352,6 +355,9 @@ function onBackdropPointerUp(event: PointerEvent) {
       <span class="term-kind">タグ</span>
       <select class="wide" bind:value={draft.tagId}>
         <option value={null}>選択してください</option>
+        {#each ungroupedTags as tag (tag.id)}
+          <option value={tag.id}>{tag.name}</option>
+        {/each}
         {#each axes as axis (axis.id)}
           <optgroup label={axis.name}>
             {#each axis.tags as tag (tag.id)}

@@ -9,6 +9,7 @@ import {
 	tagCreateAxis,
 	tagDelete,
 	tagDeleteAxis,
+	tagMove,
 	tagOfTracks,
 	tagRename,
 	tagUnassign,
@@ -20,6 +21,7 @@ import type { Rule, Tag, TagAxis, Track } from "$lib/types";
 
 interface Props {
 	axes: TagAxis[];
+	ungroupedTags: Tag[];
 	/** いまチェックが入っている曲。ここへの付け外しは一括で効く。 */
 	selectedTracks: Track[];
 	activeTagIds: number[];
@@ -31,6 +33,7 @@ interface Props {
 
 let {
 	axes,
+	ungroupedTags,
 	selectedTracks,
 	activeTagIds,
 	busy = false,
@@ -81,7 +84,7 @@ function stateOf(tag: Tag): TagState {
 	return count === selectedTracks.length ? "all" : "some";
 }
 
-async function toggleAssign(axis: TagAxis, tag: Tag) {
+async function toggleAssign(tag: Tag) {
 	if (selectedTracks.length === 0) return;
 	const ids = selectedTracks.map((track) => track.id);
 	try {
@@ -121,7 +124,9 @@ async function promoteFilter() {
 	const names = activeTagIds
 		.map(
 			(id) =>
-				axes.flatMap((axis) => axis.tags).find((tag) => tag.id === id)?.name,
+				[...ungroupedTags, ...axes.flatMap((axis) => axis.tags)].find(
+					(tag) => tag.id === id,
+				)?.name,
 		)
 		.filter((name): name is string => !!name);
 	try {
@@ -185,10 +190,37 @@ function startRenameAxis(axis: TagAxis) {
 	});
 }
 
-function startCreateTag(axis: TagAxis) {
-	openPrompt(`${axis.name} に新しいタグ`, "", async (name) => {
-		await tagCreate(axis.id, name);
-	});
+function startCreateTag(axis: TagAxis | null) {
+	openPrompt(
+		axis ? `${axis.name} に新しいタグ` : "新しいタグ",
+		"",
+		async (name) => {
+			await tagCreate(axis?.id ?? null, name);
+		},
+	);
+}
+
+let moveTarget = $state<Tag | null>(null);
+let moveAxisId = $state<number | null>(null);
+let moveSaving = $state(false);
+
+function startMoveTag(tag: Tag) {
+	moveTarget = tag;
+	moveAxisId = tag.axisId;
+}
+
+async function submitMove() {
+	if (!moveTarget || moveSaving) return;
+	moveSaving = true;
+	try {
+		await tagMove(moveTarget.id, moveAxisId);
+		moveTarget = null;
+		await onchanged();
+	} catch (error) {
+		fail(error);
+	} finally {
+		moveSaving = false;
+	}
 }
 
 function startRenameTag(tag: Tag) {
@@ -291,9 +323,70 @@ function onBackdropPointerUp(event: PointerEvent) {
 }
 </script>
 
+{#snippet tagChips(tags: Tag[])}
+  <div class="tags">
+    {#each tags as tag (tag.id)}
+      <div
+        class="tag-chip"
+        class:active={activeSet.has(tag.id)}
+        class:assigned={selectedTracks.length > 0 && stateOf(tag) === "all"}
+        class:partial={selectedTracks.length > 0 && stateOf(tag) === "some"}
+        class:drop={dropTagId === tag.id}
+        role="presentation"
+        ondragover={(event) => handleTagDragOver(tag, event)}
+        ondragleave={() => (dropTagId = null)}
+        ondrop={(event) => void handleTagDrop(tag, event)}
+      >
+        <button
+          type="button"
+          class="tag-btn"
+          onclick={() =>
+            selectedTracks.length > 0 ? void toggleAssign(tag) : toggleFilter(tag)}
+        >
+          {#if selectedTracks.length > 0}
+            <span class="mark">
+              {stateOf(tag) === "all" ? "●" : stateOf(tag) === "some" ? "◐" : "○"}
+            </span>
+          {/if}
+          <span class="tag-name">{tag.name}</span>
+          <span class="tag-count">{tag.trackCount}</span>
+        </button>
+        <button
+          type="button"
+          class="icon-btn tiny"
+          title="タグの名前を変更"
+          onclick={() => startRenameTag(tag)}
+        >
+          ✎
+        </button>
+        <button
+          type="button"
+          class="icon-btn tiny"
+          title="タグの軸を変更"
+          disabled={busy}
+          onclick={() => startMoveTag(tag)}
+        >
+          ↪
+        </button>
+        <button
+          type="button"
+          class="icon-btn tiny"
+          title="タグを削除"
+          onclick={() => void deleteTag(tag)}
+        >
+          ✕
+        </button>
+      </div>
+    {/each}
+  </div>
+{/snippet}
+
 <div class="tag-panel">
   <div class="panel-head">
-    <button type="button" class="side-btn" disabled={busy} onclick={startCreateAxis}>＋ 軸</button>
+    <div class="panel-ops">
+      <button type="button" class="side-btn" disabled={busy} onclick={() => startCreateTag(null)}>＋ タグ</button>
+      <button type="button" class="side-btn" disabled={busy} onclick={startCreateAxis}>＋ 軸</button>
+    </div>
   </div>
 
   {#if selectedTracks.length > 0}
@@ -302,9 +395,13 @@ function onBackdropPointerUp(event: PointerEvent) {
     <p class="lead">クリックで絞り込み。曲を選ぶと付け外しになる</p>
   {/if}
 
-  {#if axes.length === 0}
-    <p class="lead">軸がありません</p>
-  {:else}
+  {#if ungroupedTags.length > 0}
+    {@render tagChips(ungroupedTags)}
+  {:else if axes.length === 0}
+    <p class="lead">「＋ タグ」で軸なしのタグを作成できる</p>
+  {/if}
+
+  {#if axes.length > 0}
     <div class="axes">
       {#each axes as axis (axis.id)}
         <div class="axis">
@@ -355,52 +452,7 @@ function onBackdropPointerUp(event: PointerEvent) {
           {#if axis.tags.length === 0}
             <p class="axis-empty">タグがありません</p>
           {:else}
-            <div class="tags">
-              {#each axis.tags as tag (tag.id)}
-                <div
-                  class="tag-chip"
-                  class:active={activeSet.has(tag.id)}
-                  class:assigned={selectedTracks.length > 0 && stateOf(tag) === "all"}
-                  class:partial={selectedTracks.length > 0 && stateOf(tag) === "some"}
-                  class:drop={dropTagId === tag.id}
-                  role="presentation"
-                  ondragover={(event) => handleTagDragOver(tag, event)}
-                  ondragleave={() => (dropTagId = null)}
-                  ondrop={(event) => void handleTagDrop(tag, event)}
-                >
-                  <button
-                    type="button"
-                    class="tag-btn"
-                    onclick={() =>
-                      selectedTracks.length > 0 ? void toggleAssign(axis, tag) : toggleFilter(tag)}
-                  >
-                    {#if selectedTracks.length > 0}
-                      <span class="mark">
-                        {stateOf(tag) === "all" ? "●" : stateOf(tag) === "some" ? "◐" : "○"}
-                      </span>
-                    {/if}
-                    <span class="tag-name">{tag.name}</span>
-                    <span class="tag-count">{tag.trackCount}</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="icon-btn tiny"
-                    title="タグの名前を変更"
-                    onclick={() => startRenameTag(tag)}
-                  >
-                    ✎
-                  </button>
-                  <button
-                    type="button"
-                    class="icon-btn tiny"
-                    title="タグを削除"
-                    onclick={() => void deleteTag(tag)}
-                  >
-                    ✕
-                  </button>
-                </div>
-              {/each}
-            </div>
+            {@render tagChips(axis.tags)}
           {/if}
         </div>
       {/each}
@@ -456,6 +508,31 @@ function onBackdropPointerUp(event: PointerEvent) {
   </div>
 {/if}
 
+{#if moveTarget}
+  <div class="modal-backdrop" role="presentation">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="タグの軸を変更">
+      <h3>「{moveTarget.name}」の軸を変更</h3>
+      <label>
+        軸
+        <select bind:value={moveAxisId} disabled={moveSaving}>
+          <option value={null}>軸なし</option>
+          {#each axes as axis (axis.id)}
+            <option value={axis.id}>{axis.name}</option>
+          {/each}
+        </select>
+      </label>
+      <div class="modal-actions">
+        <button type="button" class="side-btn" disabled={moveSaving} onclick={() => (moveTarget = null)}>
+          キャンセル
+        </button>
+        <button type="button" class="side-btn primary" disabled={moveSaving} onclick={() => void submitMove()}>
+          決定
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   .tag-panel {
     display: flex;
@@ -469,6 +546,11 @@ function onBackdropPointerUp(event: PointerEvent) {
     align-items: center;
     justify-content: flex-end;
     gap: 0.4rem;
+  }
+
+  .panel-ops {
+    display: flex;
+    gap: 0.25rem;
   }
 
   .lead {
@@ -676,7 +758,8 @@ function onBackdropPointerUp(event: PointerEvent) {
     color: var(--text-muted);
   }
 
-  .modal input {
+  .modal input,
+  .modal select {
     padding: 0.4rem 0.5rem;
     border: 1px solid var(--border);
     border-radius: 6px;

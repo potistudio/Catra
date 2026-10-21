@@ -306,6 +306,14 @@ export async function tagListAxes(): Promise<TagAxis[]> {
 	return invoke<TagAxis[]>("tag_list_axes");
 }
 
+export async function tagListUngrouped(): Promise<Tag[]> {
+	return invoke<Tag[]>("tag_list_ungrouped");
+}
+
+export async function tagMove(id: number, axisId: number | null): Promise<Tag> {
+	return invoke<Tag>("tag_move", { id, axisId });
+}
+
 export async function tagCreateAxis(
 	name: string,
 	selection: TagSelection,
@@ -330,7 +338,10 @@ export async function tagDeleteAxis(id: number): Promise<number> {
 	return invoke<number>("tag_delete_axis", { id });
 }
 
-export async function tagCreate(axisId: number, name: string): Promise<Tag> {
+export async function tagCreate(
+	axisId: number | null,
+	name: string,
+): Promise<Tag> {
 	return invoke<Tag>("tag_create", { axisId, name });
 }
 

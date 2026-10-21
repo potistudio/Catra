@@ -338,7 +338,7 @@ export type TagSelection = "single" | "multi";
 
 export interface Tag {
 	id: number;
-	axisId: number;
+	axisId: number | null;
 	name: string;
 	position: number;
 	trackCount: number;

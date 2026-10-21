@@ -1,8 +1,5 @@
-//! ユーザー由来の属性、つまりタグ。
-//!
-//! タグはファイルに書き戻さない。だから再取り込みで上書きされない（不変条件3）。
-//! 階層は「軸 > タグ」の2段で固定で、継承はない。軸が `single` なら、
-//! 1曲がその軸で持てるタグは1つだけ。この排他は書き込みのトランザクションの中で守る。
+//! ユーザー由来のタグを library.db で管理し、ファイルへの書き戻しは行わない。
+//! 軸への所属は任意とする。単一選択軸の排他制約は書き込みトランザクション内で適用する。
 
 use super::db::LibraryState;
 use super::playlist;
@@ -36,7 +33,7 @@ impl TagSelection {
 #[serde(rename_all = "camelCase")]
 pub struct Tag {
     pub id: i64,
-    pub axis_id: i64,
+    pub axis_id: Option<i64>,
     pub name: String,
     pub position: i64,
     /// このタグが付いている曲の数。ゴミ箱の中は数えない。
@@ -76,14 +73,14 @@ fn normalize_name(name: &str) -> Result<String, String> {
     Ok(trimmed.to_string())
 }
 
-fn tags_of_axis(conn: &Connection, axis_id: i64) -> Result<Vec<Tag>, String> {
+fn tags_of_axis(conn: &Connection, axis_id: Option<i64>) -> Result<Vec<Tag>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT g.id, g.axis_id, g.name, g.position,
                     (SELECT COUNT(*) FROM track_tags tt
                      JOIN tracks t ON t.id = tt.track_id
                      WHERE tt.tag_id = g.id AND t.trashed_at IS NULL)
-             FROM tags g WHERE g.axis_id = ?1 ORDER BY g.position, g.id",
+             FROM tags g WHERE g.axis_id IS ?1 ORDER BY g.position, g.id",
         )
         .map_err(err)?;
     let tags = stmt
@@ -119,7 +116,7 @@ fn axis_by_id(conn: &Connection, id: i64) -> Result<TagAxis, String> {
         name,
         selection: TagSelection::parse(&selection),
         position,
-        tags: tags_of_axis(conn, id)?,
+        tags: tags_of_axis(conn, Some(id))?,
     })
 }
 
@@ -160,6 +157,11 @@ pub fn list_axes(library: &LibraryState) -> Result<Vec<TagAxis>, String> {
         ids
     };
     ids.into_iter().map(|id| axis_by_id(&conn, id)).collect()
+}
+
+pub fn list_ungrouped(library: &LibraryState) -> Result<Vec<Tag>, String> {
+    let conn = library.conn().map_err(err)?;
+    tags_of_axis(&conn, None)
 }
 
 pub fn create_axis(
@@ -267,25 +269,16 @@ pub fn delete_axis(library: &LibraryState, id: i64) -> Result<u32, String> {
     Ok(dead_tags.len() as u32)
 }
 
-pub fn create_tag(library: &LibraryState, axis_id: i64, name: &str) -> Result<Tag, String> {
+pub fn create_tag(library: &LibraryState, axis_id: Option<i64>, name: &str) -> Result<Tag, String> {
     let name = normalize_name(name)?;
     let conn = library.conn().map_err(err)?;
-    let axis_exists: bool = conn
-        .query_row(
-            "SELECT 1 FROM tag_axes WHERE id = ?1",
-            params![axis_id],
-            |_| Ok(true),
-        )
-        .optional()
-        .map_err(err)?
-        .unwrap_or(false);
-    if !axis_exists {
-        return Err(format!("軸が見つかりません: {axis_id}"));
+    if let Some(axis_id) = axis_id {
+        axis_by_id(&conn, axis_id)?;
     }
 
     let position: i64 = conn
         .query_row(
-            "SELECT COALESCE(MAX(position) + 1, 0) FROM tags WHERE axis_id = ?1",
+            "SELECT COALESCE(MAX(position) + 1, 0) FROM tags WHERE axis_id IS ?1",
             params![axis_id],
             |row| row.get(0),
         )
@@ -315,6 +308,46 @@ pub fn rename_tag(library: &LibraryState, id: i64, name: &str) -> Result<Tag, St
     tag_by_id(&conn, id)
 }
 
+pub fn move_tag(library: &LibraryState, id: i64, axis_id: Option<i64>) -> Result<Tag, String> {
+    let mut conn = library.conn().map_err(err)?;
+    let tx = conn.transaction().map_err(err)?;
+    let tag = tag_by_id(&tx, id)?;
+    if let Some(axis_id) = axis_id {
+        let axis = axis_by_id(&tx, axis_id)?;
+        if axis.selection == TagSelection::Single {
+            let conflicts: u32 = tx.query_row(
+                "SELECT COUNT(DISTINCT own.track_id) FROM track_tags own
+                 JOIN track_tags other ON other.track_id = own.track_id AND other.tag_id != own.tag_id
+                 JOIN tags g ON g.id = other.tag_id
+                 WHERE own.tag_id = ?1 AND g.axis_id = ?2",
+                params![id, axis_id],
+                |row| row.get(0),
+            ).map_err(err)?;
+            if conflicts > 0 {
+                return Err(format!("移動先の単一選択軸でタグが競合する曲が {conflicts} 曲あります。先に整理してください"));
+            }
+        }
+    }
+    if tag.axis_id == axis_id {
+        return Ok(tag);
+    }
+    let position: i64 = tx
+        .query_row(
+            "SELECT COALESCE(MAX(position) + 1, 0) FROM tags WHERE axis_id IS ?1",
+            params![axis_id],
+            |row| row.get(0),
+        )
+        .map_err(err)?;
+    tx.execute(
+        "UPDATE tags SET axis_id = ?2, position = ?3, updated_at = ?4 WHERE id = ?1",
+        params![id, axis_id, position, now()],
+    )
+    .map_err(|_| "移動先に同じ名前のタグがあります".to_string())?;
+    let moved = tag_by_id(&tx, id)?;
+    tx.commit().map_err(err)?;
+    Ok(moved)
+}
+
 pub fn delete_tag(library: &LibraryState, id: i64) -> Result<(), String> {
     let mut guard = library.conn().map_err(err)?;
     let tx = guard.transaction().map_err(err)?;
@@ -340,9 +373,9 @@ pub fn assign(library: &LibraryState, track_ids: &[i64], tag_ids: &[i64]) -> Res
     let stamp = now();
 
     for tag_id in tag_ids {
-        let axis: Option<(i64, String)> = tx
+        let axis: Option<(Option<i64>, String)> = tx
             .query_row(
-                "SELECT a.id, a.selection FROM tags g JOIN tag_axes a ON a.id = g.axis_id
+                "SELECT g.axis_id, COALESCE(a.selection, 'multi') FROM tags g LEFT JOIN tag_axes a ON a.id = g.axis_id
                  WHERE g.id = ?1",
                 params![tag_id],
                 |row| Ok((row.get(0)?, row.get(1)?)),
@@ -353,7 +386,9 @@ pub fn assign(library: &LibraryState, track_ids: &[i64], tag_ids: &[i64]) -> Res
             return Err(format!("タグが見つかりません: {tag_id}"));
         };
 
-        if TagSelection::parse(&selection) == TagSelection::Single {
+        if let Some(axis_id) =
+            axis_id.filter(|_| TagSelection::parse(&selection) == TagSelection::Single)
+        {
             let placeholders = vec!["?"; track_ids.len()].join(", ");
             let mut values: Vec<i64> = vec![axis_id];
             values.extend_from_slice(track_ids);
@@ -478,9 +513,9 @@ pub(super) fn carry_over_tags(
          SELECT ?2, tt.tag_id, tt.assigned_at
          FROM track_tags tt
          JOIN tags g ON g.id = tt.tag_id
-         JOIN tag_axes a ON a.id = g.axis_id
+         LEFT JOIN tag_axes a ON a.id = g.axis_id
          WHERE tt.track_id = ?1
-           AND (a.selection != 'single'
+           AND (a.selection IS NULL OR a.selection != 'single'
                 OR NOT EXISTS (
                     SELECT 1 FROM track_tags won
                     JOIN tags won_tag ON won_tag.id = won.tag_id
@@ -551,8 +586,8 @@ mod tests {
     fn filtering_by_several_tags_keeps_only_tracks_that_hold_all_of_them() {
         let library = temp_library();
         let axis = create_axis(&library, "テーマ", TagSelection::Multi).unwrap();
-        let warm = create_tag(&library, axis.id, "暖").unwrap();
-        let night = create_tag(&library, axis.id, "夜").unwrap();
+        let warm = create_tag(&library, Some(axis.id), "暖").unwrap();
+        let night = create_tag(&library, Some(axis.id), "夜").unwrap();
         let both = insert_track(&library, "Both");
         let one = insert_track(&library, "One");
 
@@ -570,8 +605,8 @@ mod tests {
     fn a_single_axis_holds_only_one_tag_per_track() {
         let library = temp_library();
         let axis = create_axis(&library, "テンション", TagSelection::Single).unwrap();
-        let low = create_tag(&library, axis.id, "静").unwrap();
-        let high = create_tag(&library, axis.id, "動").unwrap();
+        let low = create_tag(&library, Some(axis.id), "静").unwrap();
+        let high = create_tag(&library, Some(axis.id), "動").unwrap();
         let song = insert_track(&library, "Song");
 
         assign(&library, &[song], &[low.id]).unwrap();
@@ -585,8 +620,8 @@ mod tests {
     fn a_multi_axis_stacks_tags() {
         let library = temp_library();
         let axis = create_axis(&library, "テーマ", TagSelection::Multi).unwrap();
-        let a = create_tag(&library, axis.id, "夏").unwrap();
-        let b = create_tag(&library, axis.id, "夜").unwrap();
+        let a = create_tag(&library, Some(axis.id), "夏").unwrap();
+        let b = create_tag(&library, Some(axis.id), "夜").unwrap();
         let song = insert_track(&library, "Song");
 
         assign(&library, &[song], &[a.id, b.id]).unwrap();
@@ -598,8 +633,8 @@ mod tests {
     fn switching_to_single_is_blocked_while_a_track_holds_two() {
         let library = temp_library();
         let axis = create_axis(&library, "テーマ", TagSelection::Multi).unwrap();
-        let a = create_tag(&library, axis.id, "夏").unwrap();
-        let b = create_tag(&library, axis.id, "夜").unwrap();
+        let a = create_tag(&library, Some(axis.id), "夏").unwrap();
+        let b = create_tag(&library, Some(axis.id), "夜").unwrap();
         let song = insert_track(&library, "Song");
         assign(&library, &[song], &[a.id, b.id]).unwrap();
 
@@ -614,7 +649,7 @@ mod tests {
     fn deleting_an_axis_takes_its_tags_but_not_the_songs() {
         let library = temp_library();
         let axis = create_axis(&library, "テーマ", TagSelection::Multi).unwrap();
-        let tag = create_tag(&library, axis.id, "夏").unwrap();
+        let tag = create_tag(&library, Some(axis.id), "夏").unwrap();
         let song = insert_track(&library, "Song");
         assign(&library, &[song], &[tag.id]).unwrap();
 
@@ -628,8 +663,8 @@ mod tests {
     fn the_winner_keeps_its_own_tag_on_a_single_axis() {
         let library = temp_library();
         let axis = create_axis(&library, "テンション", TagSelection::Single).unwrap();
-        let low = create_tag(&library, axis.id, "静").unwrap();
-        let high = create_tag(&library, axis.id, "動").unwrap();
+        let low = create_tag(&library, Some(axis.id), "静").unwrap();
+        let high = create_tag(&library, Some(axis.id), "動").unwrap();
         let old = insert_track(&library, "Old");
         let new = insert_track(&library, "New");
         assign(&library, &[old], &[low.id]).unwrap();
@@ -647,8 +682,8 @@ mod tests {
     fn carry_over_hands_tags_to_a_bare_winner() {
         let library = temp_library();
         let axis = create_axis(&library, "テーマ", TagSelection::Multi).unwrap();
-        let a = create_tag(&library, axis.id, "夏").unwrap();
-        let b = create_tag(&library, axis.id, "夜").unwrap();
+        let a = create_tag(&library, Some(axis.id), "夏").unwrap();
+        let b = create_tag(&library, Some(axis.id), "夜").unwrap();
         let old = insert_track(&library, "Old");
         let new = insert_track(&library, "New");
         assign(&library, &[old], &[a.id, b.id]).unwrap();
@@ -661,10 +696,136 @@ mod tests {
     }
 
     #[test]
+    fn ungrouped_tags_can_be_created_assigned_filtered_and_removed() {
+        let library = temp_library();
+        let warm = create_tag(&library, None, " 暖 ").unwrap();
+        let night = create_tag(&library, None, "夜").unwrap();
+        assert_eq!(warm.name, "暖");
+        assert_eq!(warm.axis_id, None);
+        assert!(list_axes(&library).unwrap().is_empty());
+        assert_eq!(list_ungrouped(&library).unwrap().len(), 2);
+        let both = insert_track(&library, "Both");
+        let one = insert_track(&library, "One");
+        assign(&library, &[both], &[warm.id, night.id]).unwrap();
+        assign(&library, &[one], &[warm.id]).unwrap();
+        assert_eq!(
+            track_ids(&library, &[warm.id, night.id]).unwrap(),
+            vec![both]
+        );
+        assert_eq!(list_ungrouped(&library).unwrap()[0].track_count, 2);
+        assert_eq!(unassign(&library, &[both], &[night.id]).unwrap(), 1);
+        assert_eq!(
+            of_tracks(&library, &[both]).unwrap()[0].tag_ids,
+            vec![warm.id]
+        );
+        delete_tag(&library, warm.id).unwrap();
+        assert!(of_tracks(&library, &[both, one])
+            .unwrap()
+            .iter()
+            .all(|row| row.tag_ids.is_empty()));
+        assert_eq!(list_ungrouped(&library).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn ungrouped_names_are_unique_and_invalid_moves_leave_tags_unchanged() {
+        let library = temp_library();
+        assert!(create_tag(&library, None, "  ").is_err());
+        assert!(create_tag(&library, Some(-1), "不正").is_err());
+        let summer = create_tag(&library, None, "夏").unwrap();
+        let night = create_tag(&library, None, "夜").unwrap();
+        assert!(create_tag(&library, None, " 夏 ").is_err());
+        assert!(rename_tag(&library, night.id, "夏").is_err());
+        let axis = create_axis(&library, "テーマ", TagSelection::Multi).unwrap();
+        let grouped = create_tag(&library, Some(axis.id), "夏").unwrap();
+        assert!(move_tag(&library, grouped.id, None).is_err());
+        assert!(move_tag(&library, summer.id, Some(axis.id)).is_err());
+        assert!(move_tag(&library, summer.id, Some(-1)).is_err());
+        assert!(move_tag(&library, -1, None).is_err());
+        let conn = library.conn().unwrap();
+        assert_eq!(tag_by_id(&conn, grouped.id).unwrap().axis_id, Some(axis.id));
+        assert_eq!(tag_by_id(&conn, summer.id).unwrap().axis_id, None);
+        assert_eq!(tag_by_id(&conn, night.id).unwrap().name, "夜");
+    }
+
+    #[test]
+    fn moving_tags_preserves_assignments_and_smart_playlist_rules() {
+        let library = temp_library();
+        let tag = create_tag(&library, None, "夏").unwrap();
+        let song = insert_track(&library, "Song");
+        assign(&library, &[song], &[tag.id]).unwrap();
+        let smart =
+            playlist::create(&library, "夏の曲", None, playlist::PlaylistKind::Smart).unwrap();
+        playlist::set_rule(
+            &library,
+            smart.id,
+            Some(serde_json::json!({"tag": tag.id})),
+            None,
+        )
+        .unwrap();
+        let axis = create_axis(&library, "テーマ", TagSelection::Single).unwrap();
+        assert_eq!(
+            move_tag(&library, tag.id, Some(axis.id)).unwrap().axis_id,
+            Some(axis.id)
+        );
+        assert!(list_ungrouped(&library).unwrap().is_empty());
+        assert_eq!(list_axes(&library).unwrap()[0].tags[0].id, tag.id);
+        assert_eq!(move_tag(&library, tag.id, None).unwrap().id, tag.id);
+        assert_eq!(
+            of_tracks(&library, &[song]).unwrap()[0].tag_ids,
+            vec![tag.id]
+        );
+        assert_eq!(
+            playlist::entries(&library, smart.id).unwrap()[0].track.id,
+            song
+        );
+        delete_axis(&library, axis.id).unwrap();
+        assert_eq!(list_ungrouped(&library).unwrap()[0].track_count, 1);
+    }
+
+    #[test]
+    fn moving_into_a_single_axis_rejects_conflicts_without_removing_assignments() {
+        let library = temp_library();
+        let axis = create_axis(&library, "テンション", TagSelection::Single).unwrap();
+        let low = create_tag(&library, Some(axis.id), "静").unwrap();
+        let high = create_tag(&library, None, "動").unwrap();
+        let song = insert_track(&library, "Song");
+        assign(&library, &[song], &[low.id, high.id]).unwrap();
+        assert!(move_tag(&library, high.id, Some(axis.id)).is_err());
+        assert_eq!(of_tracks(&library, &[song]).unwrap()[0].tag_ids.len(), 2);
+        assert_eq!(list_ungrouped(&library).unwrap()[0].id, high.id);
+        unassign(&library, &[song], &[low.id]).unwrap();
+        move_tag(&library, high.id, Some(axis.id)).unwrap();
+        assign(&library, &[song], &[low.id]).unwrap();
+        assert_eq!(
+            of_tracks(&library, &[song]).unwrap()[0].tag_ids,
+            vec![low.id]
+        );
+    }
+
+    #[test]
+    fn duplicate_resolution_carries_ungrouped_tags_alongside_single_axis_tags() {
+        let library = temp_library();
+        let axis = create_axis(&library, "テンション", TagSelection::Single).unwrap();
+        let low = create_tag(&library, Some(axis.id), "静").unwrap();
+        let high = create_tag(&library, Some(axis.id), "動").unwrap();
+        let warm = create_tag(&library, None, "暖").unwrap();
+        let night = create_tag(&library, None, "夜").unwrap();
+        let old = insert_track(&library, "Old");
+        let new = insert_track(&library, "New");
+        assign(&library, &[old], &[low.id, warm.id, night.id]).unwrap();
+        assign(&library, &[new], &[high.id]).unwrap();
+        carry_over_tags(&library.conn().unwrap(), old, new).unwrap();
+        assert_eq!(
+            of_tracks(&library, &[new]).unwrap()[0].tag_ids,
+            vec![high.id, warm.id, night.id]
+        );
+    }
+
+    #[test]
     fn tag_counts_ignore_the_trash() {
         let library = temp_library();
         let axis = create_axis(&library, "テーマ", TagSelection::Multi).unwrap();
-        let tag = create_tag(&library, axis.id, "夏").unwrap();
+        let tag = create_tag(&library, Some(axis.id), "夏").unwrap();
         let song = insert_track(&library, "Song");
         assign(&library, &[song], &[tag.id]).unwrap();
         assert_eq!(list_axes(&library).unwrap()[0].tags[0].track_count, 1);

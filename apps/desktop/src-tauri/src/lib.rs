@@ -21,8 +21,8 @@ use commands::{
     rekordbox_delete_playlist, rekordbox_get_content, rekordbox_get_playlist_content,
     rekordbox_list_playlists, rekordbox_move_song_in_playlist, rekordbox_remove_from_playlist,
     rekordbox_rename_playlist, rekordbox_update_content, tag_assign, tag_axis_conflicts,
-    tag_create, tag_create_axis, tag_delete, tag_delete_axis, tag_list_axes, tag_of_tracks,
-    tag_rename, tag_unassign, tag_update_axis,
+    tag_create, tag_create_axis, tag_delete, tag_delete_axis, tag_list_axes, tag_list_ungrouped,
+    tag_move, tag_of_tracks, tag_rename, tag_unassign, tag_update_axis,
 };
 use extension_server::start as start_extension_server;
 use library::{check_health_with, init_library, HealthDepth, LibraryState};
@@ -71,6 +71,8 @@ pub fn run() {
             playlist_remove_tracks,
             playlist_reorder_entries,
             tag_list_axes,
+            tag_list_ungrouped,
+            tag_move,
             tag_create_axis,
             tag_update_axis,
             tag_axis_conflicts,

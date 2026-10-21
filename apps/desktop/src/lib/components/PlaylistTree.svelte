@@ -11,11 +11,12 @@ import RuleEditor from "$lib/components/RuleEditor.svelte";
 import { fadeMotion, revealMotion } from "$lib/motion";
 import { canDropInto, playlistTreeRows } from "$lib/playlistTree";
 import { hasTrackDrag, readTrackDrag } from "$lib/trackDrag";
-import type { PlaylistKind, PlaylistNode, TagAxis } from "$lib/types";
+import type { PlaylistKind, PlaylistNode, Tag, TagAxis } from "$lib/types";
 
 interface Props {
 	nodes: PlaylistNode[];
 	axes: TagAxis[];
+	ungroupedTags: Tag[];
 	selectedId: number | null;
 	expandedIds: number[];
 	busy?: boolean;
@@ -33,6 +34,7 @@ interface Props {
 let {
 	nodes,
 	axes,
+	ungroupedTags,
 	selectedId,
 	expandedIds,
 	busy = false,
@@ -424,6 +426,7 @@ function onBackdropPointerUp(event: PointerEvent, close: () => void) {
     node={ruleTarget}
     {nodes}
     {axes}
+    {ungroupedTags}
     onclose={() => (ruleTarget = null)}
     onsaved={() => {
       ruleTarget = null;

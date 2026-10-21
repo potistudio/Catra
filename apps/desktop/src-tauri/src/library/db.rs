@@ -116,7 +116,7 @@ const CLASSIFICATION_SCHEMA: &str = "
 
     CREATE TABLE IF NOT EXISTS tags (
         id         INTEGER PRIMARY KEY AUTOINCREMENT,
-        axis_id    INTEGER NOT NULL REFERENCES tag_axes(id) ON DELETE CASCADE,
+        axis_id    INTEGER REFERENCES tag_axes(id) ON DELETE CASCADE,
         name       TEXT    NOT NULL,
         position   INTEGER NOT NULL,
         created_at INTEGER NOT NULL,
@@ -124,6 +124,7 @@ const CLASSIFICATION_SCHEMA: &str = "
         UNIQUE(axis_id, name)
     );
     CREATE INDEX IF NOT EXISTS idx_tags_axis ON tags(axis_id, position);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_ungrouped_name ON tags(name) WHERE axis_id IS NULL;
 
     CREATE TABLE IF NOT EXISTS track_tags (
         track_id    INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
@@ -601,7 +602,172 @@ fn migrate(conn: &Connection) -> Result<(), rusqlite::Error> {
     )
     .ok();
 
+    migrate_optional_tag_axes(conn)?;
     Ok(())
+}
+
+fn migrate_optional_tag_axes(conn: &Connection) -> rusqlite::Result<()> {
+    let required: bool = conn.query_row(
+        "SELECT \"notnull\" FROM pragma_table_info('tags') WHERE name = 'axis_id'",
+        [],
+        |row| row.get(0),
+    )?;
+    if !required {
+        return Ok(());
+    }
+
+    // tags の再作成中に track_tags のカスケード削除を実行しない。
+    conn.pragma_update(None, "foreign_keys", false)?;
+    let result = (|| {
+        let tx = conn.unchecked_transaction()?;
+        let sequence: i64 = tx.query_row(
+            "SELECT COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'tags'), 0)",
+            [],
+            |row| row.get(0),
+        )?;
+        tx.execute_batch(
+            "CREATE TABLE tags_optional (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                axis_id    INTEGER REFERENCES tag_axes(id) ON DELETE CASCADE,
+                name       TEXT NOT NULL,
+                position   INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                UNIQUE(axis_id, name)
+            );
+            INSERT INTO tags_optional SELECT * FROM tags;
+            DROP TABLE tags;
+            ALTER TABLE tags_optional RENAME TO tags;
+            CREATE INDEX idx_tags_axis ON tags(axis_id, position);
+            CREATE UNIQUE INDEX idx_tags_ungrouped_name ON tags(name) WHERE axis_id IS NULL;",
+        )?;
+        tx.execute(
+            "UPDATE sqlite_sequence SET seq = MAX(seq, ?1) WHERE name = 'tags'",
+            params![sequence],
+        )?;
+        if tx.prepare("PRAGMA foreign_key_check")?.exists([])? {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+        tx.commit()
+    })();
+    let restored = conn.pragma_update(None, "foreign_keys", true);
+    result.and(restored)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn legacy_classification() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "PRAGMA foreign_keys = ON; CREATE TABLE tracks (id INTEGER PRIMARY KEY);",
+        )
+        .unwrap();
+        conn.execute_batch(&CLASSIFICATION_SCHEMA.replace(
+            "axis_id    INTEGER REFERENCES",
+            "axis_id    INTEGER NOT NULL REFERENCES",
+        ))
+        .unwrap();
+        conn.execute_batch(
+            "INSERT INTO tracks VALUES (1);
+             INSERT INTO tag_axes VALUES (1, 'テーマ', 'multi', 0, 1, 1);
+             INSERT INTO tags VALUES (1, 1, '夏', 0, 2, 3);
+             INSERT INTO tags VALUES (90, 1, '削除済み', 1, 2, 3);
+             DELETE FROM tags WHERE id = 90;
+             INSERT INTO track_tags VALUES (1, 1, 4);
+             INSERT INTO playlists VALUES (1, NULL, 'smart', '夏の曲', 0, '{\"tag\":1}', NULL, 1, 1);",
+        ).unwrap();
+        conn
+    }
+
+    #[test]
+    fn optional_tag_axis_migration_preserves_ids_assignments_rules_and_cascades() {
+        let conn = legacy_classification();
+        migrate_optional_tag_axes(&conn).unwrap();
+        migrate_optional_tag_axes(&conn).unwrap();
+        let tag: (i64, i64, String, i64, i64, i64) = conn
+            .query_row("SELECT * FROM tags WHERE id = 1", [], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            })
+            .unwrap();
+        assert_eq!(tag, (1, 1, "夏".into(), 0, 2, 3));
+        let assigned: i64 = conn
+            .query_row(
+                "SELECT assigned_at FROM track_tags WHERE tag_id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(assigned, 4);
+        let rule: String = conn
+            .query_row("SELECT rule FROM playlists WHERE id = 1", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(rule, "{\"tag\":1}");
+        conn.execute("INSERT INTO tags (axis_id, name, position, created_at, updated_at) VALUES (NULL, '夜', 0, 1, 1)", []).unwrap();
+        assert!(conn.last_insert_rowid() > 90);
+        let loose = conn.last_insert_rowid();
+        conn.execute("INSERT INTO track_tags VALUES (1, ?1, 5)", params![loose])
+            .unwrap();
+        conn.execute("DELETE FROM tag_axes WHERE id = 1", [])
+            .unwrap();
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM track_tags", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        conn.execute("DELETE FROM tracks WHERE id = 1", []).unwrap();
+        assert!(!conn
+            .prepare("SELECT 1 FROM track_tags")
+            .unwrap()
+            .exists([])
+            .unwrap());
+        assert!(!conn
+            .prepare("PRAGMA foreign_key_check")
+            .unwrap()
+            .exists([])
+            .unwrap());
+    }
+
+    #[test]
+    fn failed_tag_axis_migration_rolls_back_and_restores_foreign_keys() {
+        let conn = legacy_classification();
+        conn.execute_batch("PRAGMA foreign_keys = OFF; INSERT INTO track_tags VALUES (1, 99, 1); PRAGMA foreign_keys = ON;").unwrap();
+        assert!(migrate_optional_tag_axes(&conn).is_err());
+        let required: bool = conn
+            .query_row(
+                "SELECT \"notnull\" FROM pragma_table_info('tags') WHERE name = 'axis_id'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(required);
+        let enforced: bool = conn
+            .pragma_query_value(None, "foreign_keys", |row| row.get(0))
+            .unwrap();
+        assert!(enforced);
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM track_tags", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            2
+        );
+        assert!(!conn
+            .prepare("SELECT 1 FROM sqlite_master WHERE name = 'tags_optional'")
+            .unwrap()
+            .exists([])
+            .unwrap());
+    }
 }
 
 pub fn init_library(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
