@@ -128,7 +128,12 @@ fn import_from_rekordbox(
                 }
             ))
         };
-        emit_activity_log(app, "warning", format!("ファイル未検出: {missing} 曲"), sample);
+        emit_activity_log(
+            app,
+            "warning",
+            format!("ファイル未検出: {missing} 曲"),
+            sample,
+        );
     }
 
     Ok(ScanResult { added, skipped })
@@ -177,9 +182,7 @@ fn resolve_content_path(content: &RekordboxContent) -> Option<PathBuf> {
             if base.is_dir() {
                 let joined = base.join(file_name);
                 if joined.is_file() {
-                    return Some(PathBuf::from(normalize_fs_path(
-                        &joined.to_string_lossy(),
-                    )));
+                    return Some(PathBuf::from(normalize_fs_path(&joined.to_string_lossy())));
                 }
             }
         }

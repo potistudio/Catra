@@ -147,9 +147,7 @@ impl ProgressTracker {
             if line.contains("[ExtractAudio]") {
                 state.message = Some("音声を変換中...".to_string());
             } else if let (Some(current), Some(total)) = (state.current, state.total) {
-                state.message = Some(format!(
-                    "{current}/{total} 曲 ({percent:.0}%)"
-                ));
+                state.message = Some(format!("{current}/{total} 曲 ({percent:.0}%)"));
             } else {
                 state.message = Some(format!("ダウンロード中 {percent:.0}%"));
             }
@@ -260,7 +258,11 @@ impl ProgressTracker {
                 current: None,
                 total: None,
                 queue_position: Some(position + 1),
-                message: Some(format!("待機中 ({}/{})", position + 1, state.queued_urls.len())),
+                message: Some(format!(
+                    "待機中 ({}/{})",
+                    position + 1,
+                    state.queued_urls.len()
+                )),
             };
         }
 
@@ -738,10 +740,7 @@ fn import_downloaded_path(app: &AppHandle, path: &Path) -> Result<(), String> {
         },
         Some(path.to_string_lossy().to_string()),
     );
-    let _ = app.emit(
-        "library-updated",
-        path.to_string_lossy().to_string(),
-    );
+    let _ = app.emit("library-updated", path.to_string_lossy().to_string());
     Ok(())
 }
 
@@ -750,15 +749,19 @@ fn process_track_download(app: &AppHandle, url: &str) {
     emit_activity_log(app, "info", format!("ダウンロードを開始: {url}"), None);
 
     match download_track(app, url).and_then(|path| {
-        import_downloaded_path(app, &path).map_err(|error| {
-            format!("インポートに失敗しました: {error}")
-        })
+        import_downloaded_path(app, &path)
+            .map_err(|error| format!("インポートに失敗しました: {error}"))
     }) {
         Ok(()) => {
             ProgressTracker::global().finish_job(app, url, true, None);
         }
         Err(error) => {
-            emit_activity_log(app, "error", "ダウンロードに失敗しました", Some(error.clone()));
+            emit_activity_log(
+                app,
+                "error",
+                "ダウンロードに失敗しました",
+                Some(error.clone()),
+            );
             let _ = app.emit("download-error", error.clone());
             ProgressTracker::global().finish_job(app, url, false, Some(error));
         }
@@ -777,7 +780,12 @@ fn process_playlist_download(app: &AppHandle, url: &str) {
     let paths = match download_playlist(app, url) {
         Ok(paths) => paths,
         Err(error) => {
-            emit_activity_log(app, "error", "プレイリストのダウンロードに失敗しました", Some(error.clone()));
+            emit_activity_log(
+                app,
+                "error",
+                "プレイリストのダウンロードに失敗しました",
+                Some(error.clone()),
+            );
             let _ = app.emit("download-error", error.clone());
             ProgressTracker::global().finish_job(app, url, false, Some(error));
             return;
@@ -809,7 +817,10 @@ fn process_playlist_download(app: &AppHandle, url: &str) {
                 emit_activity_log(
                     app,
                     "error",
-                    format!("インポートに失敗: {}", path.file_name().unwrap_or_default().to_string_lossy()),
+                    format!(
+                        "インポートに失敗: {}",
+                        path.file_name().unwrap_or_default().to_string_lossy()
+                    ),
                     Some(error),
                 );
             }

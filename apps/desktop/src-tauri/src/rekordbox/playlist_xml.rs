@@ -50,7 +50,9 @@ impl MasterPlaylistXml {
     #[allow(dead_code)]
     pub fn get(&self, playlist_id: &str) -> Option<&PlaylistXmlNode> {
         let hex_id = to_hex_id(playlist_id)?;
-        self.nodes.iter().find(|node| node.id.eq_ignore_ascii_case(&hex_id))
+        self.nodes
+            .iter()
+            .find(|node| node.id.eq_ignore_ascii_case(&hex_id))
     }
 
     pub fn add(
@@ -67,7 +69,9 @@ impl MasterPlaylistXml {
             .iter()
             .any(|node| node.id.eq_ignore_ascii_case(&hex_id))
         {
-            return Err(format!("playlist {playlist_id} already exists in masterPlaylists6.xml"));
+            return Err(format!(
+                "playlist {playlist_id} already exists in masterPlaylists6.xml"
+            ));
         }
         let parent_hex = parent_to_hex(parent_id)?;
         self.nodes.push(PlaylistXmlNode {
@@ -269,7 +273,9 @@ fn rebuild_xml(raw: &str, nodes: &[PlaylistXmlNode]) -> Result<String, String> {
                     for node in nodes {
                         write_node(&mut writer, node)?;
                     }
-                } else if !(in_playlists && skipping_old_nodes && element.name().as_ref() == b"NODE")
+                } else if !(in_playlists
+                    && skipping_old_nodes
+                    && element.name().as_ref() == b"NODE")
                 {
                     writer
                         .write_event(Event::Start(element.clone()))

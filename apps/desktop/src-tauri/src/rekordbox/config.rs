@@ -29,7 +29,9 @@ pub fn load_config() -> Result<RekordboxConfig, String> {
         version: install.as_ref().map(|info| info.version.clone()),
         install_dir: install.map(|info| info.path),
         app_dir: Some(rb_app_dir),
-        db_dir: db_path.as_ref().and_then(|path| path.parent().map(Path::to_path_buf)),
+        db_dir: db_path
+            .as_ref()
+            .and_then(|path| path.parent().map(Path::to_path_buf)),
         db_path: db_path.clone(),
         analysis_root: options.analysis_root,
         settings_root: options.settings_root,
@@ -49,12 +51,16 @@ struct InstallInfo {
 }
 
 fn pioneer_app_dir() -> Result<PathBuf, String> {
-    let data_dir = dirs::data_dir().ok_or_else(|| "could not resolve app data directory".to_string())?;
+    let data_dir =
+        dirs::data_dir().ok_or_else(|| "could not resolve app data directory".to_string())?;
     let path = data_dir.join("Pioneer");
     if path.is_dir() {
         Ok(path)
     } else {
-        Err(format!("Pioneer app data directory not found: {}", path.display()))
+        Err(format!(
+            "Pioneer app data directory not found: {}",
+            path.display()
+        ))
     }
 }
 

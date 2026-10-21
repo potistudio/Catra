@@ -113,11 +113,7 @@ fn collect_with_children(
     Ok(set.into_iter().collect())
 }
 
-fn collect_ids(
-    library: &LibraryState,
-    id: i64,
-    set: &mut HashSet<i64>,
-) -> Result<(), String> {
+fn collect_ids(library: &LibraryState, id: i64, set: &mut HashSet<i64>) -> Result<(), String> {
     if !set.insert(id) {
         return Ok(());
     }
@@ -169,11 +165,7 @@ fn relocate_track_dir(
     fs::rename(&from, &to).map_err(|error| error.to_string())
 }
 
-fn relink_folder_path(
-    library: &LibraryState,
-    id: i64,
-    relative: &str,
-) -> Result<(), String> {
+fn relink_folder_path(library: &LibraryState, id: i64, relative: &str) -> Result<(), String> {
     let Some(track) = library.get_track(id).map_err(|error| error.to_string())? else {
         return Ok(());
     };
@@ -201,10 +193,7 @@ fn is_missing_content_error(error: &str) -> bool {
     error.starts_with("content ") && error.ends_with(" was not found")
 }
 
-fn ensure_rekordbox_writable_if_linked(
-    library: &LibraryState,
-    ids: &[i64],
-) -> Result<(), String> {
+fn ensure_rekordbox_writable_if_linked(library: &LibraryState, ids: &[i64]) -> Result<(), String> {
     let mut linked = false;
     for id in ids {
         if let Some(track) = library.get_track(*id).map_err(|error| error.to_string())? {
@@ -309,8 +298,18 @@ mod tests {
         let parent = insert_file(&library, "source.wav", None);
         let child = insert_file(&library, "source.mp3", Some(parent));
         trash_tracks(&library, &[parent]).unwrap();
-        assert!(library.get_track(parent).unwrap().unwrap().trashed_at.is_some());
-        assert!(library.get_track(child).unwrap().unwrap().trashed_at.is_some());
+        assert!(library
+            .get_track(parent)
+            .unwrap()
+            .unwrap()
+            .trashed_at
+            .is_some());
+        assert!(library
+            .get_track(child)
+            .unwrap()
+            .unwrap()
+            .trashed_at
+            .is_some());
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -319,22 +318,30 @@ mod tests {
         let (library, root) = temp_library();
         let first = insert_file(&library, "song.wav", None);
         let second = insert_file(&library, "song.mp3", None);
-        library
-            .set_format_group_id(first, Some("group"))
-            .unwrap();
-        library
-            .set_format_group_id(second, Some("group"))
-            .unwrap();
+        library.set_format_group_id(first, Some("group")).unwrap();
+        library.set_format_group_id(second, Some("group")).unwrap();
         trash_tracks(&library, &[first]).unwrap();
-        assert!(library.get_track(first).unwrap().unwrap().trashed_at.is_some());
-        assert!(library.get_track(second).unwrap().unwrap().trashed_at.is_none());
+        assert!(library
+            .get_track(first)
+            .unwrap()
+            .unwrap()
+            .trashed_at
+            .is_some());
+        assert!(library
+            .get_track(second)
+            .unwrap()
+            .unwrap()
+            .trashed_at
+            .is_none());
         let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
     fn missing_content_error_does_not_match_other_not_found() {
         assert!(is_missing_content_error("content 58253138 was not found"));
-        assert!(!is_missing_content_error("Rekordbox master.db was not found"));
+        assert!(!is_missing_content_error(
+            "Rekordbox master.db was not found"
+        ));
         assert!(!is_missing_content_error("file not found: C:\\x"));
         assert!(!is_missing_content_error("playlist 1 was not found"));
     }

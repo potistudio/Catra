@@ -93,7 +93,9 @@ impl ConvertOptions {
                 .bitrate_kbps
                 .unwrap_or_else(|| self.format.default_bitrate());
             if !LOSSY_BITRATES.contains(&bitrate) {
-                return Err("ビットレートは 128 / 192 / 256 / 320 kbps を指定してください".to_string());
+                return Err(
+                    "ビットレートは 128 / 192 / 256 / 320 kbps を指定してください".to_string(),
+                );
             }
             Ok(Self {
                 bitrate_kbps: Some(bitrate),
@@ -176,12 +178,7 @@ pub fn start_convert_tracks(
                 let _ = app.emit("library-updated", ());
             }
             Err(error) => {
-                emit_activity_log(
-                    &app,
-                    "error",
-                    "変換に失敗しました",
-                    Some(error.clone()),
-                );
+                emit_activity_log(&app, "error", "変換に失敗しました", Some(error.clone()));
                 let _ = app.emit("library-convert-error", error);
             }
         }
@@ -219,12 +216,7 @@ fn convert_tracks(
         add_to_rekordbox = false;
     }
 
-    emit_activity_log(
-        app,
-        "info",
-        format!("{total} 曲を変換します"),
-        None,
-    );
+    emit_activity_log(app, "info", format!("{total} 曲を変換します"), None);
 
     for (index, id) in ids.iter().enumerate() {
         let processed = (index + 1) as u32;
@@ -272,25 +264,11 @@ fn convert_tracks(
         );
 
         match convert_one(
-            app,
-            &library,
-            &track,
-            &source,
-            &options,
-            processed,
-            total,
-            converted,
-            skipped,
-            failed,
+            app, &library, &track, &source, &options, processed, total, converted, skipped, failed,
         ) {
             Ok(ConvertOutcome::Converted { output, id }) => {
                 converted += 1;
-                emit_activity_log(
-                    app,
-                    "success",
-                    format!("変換完了: {current_name}"),
-                    None,
-                );
+                emit_activity_log(app, "success", format!("変換完了: {current_name}"), None);
                 let _ = app.emit("library-updated", ());
                 if add_to_rekordbox {
                     match crate::rekordbox::add_content(
@@ -333,12 +311,7 @@ fn convert_tracks(
             }
             Ok(ConvertOutcome::Skipped) => {
                 skipped += 1;
-                emit_activity_log(
-                    app,
-                    "info",
-                    format!("スキップ: {current_name}"),
-                    None,
-                );
+                emit_activity_log(app, "info", format!("スキップ: {current_name}"), None);
             }
             Err(error) => {
                 failed += 1;
@@ -450,12 +423,7 @@ fn convert_one(
         return Err(error);
     }
 
-    match ingest_converted(
-        library,
-        track,
-        &output,
-        chrono::Utc::now().timestamp(),
-    ) {
+    match ingest_converted(library, track, &output, chrono::Utc::now().timestamp()) {
         Ok(inserted) => {
             let _ = std::fs::remove_dir_all(&incoming_dir);
             Ok(ConvertOutcome::Converted {
@@ -590,9 +558,9 @@ fn read_ffmpeg_progress(
         }
         last_emit = Instant::now();
 
-        let percent = duration_ms.filter(|&duration| duration > 0).map(|duration| {
-            (out_ms as f64 / duration as f64 * 100.0).clamp(0.0, 100.0)
-        });
+        let percent = duration_ms
+            .filter(|&duration| duration > 0)
+            .map(|duration| (out_ms as f64 / duration as f64 * 100.0).clamp(0.0, 100.0));
         let _ = app.emit(
             "library-convert-progress",
             ConvertProgress {
@@ -796,7 +764,9 @@ mod tests {
     fn converted_output_uses_stem_and_parent_id() {
         let root = temp_dir();
         let library = LibraryState::new(root.clone()).unwrap();
-        let incoming = library.incoming_dir().join(uuid::Uuid::new_v4().to_string());
+        let incoming = library
+            .incoming_dir()
+            .join(uuid::Uuid::new_v4().to_string());
         fs::create_dir_all(&incoming).unwrap();
         let source_file = incoming.join("song title.flac");
         fs::write(&source_file, b"src").unwrap();
@@ -826,10 +796,15 @@ mod tests {
         let dest = library.absolute_path(&library_prefix(parent_id));
         fs::rename(&incoming, &dest).unwrap();
         library
-            .update_location(parent_id, &format!("{}/song title.flac", library_prefix(parent_id)))
+            .update_location(
+                parent_id,
+                &format!("{}/song title.flac", library_prefix(parent_id)),
+            )
             .unwrap();
 
-        let output_dir = library.incoming_dir().join(uuid::Uuid::new_v4().to_string());
+        let output_dir = library
+            .incoming_dir()
+            .join(uuid::Uuid::new_v4().to_string());
         fs::create_dir_all(&output_dir).unwrap();
         let filename = converted_filename(Path::new("song title.flac"), "mp3");
         let output = output_dir.join(&filename);

@@ -190,7 +190,10 @@ mod tests {
 
     #[test]
     fn sanitize_replaces_illegal_windows_chars() {
-        assert_eq!(sanitize_filename("a<b>c:d\"e/f\\g|h?i*.mp3"), "a_b_c_d_e_f_g_h_i_.mp3");
+        assert_eq!(
+            sanitize_filename("a<b>c:d\"e/f\\g|h?i*.mp3"),
+            "a_b_c_d_e_f_g_h_i_.mp3"
+        );
     }
 
     #[test]
@@ -215,10 +218,7 @@ mod tests {
         let relative = "library/9/track name.wav";
         let trashed = swap_location_prefix(relative, "library", "trash");
         assert_eq!(trashed, "trash/9/track name.wav");
-        assert_eq!(
-            swap_location_prefix(&trashed, "trash", "library"),
-            relative
-        );
+        assert_eq!(swap_location_prefix(&trashed, "trash", "library"), relative);
     }
 
     #[test]

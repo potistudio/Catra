@@ -4,8 +4,8 @@ use crate::download::{
     get_download_progress, normalize_download_url,
 };
 use serde::Deserialize;
-use tiny_http::{Header, Method, Response, Server, StatusCode};
 use tauri::AppHandle;
+use tiny_http::{Header, Method, Response, Server, StatusCode};
 
 pub const PORT: u16 = 17340;
 
@@ -36,9 +36,10 @@ fn decode_query_value(value: &str) -> String {
     while index < bytes.len() {
         match bytes[index] {
             b'%' if index + 2 < bytes.len() => {
-                if let Ok(byte) =
-                    u8::from_str_radix(std::str::from_utf8(&bytes[index + 1..index + 3]).unwrap_or(""), 16)
-                {
+                if let Ok(byte) = u8::from_str_radix(
+                    std::str::from_utf8(&bytes[index + 1..index + 3]).unwrap_or(""),
+                    16,
+                ) {
                     decoded.push(byte);
                     index += 3;
                     continue;

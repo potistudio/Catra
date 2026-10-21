@@ -14,7 +14,9 @@ use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager};
 use walkdir::WalkDir;
 
-const AUDIO_EXTENSIONS: &[&str] = &["mp3", "flac", "wav", "aiff", "aif", "m4a", "ogg", "opus", "wma"];
+const AUDIO_EXTENSIONS: &[&str] = &[
+    "mp3", "flac", "wav", "aiff", "aif", "m4a", "ogg", "opus", "wma",
+];
 const SCAN_PROGRESS_INTERVAL: u32 = 10;
 
 #[derive(Debug, Clone, Serialize)]
@@ -42,8 +44,7 @@ pub fn start_scan_folder(app: AppHandle, folder: String) {
                     "success",
                     format!(
                         "スキャン完了: {} 曲を追加 ({} 曲は既存)",
-                        scan_result.added,
-                        scan_result.skipped
+                        scan_result.added, scan_result.skipped
                     ),
                     Some(folder),
                 );
@@ -80,12 +81,7 @@ pub fn start_import_paths(app: AppHandle, paths: Vec<String>) {
                 let _ = app.emit("library-updated", ());
             }
             Err(error) => {
-                emit_activity_log(
-                    &app,
-                    "error",
-                    "取り込みに失敗しました",
-                    Some(error.clone()),
-                );
+                emit_activity_log(&app, "error", "取り込みに失敗しました", Some(error.clone()));
                 let _ = app.emit("library-scan-error", error);
             }
         }
@@ -318,9 +314,7 @@ pub(crate) fn read_metadata(path: &Path) -> FileMetadata {
         .map(|s| s.to_string());
 
     let options = ParseOptions::new().max_junk_bytes(4096);
-    let tagged_file = match Probe::open(path)
-        .and_then(|probe| probe.options(options).read())
-    {
+    let tagged_file = match Probe::open(path).and_then(|probe| probe.options(options).read()) {
         Ok(file) => file,
         Err(_) => {
             return empty_metadata(fallback_title);
@@ -336,9 +330,7 @@ pub(crate) fn read_metadata(path: &Path) -> FileMetadata {
         let artist = tag.artist().map(|s| s.to_string());
         let album = tag.album().map(|s| s.to_string());
         let genre = tag.genre().map(|s| s.to_string());
-        let key = tag
-            .get_string(&ItemKey::InitialKey)
-            .map(|s| s.to_string());
+        let key = tag.get_string(&ItemKey::InitialKey).map(|s| s.to_string());
         let bpm = tag
             .get_string(&ItemKey::Bpm)
             .or_else(|| tag.get_string(&ItemKey::IntegerBpm))

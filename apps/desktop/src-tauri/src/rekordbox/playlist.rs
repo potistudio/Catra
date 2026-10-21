@@ -1,5 +1,5 @@
 use super::content::{
-    map_content_row_with_song_id, resolve_artwork_path, CONTENT_QUERY_WITH_SONG, RekordboxContent,
+    map_content_row_with_song_id, resolve_artwork_path, RekordboxContent, CONTENT_QUERY_WITH_SONG,
 };
 use super::db::MasterDatabase;
 use super::ids::{new_uuid, unused_numeric_id};
@@ -66,8 +66,7 @@ ORDER BY sp.TrackNo"
             .map_err(|error| error.to_string())?;
 
         for content in &mut contents {
-            content.artwork_path =
-                resolve_artwork_path(db_dir, content.artwork_path.as_deref());
+            content.artwork_path = resolve_artwork_path(db_dir, content.artwork_path.as_deref());
         }
 
         Ok(contents)
@@ -244,9 +243,7 @@ pub fn delete_playlist(id: String) -> Result<(), String> {
             rows.collect::<Result<Vec<_>, _>>()
                 .map_err(|error| error.to_string())?
         };
-        session
-            .usn
-            .track_many("djmdSongPlaylist", song_ids.clone());
+        session.usn.track_many("djmdSongPlaylist", song_ids.clone());
         session
             .conn()
             .execute(
@@ -415,11 +412,13 @@ pub fn add_to_playlist(
 
     session.usn.track("djmdSongPlaylist", song_id.clone());
     session.usn.track("djmdPlaylist", playlist_id.clone());
-    session.conn().execute(
-        "UPDATE djmdPlaylist SET updated_at = ?1 WHERE ID = ?2",
-        params![ts.as_str(), playlist_id.as_str()],
-    )
-    .map_err(|error| error.to_string())?;
+    session
+        .conn()
+        .execute(
+            "UPDATE djmdPlaylist SET updated_at = ?1 WHERE ID = ?2",
+            params![ts.as_str(), playlist_id.as_str()],
+        )
+        .map_err(|error| error.to_string())?;
     if let Some(xml) = session.playlist_xml.as_mut() {
         xml.update_timestamp(&playlist_id, now)?;
     }
@@ -438,7 +437,9 @@ pub fn remove_from_playlist(playlist_id: String, song_playlist_id: String) -> Re
             |row| row.get(0),
         )
         .map_err(|_| {
-            format!("song playlist entry {song_playlist_id} was not found in playlist {playlist_id}")
+            format!(
+                "song playlist entry {song_playlist_id} was not found in playlist {playlist_id}"
+            )
         })?;
 
     let now = now_local();
@@ -481,11 +482,13 @@ pub fn remove_from_playlist(playlist_id: String, song_playlist_id: String) -> Re
     }
     session.usn.track_many("djmdSongPlaylist", shifted);
 
-    session.conn().execute(
-        "UPDATE djmdPlaylist SET updated_at = ?1 WHERE ID = ?2",
-        params![ts.as_str(), playlist_id.as_str()],
-    )
-    .map_err(|error| error.to_string())?;
+    session
+        .conn()
+        .execute(
+            "UPDATE djmdPlaylist SET updated_at = ?1 WHERE ID = ?2",
+            params![ts.as_str(), playlist_id.as_str()],
+        )
+        .map_err(|error| error.to_string())?;
     session.usn.track("djmdPlaylist", playlist_id.clone());
     if let Some(xml) = session.playlist_xml.as_mut() {
         xml.update_timestamp(&playlist_id, now)?;
@@ -513,7 +516,9 @@ pub fn move_song_in_playlist(
             |row| row.get(0),
         )
         .map_err(|_| {
-            format!("song playlist entry {song_playlist_id} was not found in playlist {playlist_id}")
+            format!(
+                "song playlist entry {song_playlist_id} was not found in playlist {playlist_id}"
+            )
         })?;
 
     let count: i64 = session
@@ -614,11 +619,13 @@ pub fn move_song_in_playlist(
         .map_err(|error| error.to_string())?;
     session.usn.track("djmdSongPlaylist", song_playlist_id);
 
-    session.conn().execute(
-        "UPDATE djmdPlaylist SET updated_at = ?1 WHERE ID = ?2",
-        params![ts.as_str(), playlist_id.as_str()],
-    )
-    .map_err(|error| error.to_string())?;
+    session
+        .conn()
+        .execute(
+            "UPDATE djmdPlaylist SET updated_at = ?1 WHERE ID = ?2",
+            params![ts.as_str(), playlist_id.as_str()],
+        )
+        .map_err(|error| error.to_string())?;
     session.usn.track("djmdPlaylist", playlist_id.clone());
     if let Some(xml) = session.playlist_xml.as_mut() {
         xml.update_timestamp(&playlist_id, now)?;

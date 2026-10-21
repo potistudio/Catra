@@ -90,10 +90,7 @@ fn content_id_from_tables(tables: &Map<String, JsonValue>) -> Result<String, Str
     json_id(row.get("ID")).ok_or_else(|| "content snapshot is missing ID".to_string())
 }
 
-fn apply_path_to_content(
-    tables: &mut Map<String, JsonValue>,
-    path: &str,
-) -> Result<(), String> {
+fn apply_path_to_content(tables: &mut Map<String, JsonValue>, path: &str) -> Result<(), String> {
     let path = std::path::PathBuf::from(path);
     if !path.is_file() {
         return Err(format!("file not found: {}", path.display()));
@@ -110,7 +107,10 @@ fn apply_path_to_content(
         return Err("content snapshot has no djmdContent row".to_string());
     };
     row.insert("FolderPath".to_string(), JsonValue::String(folder_path));
-    row.insert("FileNameL".to_string(), JsonValue::String(file_name.to_string()));
+    row.insert(
+        "FileNameL".to_string(),
+        JsonValue::String(file_name.to_string()),
+    );
     Ok(())
 }
 
@@ -161,9 +161,7 @@ fn select_rows(
         .into_iter()
         .map(ToOwned::to_owned)
         .collect();
-    let mut rows = stmt
-        .query(params![id])
-        .map_err(|error| error.to_string())?;
+    let mut rows = stmt.query(params![id]).map_err(|error| error.to_string())?;
     let mut out = Vec::new();
     while let Some(row) = rows.next().map_err(|error| error.to_string())? {
         let mut map = Map::new();
@@ -176,11 +174,7 @@ fn select_rows(
     Ok(out)
 }
 
-fn insert_rows(
-    session: &mut WriteSession,
-    table: &str,
-    rows: &[JsonValue],
-) -> Result<(), String> {
+fn insert_rows(session: &mut WriteSession, table: &str, rows: &[JsonValue]) -> Result<(), String> {
     let ident = quote_ident(table)?;
     for row in rows {
         let JsonValue::Object(map) = row else {
@@ -247,7 +241,9 @@ fn sql_to_json(value: ValueRef<'_>) -> JsonValue {
         ValueRef::Integer(value) => JsonValue::from(value),
         ValueRef::Real(value) => JsonValue::from(value),
         ValueRef::Text(value) => JsonValue::String(String::from_utf8_lossy(value).into_owned()),
-        ValueRef::Blob(value) => JsonValue::Array(value.iter().copied().map(JsonValue::from).collect()),
+        ValueRef::Blob(value) => {
+            JsonValue::Array(value.iter().copied().map(JsonValue::from).collect())
+        }
     }
 }
 

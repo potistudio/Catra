@@ -106,9 +106,6 @@ pub fn rekordbox_update_content(
 
 /// Delete Content from the collection. Catra keeps Cue and analysis for re-add.
 #[tauri::command(async)]
-pub fn rekordbox_delete_content(
-    state: State<'_, LibraryState>,
-    id: String,
-) -> Result<(), String> {
+pub fn rekordbox_delete_content(state: State<'_, LibraryState>, id: String) -> Result<(), String> {
     remove_rekordbox_content_id(&state, &id)
 }

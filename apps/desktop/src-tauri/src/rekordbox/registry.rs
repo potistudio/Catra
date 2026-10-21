@@ -36,7 +36,12 @@ impl UsnBuffer {
                 target.table
             );
             conn.execute(&sql, params![usn, target.id.as_str()])
-                .map_err(|error| format!("failed to set USN on {} {}: {error}", target.table, target.id))?;
+                .map_err(|error| {
+                    format!(
+                        "failed to set USN on {} {}: {error}",
+                        target.table, target.id
+                    )
+                })?;
         }
         set_local_update_count(conn, usn)?;
         Ok(usn)
