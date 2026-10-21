@@ -1,5 +1,19 @@
 type SelectionModifiers = Pick<MouseEvent, "ctrlKey" | "metaKey" | "shiftKey">;
 
+export function getCheckedTracks<T extends { id: number }>(
+	rows: ReadonlyArray<{ key: number; track: T }>,
+	checkedKeys: ReadonlySet<number>,
+): T[] {
+	const seen = new Set<number>();
+	const tracks: T[] = [];
+	for (const { key, track } of rows) {
+		if (!checkedKeys.has(key) || seen.has(track.id)) continue;
+		seen.add(track.id);
+		tracks.push(track);
+	}
+	return tracks;
+}
+
 export function selectTrackKeys(
 	visibleKeys: number[],
 	checkedKeys: ReadonlySet<number>,

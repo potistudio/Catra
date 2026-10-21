@@ -102,7 +102,6 @@ let rekordboxStatus = $state<RekordboxCheck | null>(null);
 let rekordboxLoading = $state(false);
 let rekordboxBusy = $state(false);
 let rekordboxList = $state<ReturnType<typeof RekordboxList>>();
-let librarySidebar = $state<ReturnType<typeof LibrarySidebar>>();
 let loading = $state(false);
 let scanning = $state(false);
 let scanKind = $state<"folder" | "rekordbox" | "drop" | null>(null);
@@ -131,7 +130,7 @@ let expandedPlaylistIds = $state<number[]>([
 /** 選ばれているプレイリストの中身。列なら要素 ID が入っている。 */
 let playlistItems = $state<PlaylistEntry[]>([]);
 let classifyBusy = $state(false);
-/** タグパネルの操作対象。一覧の「タグ」ボタンで渡ってくる。 */
+/** 一覧のチェック選択をサイドバーの一括タグ操作へ渡す。 */
 let tagTargets = $state<Track[]>([]);
 let activeTagIds = $state<number[]>([]);
 /** タグでの絞り込み結果。絞っていないときは null。 */
@@ -1370,7 +1369,7 @@ onMount(() => {
         inert={activeTab !== "library" ? true : undefined}
         aria-hidden={activeTab !== "library"}
       >
-        <LibrarySidebar bind:this={librarySidebar} activeTagCount={activeTagIds.length} facetActive={facetNarrowed != null}>
+        <LibrarySidebar activeTagCount={activeTagIds.length} facetActive={facetNarrowed != null}>
           {#snippet playlists()}
             <PlaylistTree
               nodes={playlistNodes}
@@ -1435,10 +1434,7 @@ onMount(() => {
           exportBusy={exporting}
           onreorder={canReorder ? handleReorderEntries : undefined}
           onremoveentries={selectedPlaylist?.kind === "static" ? handleRemoveEntries : undefined}
-          ontagtracks={(selected) => {
-            tagTargets = selected;
-            void librarySidebar?.revealTags();
-          }}
+          oncheckedchange={(selected) => (tagTargets = selected)}
           playlistTargets={playlistNodes.filter((node) => node.kind === "static")}
           playlistBusy={classifyBusy}
           onaddtoplaylist={handleDropTracksOnPlaylist}

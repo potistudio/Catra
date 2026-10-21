@@ -1,6 +1,6 @@
 <script lang="ts">
 import { ask } from "@tauri-apps/plugin-dialog";
-import type { Snippet } from "svelte";
+import { type Snippet, untrack } from "svelte";
 import { appSession, persistAppSession } from "$lib/appSession.svelte";
 import SelectionCheckbox from "$lib/components/SelectionCheckbox.svelte";
 import TrackGrid from "$lib/components/TrackGrid.svelte";
@@ -19,7 +19,7 @@ import {
 	type TrackListRow,
 	type ViewMode,
 } from "$lib/trackListView";
-import { selectTrackKeys } from "$lib/trackSelection";
+import { getCheckedTracks, selectTrackKeys } from "$lib/trackSelection";
 import type { PlaylistEntry, PlaylistNode, Track } from "$lib/types";
 
 const SORT_LABELS: Record<SortColumn, string> = {
@@ -84,8 +84,8 @@ interface Props {
 	/** この要素だけプレイリストから外す。同じ曲の別の要素は残る。 */
 	onremoveentries?: (entryIds: number[]) => void | Promise<void>;
 	removeEntriesLabel?: string;
-	/** 選択中の曲にタグを付ける入口。 */
-	ontagtracks?: (tracks: Track[]) => void;
+	/** 行選択を曲単位の一括操作へ反映する。未選択時は空配列を通知する。 */
+	oncheckedchange?: (tracks: Track[]) => void;
 	/** 選択曲を追加できる通常プレイリスト。 */
 	playlistTargets?: PlaylistNode[];
 	playlistBusy?: boolean;
@@ -133,7 +133,7 @@ let {
 	onreorder,
 	onremoveentries,
 	removeEntriesLabel = "プレイリストから外す",
-	ontagtracks,
+	oncheckedchange,
 	playlistTargets = [],
 	playlistBusy = false,
 	onaddtoplaylist,
@@ -279,15 +279,11 @@ let someVisibleSelected = $derived(
 let targetRows = $derived(allRows.filter((row) => checkedKeys.has(row.key)));
 
 /** 一括操作は曲単位で適用するため、同じ曲の複数要素を1曲に集約する。 */
-let targetTracks = $derived.by(() => {
-	const seen = new Set<number>();
-	const picked: Track[] = [];
-	for (const { track } of targetRows) {
-		if (seen.has(track.id)) continue;
-		seen.add(track.id);
-		picked.push(track);
-	}
-	return picked;
+let targetTracks = $derived(getCheckedTracks(allRows, checkedKeys));
+
+$effect(() => {
+	const selected = targetTracks;
+	untrack(() => oncheckedchange?.(selected));
 });
 
 /** 列から外す操作だけは要素単位。同じ曲の片方だけを外せる。 */
@@ -322,11 +318,7 @@ let targetSummary = $derived.by(() => {
 });
 
 let showCommandBar = $derived(
-	(commandBarMode ||
-		!!onremoveentries ||
-		!!ontagtracks ||
-		!!onexport ||
-		!!onaddtoplaylist) &&
+	(commandBarMode || !!onremoveentries || !!onexport || !!onaddtoplaylist) &&
 		checkedCount > 0,
 );
 
@@ -504,11 +496,6 @@ async function handleExport() {
 	if (!onexport || targetTracks.length === 0 || exportBusy || convertBusy)
 		return;
 	await onexport(targetTracks);
-}
-
-function handleTag() {
-	if (!ontagtracks || targetTracks.length === 0) return;
-	ontagtracks(targetTracks);
 }
 
 async function handleAddToPlaylist() {
@@ -1017,11 +1004,6 @@ $effect(() => {
             プレイリストに追加 ({targetTracks.length})
           </button>
         </div>
-      {/if}
-      {#if ontagtracks}
-        <button type="button" class="command-btn" onclick={handleTag}>
-          タグ ({targetTracks.length})
-        </button>
       {/if}
       {#if onconvert}
         <button

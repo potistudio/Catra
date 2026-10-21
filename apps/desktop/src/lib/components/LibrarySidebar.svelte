@@ -1,5 +1,5 @@
 <script lang="ts">
-import { onMount, type Snippet, tick } from "svelte";
+import { onMount, type Snippet } from "svelte";
 import { appSession, persistAppSession } from "$lib/appSession.svelte";
 import {
 	clampSidebarWidth,
@@ -22,7 +22,6 @@ let { playlists, tags, facets, activeTagCount, facetActive }: Props = $props();
 
 const contentId = $props.id();
 let sidebar: HTMLElement;
-let tagsSection: HTMLDetailsElement;
 let maxWidth = $state(SIDEBAR_MAX_WIDTH);
 let drag = $state<{
 	pointerId: number;
@@ -53,13 +52,6 @@ function setOpen(section: SidebarSection, open: boolean) {
 	if (layout[section] === open) return;
 	layout[section] = open;
 	persistAppSession();
-}
-
-export async function revealTags() {
-	setOpen("tagsOpen", true);
-	await tick();
-	tagsSection.scrollIntoView({ block: "start" });
-	tagsSection.querySelector("summary")?.focus({ preventScroll: true });
 }
 
 function startResize(event: PointerEvent) {
@@ -132,7 +124,6 @@ function resizeWithKeyboard(event: KeyboardEvent) {
     <details
       class="section"
       open={layout.tagsOpen}
-      bind:this={tagsSection}
       ontoggle={(event) => setOpen("tagsOpen", event.currentTarget.open)}
     >
       <summary>

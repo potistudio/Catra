@@ -49,13 +49,16 @@ function fail(error: unknown) {
 // ---- 選択中の曲が持っているタグ
 
 let assigned = $state<Map<number, number>>(new Map());
+let assignedKey = $state<string | null>(null);
+let selectionKey = $derived(selectedTracks.map((track) => track.id).join(","));
+let assignmentReady = $derived(assignedKey === selectionKey);
 
 $effect(() => {
 	const ids = selectedTracks.map((track) => track.id);
-	if (ids.length === 0) {
-		assigned = new Map();
-		return;
-	}
+	const key = ids.join(",");
+	assignedKey = null;
+	assigned = new Map();
+	if (ids.length === 0) return;
 
 	let alive = true;
 	void tagOfTracks(ids)
@@ -68,6 +71,7 @@ $effect(() => {
 				}
 			}
 			assigned = counts;
+			assignedKey = key;
 		})
 		.catch(fail);
 
@@ -79,13 +83,14 @@ $effect(() => {
 type TagState = "none" | "some" | "all";
 
 function stateOf(tag: Tag): TagState {
+	if (!assignmentReady) return "none";
 	const count = assigned.get(tag.id) ?? 0;
 	if (count === 0) return "none";
 	return count === selectedTracks.length ? "all" : "some";
 }
 
 async function toggleAssign(tag: Tag) {
-	if (selectedTracks.length === 0) return;
+	if (selectedTracks.length === 0 || !assignmentReady) return;
 	const ids = selectedTracks.map((track) => track.id);
 	try {
 		if (stateOf(tag) === "all") {
@@ -100,7 +105,10 @@ async function toggleAssign(tag: Tag) {
 			for (const tagId of row.tagIds)
 				counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
 		}
-		assigned = counts;
+		if (ids.join(",") === selectionKey) {
+			assigned = counts;
+			assignedKey = selectionKey;
+		}
 		await onchanged();
 	} catch (error) {
 		fail(error);
@@ -340,6 +348,7 @@ function onBackdropPointerUp(event: PointerEvent) {
         <button
           type="button"
           class="tag-btn"
+          disabled={busy || (selectedTracks.length > 0 && !assignmentReady)}
           onclick={() =>
             selectedTracks.length > 0 ? void toggleAssign(tag) : toggleFilter(tag)}
         >
