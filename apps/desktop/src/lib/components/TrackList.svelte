@@ -1083,7 +1083,7 @@ $effect(() => {
         <button
           type="button"
           class="command-btn danger"
-          disabled={rekordboxBusy || exportBusy}
+          disabled={exportBusy}
           onclick={handleLibraryRemove}
         >
           {bulkRemoveLabel}

@@ -410,16 +410,11 @@ impl LibraryState {
         Ok(())
     }
 
-    pub fn set_trashed(
-        &self,
-        id: i64,
-        trashed_at: Option<i64>,
-        relative_path: &str,
-    ) -> Result<(), rusqlite::Error> {
+    pub fn set_trashed(&self, id: i64, trashed_at: Option<i64>) -> Result<(), rusqlite::Error> {
         let conn = lock_conn(&self.conn)?;
         conn.execute(
-            "UPDATE tracks SET trashed_at = ?1, path = ?2 WHERE id = ?3",
-            params![trashed_at, relative_path, id],
+            "UPDATE tracks SET trashed_at = ?1 WHERE id = ?2",
+            params![trashed_at, id],
         )?;
         Ok(())
     }

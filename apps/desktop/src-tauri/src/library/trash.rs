@@ -1,5 +1,5 @@
-use super::db::{LibraryState, Track};
-use super::paths::{library_prefix, swap_location_prefix, trash_prefix};
+use super::db::LibraryState;
+use super::paths::{library_prefix, trash_prefix};
 use std::collections::HashSet;
 use std::fs;
 
@@ -8,8 +8,6 @@ pub fn trash_tracks(library: &LibraryState, ids: &[i64]) -> Result<u32, String> 
     if targets.is_empty() {
         return Ok(0);
     }
-    ensure_rekordbox_writable_if_linked(library, &targets)?;
-
     let now = chrono::Utc::now().timestamp();
     let mut moved = 0u32;
     for id in targets {
@@ -19,7 +17,9 @@ pub fn trash_tracks(library: &LibraryState, ids: &[i64]) -> Result<u32, String> 
         if track.trashed_at.is_some() {
             continue;
         }
-        apply_location_change(library, &track, "library", "trash", Some(now))?;
+        library
+            .set_trashed(id, Some(now))
+            .map_err(|error| error.to_string())?;
         moved += 1;
     }
     Ok(moved)
@@ -30,8 +30,6 @@ pub fn restore_tracks(library: &LibraryState, ids: &[i64]) -> Result<u32, String
     if targets.is_empty() {
         return Ok(0);
     }
-    ensure_rekordbox_writable_if_linked(library, &targets)?;
-
     let mut restored = 0u32;
     for id in targets {
         let Some(track) = library.get_track(id).map_err(|error| error.to_string())? else {
@@ -40,7 +38,9 @@ pub fn restore_tracks(library: &LibraryState, ids: &[i64]) -> Result<u32, String
         if track.trashed_at.is_none() {
             continue;
         }
-        apply_location_change(library, &track, "trash", "library", None)?;
+        library
+            .set_trashed(id, None)
+            .map_err(|error| error.to_string())?;
         restored += 1;
     }
     Ok(restored)
@@ -121,76 +121,6 @@ fn collect_ids(library: &LibraryState, id: i64, set: &mut HashSet<i64>) -> Resul
         collect_ids(library, child.id, set)?;
     }
     Ok(())
-}
-
-fn apply_location_change(
-    library: &LibraryState,
-    track: &Track,
-    from_kind: &str,
-    to_kind: &str,
-    trashed_at: Option<i64>,
-) -> Result<(), String> {
-    relocate_track_dir(library, track.id, from_kind, to_kind)?;
-    let relative = swap_location_prefix(&track.stored_path, from_kind, to_kind);
-    if let Err(error) = library.set_trashed(track.id, trashed_at, &relative) {
-        let _ = relocate_track_dir(library, track.id, to_kind, from_kind);
-        return Err(error.to_string());
-    }
-    if let Err(error) = relink_folder_path(library, track.id, &relative) {
-        revert_location_change(library, track, to_kind, from_kind);
-        return Err(error);
-    }
-    Ok(())
-}
-
-fn revert_location_change(library: &LibraryState, track: &Track, from_kind: &str, to_kind: &str) {
-    let _ = relocate_track_dir(library, track.id, from_kind, to_kind);
-    let _ = library.set_trashed(track.id, track.trashed_at, &track.stored_path);
-}
-
-fn relocate_track_dir(
-    library: &LibraryState,
-    id: i64,
-    from_kind: &str,
-    to_kind: &str,
-) -> Result<(), String> {
-    let from = library.absolute_path(&format!("{from_kind}/{id}"));
-    let to = library.absolute_path(&format!("{to_kind}/{id}"));
-    if !from.exists() {
-        return Err(format!("ファイルがありません: {}", from.display()));
-    }
-    if let Some(parent) = to.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    fs::rename(&from, &to).map_err(|error| error.to_string())
-}
-
-fn relink_folder_path(library: &LibraryState, id: i64, relative: &str) -> Result<(), String> {
-    let Some(track) = library.get_track(id).map_err(|error| error.to_string())? else {
-        return Ok(());
-    };
-    let Some(content_id) = track.rekordbox_content_id else {
-        return Ok(());
-    };
-    if !rekordbox_configured() {
-        return Ok(());
-    }
-    let absolute = library.absolute_string(relative);
-    match crate::rekordbox::update_content_folder_path(&content_id, &absolute) {
-        Ok(_) => Ok(()),
-        Err(error) if is_missing_content_error(&error) => {
-            // Content 行が無いときは Catra 側の移動を継続する。リンク ID を外し、再リンクは利用者が行う。
-            library
-                .set_rekordbox_content_id(id, None)
-                .map_err(|error| error.to_string())?;
-            Ok(())
-        }
-        Err(error) => Err(error),
-    }
-}
-
-fn is_missing_content_error(error: &str) -> bool {
-    error.starts_with("content ") && error.ends_with(" was not found")
 }
 
 fn ensure_rekordbox_writable_if_linked(library: &LibraryState, ids: &[i64]) -> Result<(), String> {
@@ -275,29 +205,59 @@ mod tests {
     }
 
     #[test]
-    fn trash_keeps_id_suffix_and_restore_returns() {
+    fn trash_and_restore_keep_the_audio_path_and_rekordbox_link() {
         let (library, root) = temp_library();
         let id = insert_file(&library, "song.wav", None);
-        trash_tracks(&library, &[id]).unwrap();
+        let content_id = format!("missing-{}", Uuid::new_v4());
+        library
+            .set_rekordbox_content_id(id, Some(&content_id))
+            .unwrap();
+        library
+            .set_rekordbox_snapshot(id, Some("saved-cue-data"))
+            .unwrap();
+        let original = library.get_track(id).unwrap().unwrap();
+        assert_eq!(trash_tracks(&library, &[id, id]).unwrap(), 1);
         let trashed = library.get_track(id).unwrap().unwrap();
-        assert!(trashed.stored_path.starts_with("trash/"));
+        assert_eq!(trashed.stored_path, original.stored_path);
+        assert_eq!(trashed.path, original.path);
+        assert_eq!(
+            trashed.rekordbox_content_id.as_deref(),
+            Some(content_id.as_str())
+        );
+        assert_eq!(fs::read(&original.path).unwrap(), b"audio");
+        assert_eq!(library.list_trashed().unwrap().len(), 1);
+        assert_eq!(trash_tracks(&library, &[id]).unwrap(), 0);
         assert!(trashed.stored_path.ends_with("/song.wav"));
         assert!(trashed.trashed_at.is_some());
         assert_eq!(library.list_tracks().unwrap().len(), 0);
-        restore_tracks(&library, &[id]).unwrap();
+        assert_eq!(restore_tracks(&library, &[id]).unwrap(), 1);
         let restored = library.get_track(id).unwrap().unwrap();
-        assert!(restored.stored_path.starts_with("library/"));
-        assert!(restored.stored_path.ends_with("/song.wav"));
+        assert_eq!(restored.stored_path, original.stored_path);
+        assert_eq!(restored.path, original.path);
+        assert_eq!(
+            restored.rekordbox_content_id.as_deref(),
+            Some(content_id.as_str())
+        );
+        assert_eq!(
+            library.rekordbox_snapshot(id).unwrap().as_deref(),
+            Some("saved-cue-data")
+        );
+        assert_eq!(fs::read(&original.path).unwrap(), b"audio");
+        assert_eq!(restore_tracks(&library, &[id]).unwrap(), 0);
         assert!(restored.trashed_at.is_none());
         let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn trashing_parent_moves_derivative() {
+    fn trashing_parent_marks_derivative_without_moving_audio() {
         let (library, root) = temp_library();
         let parent = insert_file(&library, "source.wav", None);
         let child = insert_file(&library, "source.mp3", Some(parent));
-        trash_tracks(&library, &[parent]).unwrap();
+        let parent_path = library.get_track(parent).unwrap().unwrap().path;
+        let child_path = library.get_track(child).unwrap().unwrap().path;
+        assert_eq!(trash_tracks(&library, &[parent]).unwrap(), 2);
+        assert_eq!(fs::read(&parent_path).unwrap(), b"audio");
+        assert_eq!(fs::read(&child_path).unwrap(), b"audio");
         assert!(library
             .get_track(parent)
             .unwrap()
@@ -337,30 +297,102 @@ mod tests {
     }
 
     #[test]
-    fn missing_content_error_does_not_match_other_not_found() {
-        assert!(is_missing_content_error("content 58253138 was not found"));
-        assert!(!is_missing_content_error(
-            "Rekordbox master.db was not found"
-        ));
-        assert!(!is_missing_content_error("file not found: C:\\x"));
-        assert!(!is_missing_content_error("playlist 1 was not found"));
+    fn existing_trash_paths_can_be_restored_without_moving_or_relinking() {
+        let (library, root) = temp_library();
+        let id = insert_file(&library, "song.wav", None);
+        let relative = format!("trash/{id}/song.wav");
+        fs::rename(
+            library.absolute_path(&library_prefix(id)),
+            library.absolute_path(&trash_prefix(id)),
+        )
+        .unwrap();
+        library.update_location(id, &relative).unwrap();
+        library.set_trashed(id, Some(1)).unwrap();
+        let content_id = format!("missing-{}", Uuid::new_v4());
+        library
+            .set_rekordbox_content_id(id, Some(&content_id))
+            .unwrap();
+
+        assert_eq!(restore_tracks(&library, &[id]).unwrap(), 1);
+        let restored = library.get_track(id).unwrap().unwrap();
+        assert!(restored.trashed_at.is_none());
+        assert_eq!(restored.stored_path, relative);
+        assert_eq!(
+            restored.rekordbox_content_id.as_deref(),
+            Some(content_id.as_str())
+        );
+        assert_eq!(fs::read(&restored.path).unwrap(), b"audio");
+        assert!(!library.absolute_path(&library_prefix(id)).exists());
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn revert_location_returns_track_to_trash() {
+    fn empty_trash_deletes_only_marked_tracks_in_both_storage_locations() {
+        let (library, root) = temp_library();
+        let logical = insert_file(&library, "logical.wav", None);
+        let existing = insert_file(&library, "existing.wav", None);
+        let active = insert_file(&library, "active.wav", None);
+        trash_tracks(&library, &[logical]).unwrap();
+        fs::rename(
+            library.absolute_path(&library_prefix(existing)),
+            library.absolute_path(&trash_prefix(existing)),
+        )
+        .unwrap();
+        library
+            .update_location(existing, &format!("trash/{existing}/existing.wav"))
+            .unwrap();
+        library.set_trashed(existing, Some(1)).unwrap();
+
+        assert_eq!(empty_trash(&library).unwrap(), 2);
+        assert!(library.get_track(logical).unwrap().is_none());
+        assert!(library.get_track(existing).unwrap().is_none());
+        assert!(!library.absolute_path(&library_prefix(logical)).exists());
+        assert!(!library.absolute_path(&trash_prefix(existing)).exists());
+        let remaining = library.get_track(active).unwrap().unwrap();
+        assert_eq!(fs::read(&remaining.path).unwrap(), b"audio");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn missing_audio_does_not_block_trash_or_restore() {
+        let (library, root) = temp_library();
+        let id = insert_file(&library, "missing.wav", None);
+        let original = library.get_track(id).unwrap().unwrap();
+        fs::remove_file(&original.path).unwrap();
+        assert_eq!(trash_tracks(&library, &[id]).unwrap(), 1);
+        assert_eq!(restore_tracks(&library, &[id]).unwrap(), 1);
+        let restored = library.get_track(id).unwrap().unwrap();
+        assert_eq!(restored.stored_path, original.stored_path);
+        assert!(restored.trashed_at.is_none());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_database_error_leaves_the_audio_path_and_link_unchanged() {
         let (library, root) = temp_library();
         let id = insert_file(&library, "song.wav", None);
-        trash_tracks(&library, &[id]).unwrap();
-        let track = library.get_track(id).unwrap().unwrap();
-        apply_location_change(&library, &track, "trash", "library", None).unwrap();
-        let restored = library.get_track(id).unwrap().unwrap();
-        assert!(restored.trashed_at.is_none());
-        revert_location_change(&library, &track, "library", "trash");
-        let reverted = library.get_track(id).unwrap().unwrap();
-        assert!(reverted.trashed_at.is_some());
-        assert!(reverted.stored_path.starts_with("trash/"));
-        assert!(library.absolute_path(&format!("trash/{id}")).exists());
-        assert!(!library.absolute_path(&format!("library/{id}")).exists());
+        library
+            .set_rekordbox_content_id(id, Some("unchanged-link"))
+            .unwrap();
+        let original = library.get_track(id).unwrap().unwrap();
+        library
+            .conn()
+            .unwrap()
+            .execute_batch(
+                "CREATE TRIGGER block_trash BEFORE UPDATE OF trashed_at ON tracks
+             BEGIN SELECT RAISE(ABORT, 'blocked'); END;",
+            )
+            .unwrap();
+
+        assert!(trash_tracks(&library, &[id]).is_err());
+        let unchanged = library.get_track(id).unwrap().unwrap();
+        assert!(unchanged.trashed_at.is_none());
+        assert_eq!(unchanged.stored_path, original.stored_path);
+        assert_eq!(
+            unchanged.rekordbox_content_id,
+            original.rekordbox_content_id
+        );
+        assert_eq!(fs::read(&unchanged.path).unwrap(), b"audio");
         let _ = fs::remove_dir_all(&root);
     }
 }

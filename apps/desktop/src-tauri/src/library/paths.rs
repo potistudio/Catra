@@ -166,15 +166,6 @@ pub fn trash_prefix(id: i64) -> String {
     format!("trash/{id}")
 }
 
-pub fn swap_location_prefix(relative: &str, from_prefix: &str, to_prefix: &str) -> String {
-    let from = from_prefix.trim_end_matches('/');
-    if let Some(rest) = relative.strip_prefix(from) {
-        format!("{to_prefix}{rest}")
-    } else {
-        relative.to_string()
-    }
-}
-
 pub fn managed_track_id(relative: &str) -> Option<i64> {
     let mut parts = relative.split('/');
     let kind = parts.next()?;
@@ -211,14 +202,6 @@ mod tests {
         let relative = to_relative(&root, &absolute).unwrap();
         assert_eq!(relative, "library/4/song.mp3");
         assert_eq!(to_absolute(&root, &relative), absolute);
-    }
-
-    #[test]
-    fn trash_swap_keeps_id_and_filename() {
-        let relative = "library/9/track name.wav";
-        let trashed = swap_location_prefix(relative, "library", "trash");
-        assert_eq!(trashed, "trash/9/track name.wav");
-        assert_eq!(swap_location_prefix(&trashed, "trash", "library"), relative);
     }
 
     #[test]
