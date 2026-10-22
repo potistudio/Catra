@@ -16,12 +16,18 @@ import {
 	tagUpdateAxis,
 } from "$lib/api";
 import { fadeMotion, revealMotion } from "$lib/motion";
+import {
+	summarizeTagAssignments,
+	type TagAssignmentIndex,
+} from "$lib/tagAssignments";
 import { hasTrackDrag, readTrackDrag } from "$lib/trackDrag";
-import type { Rule, Tag, TagAxis, Track } from "$lib/types";
+import type { Rule, Tag, TagAxis, Track, TrackTags } from "$lib/types";
 
 interface Props {
 	axes: TagAxis[];
 	ungroupedTags: Tag[];
+	assignments: TagAssignmentIndex;
+	onassignmentschange: (rows: TrackTags[]) => void;
 	/** いまチェックが入っている曲。ここへの付け外しは一括で効く。 */
 	selectedTracks: Track[];
 	activeTagIds: number[];
@@ -34,6 +40,8 @@ interface Props {
 let {
 	axes,
 	ungroupedTags,
+	assignments,
+	onassignmentschange,
 	selectedTracks,
 	activeTagIds,
 	busy = false,
@@ -48,37 +56,14 @@ function fail(error: unknown) {
 
 // ---- 選択中の曲が持っているタグ
 
-let assigned = $state<Map<number, number>>(new Map());
-let assignedKey = $state<string | null>(null);
-let selectionKey = $derived(selectedTracks.map((track) => track.id).join(","));
-let assignmentReady = $derived(assignedKey === selectionKey);
-
-$effect(() => {
-	const ids = selectedTracks.map((track) => track.id);
-	const key = ids.join(",");
-	assignedKey = null;
-	assigned = new Map();
-	if (ids.length === 0) return;
-
-	let alive = true;
-	void tagOfTracks(ids)
-		.then((rows) => {
-			if (!alive) return;
-			const counts = new Map<number, number>();
-			for (const row of rows) {
-				for (const tagId of row.tagIds) {
-					counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
-				}
-			}
-			assigned = counts;
-			assignedKey = key;
-		})
-		.catch(fail);
-
-	return () => {
-		alive = false;
-	};
-});
+let summary = $derived(
+	summarizeTagAssignments(
+		selectedTracks.map((track) => track.id),
+		assignments,
+	),
+);
+let assigned = $derived(summary.counts);
+let assignmentReady = $derived(summary.ready);
 
 type TagState = "none" | "some" | "all";
 
@@ -99,16 +84,7 @@ async function toggleAssign(tag: Tag) {
 			// 単一選択グループの排他制約はバックエンドのトランザクションで適用する。
 			await tagAssign(ids, [tag.id]);
 		}
-		const rows = await tagOfTracks(ids);
-		const counts = new Map<number, number>();
-		for (const row of rows) {
-			for (const tagId of row.tagIds)
-				counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
-		}
-		if (ids.join(",") === selectionKey) {
-			assigned = counts;
-			assignedKey = selectionKey;
-		}
+		onassignmentschange(await tagOfTracks(ids));
 		await onchanged();
 	} catch (error) {
 		fail(error);
@@ -312,6 +288,7 @@ async function handleTagDrop(tag: Tag, event: DragEvent) {
 	if (trackIds.length === 0) return;
 	try {
 		await tagAssign(trackIds, [tag.id]);
+		onassignmentschange(await tagOfTracks(trackIds));
 		await onchanged();
 	} catch (error) {
 		fail(error);

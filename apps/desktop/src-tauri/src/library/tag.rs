@@ -436,7 +436,36 @@ pub fn unassign(library: &LibraryState, track_ids: &[i64], tag_ids: &[i64]) -> R
     Ok(removed as u32)
 }
 
-/// 選択中の曲がどのタグを持っているかを返す。タグパネルの点灯に使う。
+/// 選択時の IPC を省略するため、未付与曲を含む割り当てを一括取得する。
+pub fn of_all_tracks(library: &LibraryState) -> Result<Vec<TrackTags>, String> {
+    let conn = library.conn().map_err(err)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT t.id, tt.tag_id FROM tracks t
+         LEFT JOIN track_tags tt ON tt.track_id = t.id
+         ORDER BY t.id, tt.tag_id",
+        )
+        .map_err(err)?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, Option<i64>>(1)?))
+        })
+        .map_err(err)?;
+    let mut out: Vec<TrackTags> = Vec::new();
+    for row in rows {
+        let (track_id, tag_id) = row.map_err(err)?;
+        match out.last_mut() {
+            Some(track) if track.track_id == track_id => track.tag_ids.extend(tag_id),
+            _ => out.push(TrackTags {
+                track_id,
+                tag_ids: tag_id.into_iter().collect(),
+            }),
+        }
+    }
+    Ok(out)
+}
+
+/// 割り当て変更後の表示キャッシュに使う、指定曲の確定値を返す。
 pub fn of_tracks(library: &LibraryState, track_ids: &[i64]) -> Result<Vec<TrackTags>, String> {
     if track_ids.is_empty() {
         return Ok(Vec::new());
@@ -691,6 +720,32 @@ mod tests {
         drop(conn);
 
         assert_eq!(of_tracks(&library, &[new]).unwrap()[0].tag_ids.len(), 2);
+    }
+
+    #[test]
+    fn all_track_assignments_include_empty_and_trashed_tracks() {
+        let library = temp_library();
+        assert!(of_all_tracks(&library).unwrap().is_empty());
+        let empty = insert_track(&library, "Empty");
+        let tagged = insert_track(&library, "Tagged");
+        let trashed = insert_track(&library, "Trashed");
+        let a = create_tag(&library, None, "A").unwrap();
+        let b = create_tag(&library, None, "B").unwrap();
+        assign(&library, &[tagged], &[a.id, b.id]).unwrap();
+        assign(&library, &[trashed], &[b.id]).unwrap();
+        library.set_trashed(trashed, Some(1)).unwrap();
+        let rows = of_all_tracks(&library).unwrap();
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0].track_id, empty);
+        assert!(rows[0].tag_ids.is_empty());
+        assert_eq!(rows[1].tag_ids, vec![a.id, b.id]);
+        assert_eq!(rows[2].tag_ids, vec![b.id]);
+        assert_eq!(
+            serde_json::to_value(&rows).unwrap(),
+            serde_json::to_value(of_tracks(&library, &[empty, tagged, trashed]).unwrap()).unwrap()
+        );
+        unassign(&library, &[tagged], &[a.id, b.id]).unwrap();
+        assert!(of_all_tracks(&library).unwrap()[1].tag_ids.is_empty());
     }
 
     #[test]

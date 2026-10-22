@@ -36,6 +36,7 @@ import {
 	scanFolder,
 	tagListAxes,
 	tagListUngrouped,
+	tagOfTracks,
 } from "$lib/api";
 import {
 	type AppTab,
@@ -63,6 +64,10 @@ import {
 } from "$lib/rekordboxMembership";
 import { resolveStartupTab } from "$lib/settings";
 import { appSettings } from "$lib/settings.svelte";
+import {
+	mergeTagAssignments,
+	type TagAssignmentIndex,
+} from "$lib/tagAssignments";
 import type {
 	ActivityLogPayload,
 	ConvertOptions,
@@ -83,6 +88,7 @@ import type {
 	Tag,
 	TagAxis,
 	Track,
+	TrackTags,
 } from "$lib/types";
 
 /** Rekordbox may start or quit after the initial check; keep the write lock aligned. */
@@ -120,6 +126,8 @@ let checkingHealth = $state(false);
 let playlistNodes = $state<PlaylistNode[]>([]);
 let tagAxes = $state<TagAxis[]>([]);
 let ungroupedTags = $state<Tag[]>([]);
+let tagAssignments = $state<TagAssignmentIndex>(new Map());
+let classificationRequestId = 0;
 let browseMode = $state<BrowseMode>(appSession.library.browseMode);
 let selectedPlaylistId = $state<number | null>(
 	appSession.library.selectedPlaylistId,
@@ -283,15 +291,19 @@ async function loadTrashed(silent = true) {
 }
 
 async function loadClassification(silent = true) {
+	const requestId = ++classificationRequestId;
 	try {
-		const [nodes, axes, tags] = await Promise.all([
+		const [nodes, axes, tags, assignments] = await Promise.all([
 			playlistListTree(),
 			tagListAxes(),
 			tagListUngrouped(),
+			tagOfTracks(),
 		]);
+		if (requestId !== classificationRequestId) return;
 		playlistNodes = nodes;
 		tagAxes = axes;
 		ungroupedTags = tags;
+		tagAssignments = mergeTagAssignments(new Map(), assignments);
 		if (selectedPlaylistId != null) {
 			if (nodes.some((node) => node.id === selectedPlaylistId)) {
 				expandAncestorsOf(selectedPlaylistId);
@@ -427,13 +439,15 @@ async function handleTagFilterChange(tagIds: number[]) {
 	}
 }
 
+function handleTagAssignmentsChanged(rows: TrackTags[]) {
+	// 書き込み前に開始した全体取得で、確定済みの割り当てを上書きしない。
+	classificationRequestId += 1;
+	tagAssignments = mergeTagAssignments(tagAssignments, rows);
+}
+
 async function handleTagsChanged() {
 	await Promise.all([loadClassification(), reloadNarrowing()]);
 	await loadPlaylistItems();
-	if (tagTargets.length > 0) {
-		// 付け外しの結果を点灯に反映させるため、対象を作り直して読み込みを促す。
-		tagTargets = [...tagTargets];
-	}
 }
 
 async function handleFacetSelect(field: FacetField, value: string | null) {
@@ -1390,6 +1404,8 @@ onMount(() => {
               axes={tagAxes}
               {ungroupedTags}
               selectedTracks={tagTargets}
+              assignments={tagAssignments}
+              onassignmentschange={handleTagAssignmentsChanged}
               {activeTagIds}
               busy={classifyBusy}
               onchanged={handleTagsChanged}

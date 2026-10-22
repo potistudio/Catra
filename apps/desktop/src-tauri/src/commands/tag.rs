@@ -1,7 +1,7 @@
 use crate::library::{
     assign_tags, axis_conflicts, create_axis, create_tag, delete_axis, delete_tag, list_axes,
-    list_ungrouped, move_tag, rename_tag, tagged_track_ids, tags_of_tracks, unassign_tags,
-    update_axis, LibraryState, Tag, TagAxis, TagSelection, Track, TrackTags,
+    list_ungrouped, move_tag, rename_tag, tagged_track_ids, tags_of_all_tracks, tags_of_tracks,
+    unassign_tags, update_axis, LibraryState, Tag, TagAxis, TagSelection, Track, TrackTags,
 };
 use tauri::State;
 
@@ -94,9 +94,12 @@ pub fn tag_unassign(
 #[tauri::command]
 pub fn tag_of_tracks(
     state: State<'_, LibraryState>,
-    track_ids: Vec<i64>,
+    track_ids: Option<Vec<i64>>,
 ) -> Result<Vec<TrackTags>, String> {
-    tags_of_tracks(&state, &track_ids)
+    match track_ids {
+        Some(ids) => tags_of_tracks(&state, &ids),
+        None => tags_of_all_tracks(&state),
+    }
 }
 
 /// タグでの絞り込み。複数のタグは AND で効く。その場の結果なので保存しない。

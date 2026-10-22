@@ -36,8 +36,8 @@ pub use playlist::{
 pub use scan::{import_file, start_import_paths, start_scan_folder};
 pub use tag::{
     assign as assign_tags, axis_conflicts, create_axis, create_tag, delete_axis, delete_tag,
-    list_axes, list_ungrouped, move_tag, of_tracks as tags_of_tracks, rename_tag,
-    track_ids as tagged_track_ids, unassign as unassign_tags, update_axis, Tag, TagAxis,
-    TagSelection, TrackTags,
+    list_axes, list_ungrouped, move_tag, of_all_tracks as tags_of_all_tracks,
+    of_tracks as tags_of_tracks, rename_tag, track_ids as tagged_track_ids,
+    unassign as unassign_tags, update_axis, Tag, TagAxis, TagSelection, TrackTags,
 };
 pub use trash::{delete_permanently, empty_trash, restore_tracks, trash_tracks};

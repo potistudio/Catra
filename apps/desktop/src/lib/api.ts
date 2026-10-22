@@ -367,7 +367,9 @@ export async function tagUnassign(
 	return invoke<number>("tag_unassign", { trackIds, tagIds });
 }
 
-export async function tagOfTracks(trackIds: number[]): Promise<TrackTags[]> {
+export async function tagOfTracks(
+	trackIds: number[] | null = null,
+): Promise<TrackTags[]> {
 	return invoke<TrackTags[]>("tag_of_tracks", { trackIds });
 }
 
