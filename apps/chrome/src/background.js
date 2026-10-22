@@ -47,7 +47,40 @@ async function getDownloadProgress({ trackUrl, active = false } = {}) {
 	return result;
 }
 
+async function getSavedTracks(urls) {
+	if (
+		!Array.isArray(urls) ||
+		urls.length > 200 ||
+		urls.some((url) => typeof url !== "string" || url.length > 2048)
+	) {
+		throw new Error("照合するURLが不正です");
+	}
+	const response = await fetch(`${CATRA_API}/library/saved-tracks`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ urls }),
+		signal: AbortSignal.timeout(5000),
+	});
+	const result = await response.json().catch(() => null);
+	if (!response.ok || !result?.success || !Array.isArray(result.savedUrls)) {
+		throw new Error(result?.error ?? "保存済み楽曲の照合に失敗しました");
+	}
+	return result;
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+	if (message.type === "GET_SAVED_TRACKS") {
+		getSavedTracks(message.urls)
+			.then(sendResponse)
+			.catch((error) =>
+				sendResponse({
+					success: false,
+					error: error?.message ?? "保存済み楽曲の照合に失敗しました",
+				}),
+			);
+		return true;
+	}
+
 	if (message.type === "GET_DOWNLOAD_PROGRESS") {
 		getDownloadProgress({
 			trackUrl: message.trackUrl,

@@ -3,8 +3,10 @@ use crate::download::{
     download_and_import, download_playlist_and_import, get_active_download_progress,
     get_download_progress, normalize_download_url,
 };
+use crate::library::{index_pending_sources, saved_soundcloud_urls, LibraryState};
 use serde::Deserialize;
-use tauri::AppHandle;
+use std::io::Read;
+use tauri::{AppHandle, Manager};
 use tiny_http::{Header, Method, Response, Server, StatusCode};
 
 pub const PORT: u16 = 17340;
@@ -17,6 +19,45 @@ struct DownloadRequest {
 #[derive(Debug, Deserialize)]
 struct PlaylistDownloadRequest {
     url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct SavedTracksRequest {
+    urls: Vec<String>,
+}
+
+fn library_origin_allowed(origin: Option<&str>) -> bool {
+    origin.is_none_or(|origin| {
+        origin
+            .strip_prefix("chrome-extension://")
+            .is_some_and(|id| {
+                id.len() == 32 && id.bytes().all(|byte| (b'a'..=b'p').contains(&byte))
+            })
+    })
+}
+
+fn start_source_index(app: AppHandle) {
+    std::thread::spawn(move || {
+        let mut previous_error = None;
+        loop {
+            let state = app.state::<LibraryState>();
+            match index_pending_sources(&state) {
+                Ok(_) => previous_error = None,
+                Err(error) => {
+                    if previous_error.as_ref() != Some(&error) {
+                        emit_activity_log(
+                            &app,
+                            "warning",
+                            "保存済みURLの索引作成に失敗しました",
+                            Some(error.clone()),
+                        );
+                    }
+                    previous_error = Some(error);
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_secs(3));
+        }
+    });
 }
 
 fn cors_headers() -> Vec<Header> {
@@ -119,6 +160,71 @@ fn handle_request(app: &AppHandle, mut request: tiny_http::Request) {
         return;
     }
 
+    if method == Method::Post && url == "/library/saved-tracks" {
+        let origin = request
+            .headers()
+            .iter()
+            .find(|header| header.field.equiv("Origin"))
+            .map(|header| header.value.as_str());
+        if !library_origin_allowed(origin) {
+            let _ = request.respond(json_response(
+                StatusCode(403),
+                r#"{"success":false,"error":"Origin not allowed"}"#,
+            ));
+            return;
+        }
+        let mut body = String::new();
+        if request
+            .as_reader()
+            .take(65_537)
+            .read_to_string(&mut body)
+            .is_err()
+            || body.len() > 65_536
+        {
+            let _ = request.respond(json_response(
+                StatusCode(413),
+                r#"{"success":false,"error":"Request body too large or invalid"}"#,
+            ));
+            return;
+        }
+        let payload = match serde_json::from_str::<SavedTracksRequest>(&body) {
+            Ok(payload)
+                if payload.urls.len() <= 200
+                    && payload.urls.iter().all(|url| url.len() <= 2048) =>
+            {
+                payload
+            }
+            _ => {
+                let _ = request.respond(json_response(
+                    StatusCode(400),
+                    r#"{"success":false,"error":"Invalid URL batch"}"#,
+                ));
+                return;
+            }
+        };
+        let state = app.state::<LibraryState>();
+        match saved_soundcloud_urls(&state, &payload.urls) {
+            Ok(saved_urls) => {
+                let body =
+                    serde_json::json!({ "success": true, "savedUrls": saved_urls }).to_string();
+                let _ = request.respond(json_response(StatusCode(200), &body));
+            }
+            Err(error) => {
+                emit_activity_log(
+                    app,
+                    "warning",
+                    "保存済み楽曲の照合に失敗しました",
+                    Some(error),
+                );
+                let _ = request.respond(json_response(
+                    StatusCode(500),
+                    r#"{"success":false,"error":"Library lookup failed"}"#,
+                ));
+            }
+        }
+        return;
+    }
+
     if method == Method::Post && url == "/download" {
         let mut body = String::new();
         if request.as_reader().read_to_string(&mut body).is_err() {
@@ -211,6 +317,28 @@ fn handle_request(app: &AppHandle, mut request: tiny_http::Request) {
     ));
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn membership_lookup_rejects_website_origins() {
+        assert!(library_origin_allowed(None));
+        assert!(library_origin_allowed(Some(
+            "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
+        )));
+        for origin in [
+            "https://soundcloud.com",
+            "https://example.com",
+            "null",
+            "chrome-extension://invalid",
+            "chrome-extension://abcdefghijklmnopabcdefghijklmnop/evil",
+        ] {
+            assert!(!library_origin_allowed(Some(origin)), "{origin}");
+        }
+    }
+}
+
 pub fn start(app: AppHandle) {
     std::thread::spawn(move || {
         let address = format!("127.0.0.1:{PORT}");
@@ -234,6 +362,7 @@ pub fn start(app: AppHandle) {
             None,
         );
 
+        start_source_index(app.clone());
         for request in server.incoming_requests() {
             handle_request(&app, request);
         }

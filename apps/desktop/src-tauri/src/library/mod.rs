@@ -11,6 +11,7 @@ mod paths;
 mod playlist;
 mod rule;
 mod scan;
+mod source;
 mod tag;
 mod trash;
 
@@ -34,6 +35,7 @@ pub use playlist::{
     set_rule as set_playlist_rule, DeleteImpact, PlaylistEntry, PlaylistKind, PlaylistNode,
 };
 pub use scan::{import_file, start_import_paths, start_scan_folder};
+pub use source::{index_pending_sources, saved_soundcloud_urls};
 pub use tag::{
     assign as assign_tags, axis_conflicts, create_axis, create_tag, delete_axis, delete_tag,
     list_axes, list_ungrouped, move_tag, of_all_tracks as tags_of_all_tracks,

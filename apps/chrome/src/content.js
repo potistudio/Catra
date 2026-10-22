@@ -554,6 +554,7 @@ async function downloadPlaylist(button) {
 
 		if (button) {
 			await pollDownloadProgress(trackUrl, button);
+			window.dispatchEvent(new Event("catra-library-updated"));
 			setButtonState(button, "success");
 			resetButtonAfterSuccess(button);
 		}
@@ -589,6 +590,7 @@ async function downloadTrack(trackUrl, button) {
 
 		if (button) {
 			await pollDownloadProgress(normalizedUrl, button);
+			window.dispatchEvent(new Event("catra-library-updated"));
 			setButtonState(button, "success");
 			resetButtonAfterSuccess(button);
 		}

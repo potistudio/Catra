@@ -194,6 +194,11 @@ impl LibraryState {
             CREATE INDEX IF NOT EXISTS idx_tracks_content_hash ON tracks(content_hash);
             CREATE INDEX IF NOT EXISTS idx_tracks_trashed_at ON tracks(trashed_at);
             CREATE INDEX IF NOT EXISTS idx_tracks_parent ON tracks(parent_track_id);
+            CREATE TABLE IF NOT EXISTS track_origins (
+                track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+                source_url TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_track_origins_url ON track_origins(source_url);
             ",
         )?;
         conn.execute_batch(CLASSIFICATION_SCHEMA)?;

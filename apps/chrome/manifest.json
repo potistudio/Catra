@@ -1,8 +1,8 @@
 {
 	"manifest_version": 3,
 	"name": "Catra Downloader",
-	"version": "0.8.0",
-	"description": "Add video, track, and playlist download buttons to YouTube and SoundCloud via Catra",
+	"version": "0.9.0",
+	"description": "Download tracks and playlists via Catra and mark saved SoundCloud cover artwork",
 	"host_permissions": [
 		"http://127.0.0.1:17340/*",
 		"https://soundcloud.com/*",
@@ -15,7 +15,7 @@
 	"content_scripts": [
 		{
 			"matches": ["https://soundcloud.com/*", "https://*.soundcloud.com/*"],
-			"js": ["src/utils.js", "src/content.js"],
+			"js": ["src/utils.js", "src/content.js", "src/saved.js"],
 			"css": ["src/styles.css"],
 			"run_at": "document_idle",
 			"all_frames": true
