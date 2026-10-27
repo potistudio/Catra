@@ -122,7 +122,8 @@ fn import_paths(
         processed += 1;
         let path_str = path.to_string_lossy().to_string();
 
-        if processed == 1 || processed % SCAN_PROGRESS_INTERVAL == 0 || processed == total {
+        if processed == 1 || processed.is_multiple_of(SCAN_PROGRESS_INTERVAL) || processed == total
+        {
             let progress = ScanProgress {
                 processed,
                 added,
@@ -184,7 +185,7 @@ pub fn scan_folder(
         processed += 1;
         let path_str = path.to_string_lossy().to_string();
 
-        if processed == 1 || processed % SCAN_PROGRESS_INTERVAL == 0 {
+        if processed == 1 || processed.is_multiple_of(SCAN_PROGRESS_INTERVAL) {
             let progress = ScanProgress {
                 processed,
                 added,

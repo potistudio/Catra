@@ -9,7 +9,7 @@ use super::trash;
 use crate::activity_log::emit_activity_log;
 use std::fs;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tauri::AppHandle;
 use uuid::Uuid;
 use xxhash_rust::xxh64::Xxh64;
@@ -21,6 +21,7 @@ pub enum IngestOutcome {
     Skipped,
 }
 
+#[derive(Default)]
 pub struct IngestOptions {
     pub owned: bool,
     pub rekordbox_content_id: Option<String>,
@@ -28,19 +29,6 @@ pub struct IngestOptions {
     pub converted: bool,
     pub format_group_id: Option<String>,
     pub skip_duplicate_dialog: bool,
-}
-
-impl Default for IngestOptions {
-    fn default() -> Self {
-        Self {
-            owned: false,
-            rekordbox_content_id: None,
-            parent_track_id: None,
-            converted: false,
-            format_group_id: None,
-            skip_duplicate_dialog: false,
-        }
-    }
 }
 
 pub fn hash_file(path: &Path) -> Result<String, String> {
@@ -391,6 +379,7 @@ pub fn count_outcome(outcome: IngestOutcome, added: &mut u32, skipped: &mut u32)
 mod tests {
     use super::*;
     use crate::library::db::LibraryState;
+    use std::path::PathBuf;
 
     fn temp_library() -> (LibraryState, PathBuf) {
         let root = std::env::temp_dir().join(format!("catra-ingest-{}", Uuid::new_v4()));

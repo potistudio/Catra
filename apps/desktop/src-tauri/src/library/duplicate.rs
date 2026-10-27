@@ -124,18 +124,11 @@ pub fn is_same_track(
         _ => return false,
     }
 
-    match (existing.duration_ms, duration_ms) {
-        (Some(existing_duration), Some(new_duration)) => {
-            let diff = if existing_duration > new_duration {
-                existing_duration - new_duration
-            } else {
-                new_duration - existing_duration
-            };
-            if diff > DURATION_TOLERANCE_MS {
-                return false;
-            }
+    if let (Some(existing_duration), Some(new_duration)) = (existing.duration_ms, duration_ms) {
+        let diff = existing_duration.abs_diff(new_duration);
+        if diff > DURATION_TOLERANCE_MS {
+            return false;
         }
-        _ => {}
     }
 
     true
