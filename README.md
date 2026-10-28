@@ -12,6 +12,10 @@ apps/
 
 Chrome 拡張機能は `http://127.0.0.1:17340` で動作するデスクトップアプリのローカル API と連携する。詳細は [apps/chrome/ARCHITECTURE.md](apps/chrome/ARCHITECTURE.md) を参照。
 
+## ダウンロードの準備
+
+yt-dlp と ffmpeg が必要。macOS では `brew install yt-dlp ffmpeg` でインストールできる。Windows では両方をインストールし、実行ファイルのあるディレクトリを PATH に追加してからアプリを再起動する。
+
 ## 開発
 
 [mise](https://mise.jdx.dev/) で Node.js / pnpm / Biome を管理している。

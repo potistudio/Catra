@@ -661,7 +661,13 @@ fn run_yt_dlp(
 
     let mut child = command
         .spawn()
-        .map_err(|e| format!("yt-dlp を実行できませんでした: {e}"))?;
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                "yt-dlp を起動できませんでした。yt-dlp がインストールされ、PATH から実行できることを確認してください。".to_string()
+            } else {
+                format!("yt-dlp を実行できませんでした: {e}")
+            }
+        })?;
 
     if let Some(stdout) = child.stdout.take() {
         read_yt_dlp_stream(app.clone(), stdout);
@@ -683,6 +689,23 @@ fn run_yt_dlp(
 }
 
 fn configure_yt_dlp_command(command: &mut Command) {
+    // Finder-launched apps may not inherit the shell's Homebrew PATH. yt-dlp
+    // also needs this PATH to find ffmpeg when converting downloaded audio.
+    #[cfg(target_os = "macos")]
+    {
+        let mut paths: Vec<PathBuf> = std::env::var_os("PATH")
+            .map(|path| std::env::split_paths(&path).collect())
+            .unwrap_or_default();
+        for path in ["/opt/homebrew/bin", "/usr/local/bin"] {
+            let path = PathBuf::from(path);
+            if !paths.contains(&path) {
+                paths.push(path);
+            }
+        }
+        if let Ok(path) = std::env::join_paths(paths) {
+            command.env("PATH", path);
+        }
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -862,6 +885,27 @@ pub fn download_playlist_and_import(app: AppHandle, url: String) {
 #[cfg(test)]
 mod tests {
     use super::normalize_download_url;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn yt_dlp_command_preserves_path_and_includes_homebrew() {
+        let mut command = std::process::Command::new("yt-dlp");
+        super::configure_yt_dlp_command(&mut command);
+        let path = command
+            .get_envs()
+            .find(|(key, _)| *key == "PATH")
+            .and_then(|(_, value)| value)
+            .unwrap();
+        let paths: Vec<_> = std::env::split_paths(path).collect();
+        for existing in std::env::var_os("PATH")
+            .iter()
+            .flat_map(std::env::split_paths)
+        {
+            assert!(paths.contains(&existing));
+        }
+        assert!(paths.contains(&std::path::PathBuf::from("/opt/homebrew/bin")));
+        assert!(paths.contains(&std::path::PathBuf::from("/usr/local/bin")));
+    }
 
     #[test]
     fn normalize_download_url_preserves_youtube_identifiers() {
